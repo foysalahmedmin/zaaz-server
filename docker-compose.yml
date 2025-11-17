@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Main Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${TARGET:-development}
+    container_name: mehdihasanrafi-portfolio-server-app
+    restart: unless-stopped
+    ports:
+      - '${APP_PORT:-5000}:5000'
+      - '${DEBUG_PORT:-9229}:9229' # Debug port (dev only)
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis123}
+      - REDIS_ENABLED=${REDIS_ENABLED:-true}
+      - PORT=5000
+    depends_on:
+      - redis
+    networks:
+      - app-network
+    volumes:
+      # Development: Mount source code for hot reload
+      - ${DEV_VOLUME_MOUNT:-./src:/app/src}
+      - ${DEV_VOLUME_MOUNT:-./package.json:/app/package.json}
+      # Logs directory for both dev and prod
+      - ./logs:/app/logs
+    command: ${DOCKER_CMD:-pnpm run start:dev}
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: mehdihasanrafi-portfolio-server-redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-redis123}', 'ping']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MongoDB Express (Development only)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mehdihasanrafi-portfolio-server-mongo-express
+    restart: unless-stopped
+    ports:
+      - '${MONGO_EXPRESS_PORT:-8081}:8081'
+    environment:
+      - ME_CONFIG_MONGODB_URL=${DATABASE_URL}
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASS:-admin123}
+    networks:
+      - app-network
+    profiles:
+      - dev # Only start in development
+
+  # Mailhog (Development only)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mehdihasanrafi-portfolio-server-mailhog
+    restart: unless-stopped
+    ports:
+      - '${MAILHOG_SMTP_PORT:-1025}:1025'
+      - '${MAILHOG_WEB_PORT:-8025}:8025'
+    networks:
+      - app-network
+    profiles:
+      - dev # Only start in development
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

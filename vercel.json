@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "dist/index.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/dist/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "dist/index.js"
+    },
+    {
+      "src": "/uploads/(.*)",
+      "dest": "dist/index.js"
+    },
+    {
+      "src": "/health",
+      "dest": "dist/index.js"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "public/dist/static/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot))",
+      "dest": "public/dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "public/dist/index.html"
+    }
+  ]
+}

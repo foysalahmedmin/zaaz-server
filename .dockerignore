@@ -1,0 +1,77 @@
+# Node modules (will be installed in container)
+node_modules
+
+# Logs (will be bind mounted)
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage
+*.lcov
+.nyc_output
+
+# Build outputs
+build/
+dist/
+.next/
+.nuxt/
+
+# Cache directories
+.cache
+.parcel-cache
+.npm
+.eslintcache
+*.tsbuildinfo
+
+# Environment files (will be passed via docker-compose)
+.env.local
+.env.production
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+README.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+tmp/
+temp/
+
+# Keep these for development:
+# .env (for development environment)
+# package.json
+# pnpm-lock.yaml
+# tsconfig.json
+# src/
