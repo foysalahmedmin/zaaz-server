@@ -10,6 +10,8 @@ export interface InitiatePaymentData {
   userWalletId: string;
   returnUrl: string;
   cancelUrl: string;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 export interface PaymentResponse {
@@ -46,17 +48,15 @@ export interface IPaymentGateway {
 
 export class PaymentGatewayFactory {
   static create(paymentMethod: TPaymentMethod): IPaymentGateway {
-    const methodName = paymentMethod.name.toLowerCase().trim();
+    const method = paymentMethod.value.toLowerCase().trim();
 
-    switch (methodName) {
+    switch (method) {
       case 'stripe':
         return new StripeService(paymentMethod);
       case 'sslcommerz':
-      case 'sslcommerz':
-      case 'ssl commerz':
         return new SSLCommerzService(paymentMethod);
       default:
-        throw new Error(`Unsupported payment method: ${paymentMethod.name}`);
+        throw new Error(`Unsupported payment method: ${paymentMethod.value}`);
     }
   }
 }

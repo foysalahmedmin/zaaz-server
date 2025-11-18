@@ -1,6 +1,7 @@
 # Payment Gateway Fields Summary
 
 ## Overview
+
 এই document-এ payment gateway integration-এর জন্য models-এ যোগ করা নতুন fields-এর বিস্তারিত বিবরণ দেওয়া আছে।
 
 ---
@@ -8,6 +9,7 @@
 ## PaymentTransaction Model - নতুন Fields
 
 ### 1. `gateway_session_id` (Optional)
+
 - **Type**: String
 - **Purpose**: Payment gateway-এর session ID store করে
 - **Use Cases**:
@@ -16,6 +18,7 @@
 - **Indexed**: Yes (for faster lookups)
 
 ### 2. `gateway_status` (Optional)
+
 - **Type**: String
 - **Purpose**: Gateway-specific status store করে
 - **Examples**:
@@ -24,41 +27,49 @@
 - **Note**: আমাদের internal `status` field-এর সাথে আলাদা (pending, success, failed, refunded)
 
 ### 3. `gateway_fee` (Optional)
+
 - **Type**: Number
 - **Purpose**: Payment gateway charge করা fee amount
 - **Use Case**: Revenue calculation এবং accounting-এর জন্য
 
 ### 4. `failure_reason` (Optional)
+
 - **Type**: String
 - **Purpose**: Payment fail হলে reason store করে
 - **Examples**: "Insufficient funds", "Card declined", "Payment failed at gateway"
 
 ### 5. `refund_id` (Optional)
+
 - **Type**: String
 - **Purpose**: Gateway-এর refund transaction ID
 - **Use Case**: Refund track করার জন্য
 
 ### 6. `refunded_at` (Optional)
+
 - **Type**: Date
 - **Purpose**: Refund করা date/time
 - **Use Case**: Refund history track করার জন্য
 
 ### 7. `paid_at` (Optional)
+
 - **Type**: Date
 - **Purpose**: Payment complete হওয়ার exact date/time
 - **Use Case**: Payment timeline track করার জন্য
 
 ### 8. `customer_email` (Optional)
+
 - **Type**: String (lowercase)
 - **Purpose**: Gateway থেকে পাওয়া customer email
 - **Use Case**: Customer communication এবং verification
 
 ### 9. `customer_name` (Optional)
+
 - **Type**: String
 - **Purpose**: Gateway থেকে পাওয়া customer name
 - **Use Case**: Customer identification
 
 ### 10. `gateway_response` (Optional)
+
 - **Type**: Mixed (JSON object)
 - **Purpose**: Gateway থেকে পাওয়া raw response data store করে
 - **Select**: false (default queries-এ include হয় না, performance-এর জন্য)
@@ -73,18 +84,21 @@
 ## PaymentMethod Model - নতুন Fields
 
 ### 1. `webhook_url` (Optional)
+
 - **Type**: String (URL)
 - **Purpose**: এই payment method-এর webhook URL
 - **Use Case**: Webhook configuration track করার জন্য
 - **Example**: `https://yourdomain.com/api/payment-transactions/webhook/{payment_method_id}`
 
-### 2. `test_mode` (Optional)
+### 2. `is_test` (Optional)
+
 - **Type**: Boolean
 - **Default**: false
 - **Purpose**: Test/sandbox mode enable/disable
 - **Use Case**: Production vs Sandbox environment distinguish করার জন্য
 
-### 3. `supported_currencies` (Optional)
+### 3. `currencies` (Optional)
+
 - **Type**: Array of Strings
 - **Default**: []
 - **Purpose**: এই gateway support করা currencies-এর list
@@ -92,6 +106,7 @@
 - **Example**: `["USD", "EUR", "GBP"]`
 
 ### 4. `config` (Optional)
+
 - **Type**: Mixed (JSON object)
 - **Purpose**: Gateway-specific additional configuration
 - **Select**: false (default queries-এ include হয় না)
@@ -112,6 +127,7 @@
 ## Field Usage in Services
 
 ### Payment Initiation (`initiatePayment`)
+
 ```typescript
 // Stores:
 - gateway_transaction_id
@@ -120,6 +136,7 @@
 ```
 
 ### Webhook Handling (`handlePaymentWebhook`)
+
 ```typescript
 // Updates:
 - gateway_status (from webhook)
@@ -131,6 +148,7 @@
 ```
 
 ### Status Update (`updatePaymentTransactionStatus`)
+
 ```typescript
 // Updates:
 - status
@@ -143,6 +161,7 @@
 ## Database Indexes
 
 ### PaymentTransaction
+
 - `gateway_transaction_id` - Indexed (for webhook lookups)
 - `gateway_session_id` - Indexed (for alternative lookup)
 - `user` - Indexed (for user queries)
@@ -174,6 +193,7 @@
 ## Example Usage
 
 ### Creating Payment Transaction with Gateway Info
+
 ```typescript
 const transaction = await PaymentTransaction.create({
   user: userId,
@@ -183,13 +203,14 @@ const transaction = await PaymentTransaction.create({
   gateway_session_id: 'stripe_session_123',
   gateway_response: {
     redirectUrl: 'https://checkout.stripe.com/...',
-    initiatedAt: new Date().toISOString()
+    initiatedAt: new Date().toISOString(),
   },
   // ... other fields
 });
 ```
 
 ### Updating from Webhook
+
 ```typescript
 await PaymentTransaction.findByIdAndUpdate(transactionId, {
   gateway_status: 'paid',
@@ -201,6 +222,7 @@ await PaymentTransaction.findByIdAndUpdate(transactionId, {
 ```
 
 ### Querying with Gateway Response
+
 ```typescript
 // Get transaction with gateway response
 const transaction = await PaymentTransaction.findById(id)
@@ -223,4 +245,3 @@ const transaction = await PaymentTransaction.findById(id)
 
 **Last Updated**: Payment Gateway Implementation
 **Version**: 1.0.0
-

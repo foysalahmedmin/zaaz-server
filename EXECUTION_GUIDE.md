@@ -111,13 +111,14 @@ Configuration for payment gateways.
 
 - `_id` — ObjectId
 - `name` — String (required, unique, e.g., "Stripe", "SSL Commerz")
+- `value` — String (required, unique, lowercase, e.g., "stripe", "sslcommerz")
 - `currency` — String (required, 3-letter ISO code)
 - `secret` — String (required, gateway secret key)
 - `public_key` — String (optional, if required by gateway, e.g., Stripe webhook secret)
 - `description` — String (optional)
 - `webhook_url` — String (optional, webhook URL for this payment method)
-- `test_mode` — Boolean (optional, default: false, whether this is test/sandbox mode)
-- `supported_currencies` — String[] (optional, array of supported currencies, e.g., ["USD", "EUR"])
+- `is_test` — Boolean (optional, default: false, whether this is test/sandbox mode)
+- `currencies` — String[] (optional, array of supported currencies, e.g., ["USD", "EUR"])
 - `config` — Object (optional, additional gateway-specific configuration, stored as JSON)
 - `is_active` — Boolean (default: true, method availability)
 - `is_deleted` — Boolean (default: false, soft delete flag)
@@ -301,14 +302,15 @@ erDiagram
     PaymentMethod {
         ObjectId _id PK "Required, Primary Key"
         string name "Required, Unique, e.g. Stripe, SSL Commerz"
+        string value "Required, Unique, lowercase, e.g. stripe, sslcommerz"
         string currency "Required, 3-letter ISO code"
         string secret "Required, Gateway secret key"
         string public_key "Optional, If required by gateway, e.g. Stripe webhook secret"
         string description "Optional"
         string webhook_url "Optional, Webhook URL for this payment method"
-        boolean test_mode "Optional, Default: false, Test/sandbox mode"
-        array supported_currencies "Optional, Array of supported currencies"
+        array currencies "Optional, Array of supported currencies"
         object config "Optional, Additional gateway-specific configuration"
+        boolean is_test "Optional, Default: false, Test/sandbox mode"
         boolean is_active "Optional, Default: true, Method availability"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"

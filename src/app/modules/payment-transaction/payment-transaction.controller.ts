@@ -85,15 +85,23 @@ export const initiatePayment = catchAsync(async (req, res) => {
     payment_method: paymentMethodId,
     return_url: returnUrl,
     cancel_url: cancelUrl,
+    customer_email: customerEmail,
+    customer_name: customerName,
   } = req.body;
 
-  const result = await PaymentTransactionServices.initiatePayment(
+  // Use user info from JWT if customer info not provided
+  const finalCustomerEmail = customerEmail || req.user.email;
+  const finalCustomerName = customerName || req.user.name;
+
+  const result = await PaymentTransactionServices.initiatePayment({
     userId,
     packageId,
     paymentMethodId,
     returnUrl,
     cancelUrl,
-  );
+    customerEmail: finalCustomerEmail,
+    customerName: finalCustomerName,
+  });
 
   sendResponse(res, {
     status: httpStatus.OK,
@@ -105,7 +113,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
 
 export const handleWebhook = catchAsync(async (req, res) => {
   const { payment_method_id } = req.params;
-  
+
   // Get signature from headers (Stripe uses 'stripe-signature', SSL Commerz might use 'x-signature')
   const signature =
     (req.headers['stripe-signature'] as string) ||
@@ -130,3 +138,25 @@ export const handleWebhook = catchAsync(async (req, res) => {
   });
 });
 
+export const getPaymentTransactionStatus = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result =
+    await PaymentTransactionServices.getPaymentTransactionStatus(id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment transaction status retrieved successfully',
+    data: result,
+  });
+});
+
+export const verifyPayment = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await PaymentTransactionServices.verifyPayment(id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment verification completed',
+    data: result,
+  });
+});

@@ -168,12 +168,142 @@ export const getPaymentTransaction = async (
   const result = await PaymentTransaction.findById(id).populate([
     { path: 'user_wallet', select: '_id token' },
     { path: 'payment_method', select: '_id name currency' },
-    { path: 'package', select: '_id name token price' },
+    { path: 'package', select: '_id name token price price_previous' },
   ]);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
   return result;
+};
+
+export const getPaymentTransactionStatus = async (
+  id: string,
+): Promise<{
+  status: TPaymentTransaction['status'];
+  gateway_status?: string;
+  amount: number;
+  currency: string;
+}> => {
+  const transaction = await PaymentTransaction.findById(id)
+    .select('status gateway_status amount currency')
+    .lean();
+
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  return {
+    status: transaction.status,
+    gateway_status: transaction.gateway_status,
+    amount: transaction.amount,
+    currency: transaction.currency,
+  };
+};
+
+export const verifyPayment = async (
+  id: string,
+  session?: mongoose.ClientSession,
+): Promise<{
+  verified: boolean;
+  status: string;
+  transaction: TPaymentTransaction;
+}> => {
+  const transaction = await PaymentTransaction.findById(id)
+    .session(session || null)
+    .populate('payment_method')
+    .lean();
+
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  const paymentMethod = transaction.payment_method as any;
+  if (!paymentMethod) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
+  }
+
+  // Get gateway transaction ID
+  const gatewayTransactionId =
+    transaction.gateway_transaction_id || transaction.gateway_session_id;
+
+  if (!gatewayTransactionId) {
+    return {
+      verified: false,
+      status: 'No gateway transaction ID found',
+      transaction,
+    };
+  }
+
+  try {
+    const gateway = PaymentGatewayFactory.create(paymentMethod);
+    const verificationResult =
+      await gateway.verifyPayment(gatewayTransactionId);
+
+    // Update transaction with latest gateway status
+    if (verificationResult.status !== transaction.gateway_status) {
+      await PaymentTransaction.findByIdAndUpdate(
+        id,
+        {
+          gateway_status: verificationResult.status,
+        },
+        { session },
+      );
+    }
+
+    // If gateway says success but our status is not success, update it
+    if (
+      verificationResult.success &&
+      transaction.status !== 'success' &&
+      transaction.status !== 'refunded'
+    ) {
+      await updatePaymentTransactionStatus(id, 'success', session);
+      const updatedTransaction = await PaymentTransaction.findById(id)
+        .session(session || null)
+        .lean();
+      return {
+        verified: true,
+        status: 'success',
+        transaction: updatedTransaction!,
+      };
+    }
+
+    // If gateway says failed and our status is not failed, update it
+    if (
+      !verificationResult.success &&
+      transaction.status !== 'failed' &&
+      transaction.status !== 'refunded'
+    ) {
+      await PaymentTransaction.findByIdAndUpdate(
+        id,
+        {
+          status: 'failed',
+          gateway_status: verificationResult.status,
+          failure_reason: 'Payment verification failed',
+          failed_at: new Date(),
+        },
+        { session },
+      );
+      const updatedTransaction = await PaymentTransaction.findById(id)
+        .session(session || null)
+        .lean();
+      return {
+        verified: false,
+        status: 'failed',
+        transaction: updatedTransaction!,
+      };
+    }
+
+    return {
+      verified: verificationResult.success,
+      status: transaction.status,
+      transaction,
+    };
+  } catch (error: any) {
+    throw new AppError(
+      httpStatus.BAD_GATEWAY,
+      `Payment verification failed: ${error.message}`,
+    );
+  }
 };
 
 export const deletePaymentTransaction = async (id: string): Promise<void> => {
@@ -185,18 +315,30 @@ export const deletePaymentTransaction = async (id: string): Promise<void> => {
   await PaymentTransaction.findByIdAndUpdate(id, { is_deleted: true });
 };
 
-export const initiatePayment = async (
-  userId: string,
-  packageId: string,
-  paymentMethodId: string,
-  returnUrl: string,
-  cancelUrl: string,
-  session?: mongoose.ClientSession,
-): Promise<{
+export const initiatePayment = async (options: {
+  userId: string;
+  packageId: string;
+  paymentMethodId: string;
+  returnUrl: string;
+  cancelUrl: string;
+  customerEmail?: string;
+  customerName?: string;
+  session?: mongoose.ClientSession;
+}): Promise<{
   paymentTransaction: TPaymentTransaction;
   redirectUrl?: string;
   paymentUrl?: string;
 }> => {
+  const {
+    userId,
+    packageId,
+    paymentMethodId,
+    returnUrl,
+    cancelUrl,
+    customerEmail,
+    customerName,
+    session,
+  } = options;
   // Get payment method
   const paymentMethod = await PaymentMethod.findById(paymentMethodId)
     .session(session || null)
@@ -241,6 +383,14 @@ export const initiatePayment = async (
       ? packageData.price.USD
       : packageData.price.BDT;
 
+  // Validate amount is greater than 0
+  if (!gatewayAmount || gatewayAmount <= 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Package price for ${paymentMethod.currency} is not available or invalid`,
+    );
+  }
+
   // Create payment transaction
   const paymentTransaction = await PaymentTransaction.create(
     [
@@ -258,38 +408,61 @@ export const initiatePayment = async (
     { session },
   );
 
-  // Initiate payment with gateway
-  const gateway = PaymentGatewayFactory.create(paymentMethod);
-  const paymentResponse = await gateway.initiatePayment({
-    amount: gatewayAmount,
-    currency: paymentMethod.currency,
-    packageId,
-    userId,
-    userWalletId: wallet._id.toString(),
-    returnUrl,
-    cancelUrl,
-  });
+  try {
+    // Initiate payment with gateway
+    const gateway = PaymentGatewayFactory.create(paymentMethod);
+    const paymentResponse = await gateway.initiatePayment({
+      amount: gatewayAmount,
+      currency: paymentMethod.currency,
+      packageId,
+      userId,
+      userWalletId: wallet._id.toString(),
+      returnUrl,
+      cancelUrl,
+      customerEmail,
+      customerName,
+    });
 
-  // Update transaction with gateway ID and session ID
-  await PaymentTransaction.findByIdAndUpdate(
-    paymentTransaction[0]._id,
-    {
-      gateway_transaction_id: paymentResponse.gatewayTransactionId,
-      gateway_session_id: paymentResponse.gatewayTransactionId, // For Stripe, session ID is same as transaction ID
-      gateway_response: {
-        redirectUrl: paymentResponse.redirectUrl,
-        paymentUrl: paymentResponse.paymentUrl,
-        clientSecret: paymentResponse.clientSecret,
+    // Update transaction with gateway ID and session ID
+    await PaymentTransaction.findByIdAndUpdate(
+      paymentTransaction[0]._id,
+      {
+        gateway_transaction_id: paymentResponse.gatewayTransactionId,
+        gateway_session_id: paymentResponse.gatewayTransactionId, // For Stripe, session ID is same as transaction ID
+        gateway_response: {
+          redirectUrl: paymentResponse.redirectUrl,
+          paymentUrl: paymentResponse.paymentUrl,
+          clientSecret: paymentResponse.clientSecret,
+        },
       },
-    },
-    { session },
-  );
+      { session },
+    );
 
-  return {
-    paymentTransaction: paymentTransaction[0].toObject(),
-    redirectUrl: paymentResponse.redirectUrl,
-    paymentUrl: paymentResponse.paymentUrl,
-  };
+    return {
+      paymentTransaction: paymentTransaction[0].toObject(),
+      redirectUrl: paymentResponse.redirectUrl,
+      paymentUrl: paymentResponse.paymentUrl,
+    };
+  } catch (error: any) {
+    // If gateway call fails, mark transaction as failed
+    await PaymentTransaction.findByIdAndUpdate(
+      paymentTransaction[0]._id,
+      {
+        status: 'failed',
+        failure_reason: `Gateway initiation failed: ${error.message}`,
+        failed_at: new Date(),
+        gateway_response: {
+          error: error.message,
+        },
+      },
+      { session },
+    );
+
+    throw new AppError(
+      httpStatus.BAD_GATEWAY,
+      `Payment gateway error: ${error.message}`,
+    );
+  }
 };
 
 const prepareWebhookUpdateData = (
@@ -393,11 +566,26 @@ export const handlePaymentWebhook = async (
     payload,
   );
 
-  await PaymentTransaction.findByIdAndUpdate(transaction._id, updateData, {
-    session,
-  });
+  // Use atomic update to prevent double processing
+  // Only update if status is not already success
+  const updateResult = await PaymentTransaction.findOneAndUpdate(
+    {
+      _id: transaction._id,
+      status: { $ne: 'success' }, // Only update if not already success
+    },
+    updateData,
+    {
+      new: true,
+      session,
+    },
+  );
 
-  if (shouldTriggerSuccess) {
+  // Only trigger success if update was successful and status changed to success
+  if (
+    shouldTriggerSuccess &&
+    updateResult &&
+    updateResult.status === 'success'
+  ) {
     await updatePaymentTransactionStatus(
       transaction._id.toString(),
       'success',

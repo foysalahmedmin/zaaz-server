@@ -8,6 +8,11 @@ const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
 export const createPaymentMethodValidationSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .toLowerCase(),
     currency: z
       .string()
       .trim()
@@ -21,9 +26,9 @@ export const createPaymentMethodValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
-    test_mode: z.boolean().optional(),
-    supported_currencies: z.array(z.string().length(3)).optional(),
+    currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
+    is_test: z.boolean().optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -33,7 +38,17 @@ export const updatePaymentMethodValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
-    name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Name must be at least 2 characters')
+      .optional(),
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .toLowerCase()
+      .optional(),
     currency: z
       .string()
       .trim()
@@ -48,9 +63,9 @@ export const updatePaymentMethodValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
-    test_mode: z.boolean().optional(),
-    supported_currencies: z.array(z.string().length(3)).optional(),
+    currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
+    is_test: z.boolean().optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -81,4 +96,3 @@ export const paymentMethodsOperationValidationSchema = z.object({
       .nonempty('At least one payment method ID is required'),
   }),
 });
-

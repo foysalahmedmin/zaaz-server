@@ -54,7 +54,7 @@ export const getPublicPaymentMethods = async (
     PaymentMethod.find(),
     { ...rest, ...filter },
   )
-    .search(['name', 'description'])
+    .search(['name', 'value', 'description'])
     .filter()
     .sort()
     .paginate()
@@ -84,7 +84,7 @@ export const getPaymentMethods = async (
     PaymentMethod.find(),
     { ...rest, ...filter },
   )
-    .search(['name', 'description'])
+    .search(['name', 'value', 'description'])
     .filter()
     .sort()
     .paginate()

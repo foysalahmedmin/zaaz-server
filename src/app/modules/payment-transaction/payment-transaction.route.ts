@@ -24,6 +24,14 @@ router.get(
   PaymentTransactionControllers.getPaymentTransactions,
 );
 router.get(
+  '/:id/status',
+  auth('user', 'admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.getPaymentTransactionStatus,
+);
+router.get(
   '/:id',
   auth('admin'),
   validation(
@@ -38,6 +46,16 @@ router.post(
   auth('user', 'admin'),
   validation(PaymentTransactionValidations.initiatePaymentValidationSchema),
   PaymentTransactionControllers.initiatePayment,
+);
+
+// POST - Verify payment
+router.post(
+  '/:id/verify',
+  auth('user', 'admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.verifyPayment,
 );
 
 // POST - Webhook handler (no auth, handles both JSON and form data)

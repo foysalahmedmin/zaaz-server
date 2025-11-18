@@ -31,9 +31,10 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
     },
     gateway_transaction_id: {
       type: String,
-      required: [true, 'Gateway transaction ID is required'],
+      required: false, // Will be set after gateway response
       trim: true,
       index: true,
+      default: '',
     },
     gateway_session_id: {
       type: String,

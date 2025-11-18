@@ -13,7 +13,7 @@ export type TPaymentTransaction = {
   user_wallet: mongoose.Types.ObjectId;
   status: TPaymentTransactionStatus;
   payment_method: mongoose.Types.ObjectId;
-  gateway_transaction_id: string;
+  gateway_transaction_id: string; // Optional initially, set after gateway response
   gateway_session_id?: string; // Stripe session ID or SSL Commerz session ID
   gateway_status?: string; // Gateway-specific status (paid, VALID, etc.)
   package: mongoose.Types.ObjectId;

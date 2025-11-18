@@ -10,8 +10,16 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     name: {
       type: String,
       required: [true, 'Name is required'],
+      trim: true,
+      minlength: [2, 'Name must be at least 2 characters'],
+      maxlength: [100, 'Name cannot exceed 100 characters'],
+    },
+    value: {
+      type: String,
+      required: [true, 'Name is required'],
       unique: true,
       trim: true,
+      lowercase: true,
       minlength: [2, 'Name must be at least 2 characters'],
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
@@ -40,11 +48,11 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       type: String,
       trim: true,
     },
-    test_mode: {
+    is_test: {
       type: Boolean,
       default: false,
     },
-    supported_currencies: {
+    currencies: {
       type: [String],
       default: [],
     },
