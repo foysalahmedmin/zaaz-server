@@ -6,6 +6,8 @@ export type TPaymentTransactionStatus =
   | 'failed'
   | 'refunded';
 
+export type TCurrency = 'USD' | 'BDT';
+
 export type TPaymentTransaction = {
   user: mongoose.Types.ObjectId;
   user_wallet: mongoose.Types.ObjectId;
@@ -15,9 +17,8 @@ export type TPaymentTransaction = {
   gateway_session_id?: string; // Stripe session ID or SSL Commerz session ID
   gateway_status?: string; // Gateway-specific status (paid, VALID, etc.)
   package: mongoose.Types.ObjectId;
-  amount_usd: number;
-  amount_bdt: number;
-  exchange_rate?: number;
+  amount: number;
+  currency: TCurrency;
   gateway_fee?: number; // Fee charged by payment gateway
   failure_reason?: string; // Reason if payment failed
   refund_id?: string; // Gateway refund transaction ID

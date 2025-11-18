@@ -49,19 +49,15 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       ref: 'Package',
       required: [true, 'Package is required'],
     },
-    amount_usd: {
+    amount: {
       type: Number,
-      required: [true, 'Amount USD is required'],
-      min: [0, 'Amount USD must be 0 or greater'],
+      required: [true, 'Amount is required'],
+      min: [0, 'Amount must be 0 or greater'],
     },
-    amount_bdt: {
-      type: Number,
-      required: [true, 'Amount BDT is required'],
-      min: [0, 'Amount BDT must be 0 or greater'],
-    },
-    exchange_rate: {
-      type: Number,
-      min: [0, 'Exchange rate must be 0 or greater'],
+    currency: {
+      type: String,
+      enum: ['USD', 'BDT'],
+      required: [true, 'Currency is required'],
     },
     gateway_fee: {
       type: Number,

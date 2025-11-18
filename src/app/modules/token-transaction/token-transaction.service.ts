@@ -71,7 +71,7 @@ export const getTokenTransactions = async (
     TokenTransaction.find().populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'decrease_source', select: '_id name endpoint token' },
-      { path: 'payment_transaction', select: '_id status amount_usd' },
+      { path: 'payment_transaction', select: '_id status amount currency' },
     ]),
     { ...rest, ...filter },
   )
@@ -91,7 +91,7 @@ export const getTokenTransaction = async (
   const result = await TokenTransaction.findById(id).populate([
     { path: 'user_wallet', select: '_id token' },
     { path: 'decrease_source', select: '_id name endpoint token' },
-    { path: 'payment_transaction', select: '_id status amount_usd' },
+    { path: 'payment_transaction', select: '_id status amount currency' },
   ]);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Token transaction not found');
@@ -99,9 +99,7 @@ export const getTokenTransaction = async (
   return result;
 };
 
-export const deleteTokenTransaction = async (
-  id: string,
-): Promise<void> => {
+export const deleteTokenTransaction = async (id: string): Promise<void> => {
   const transaction = await TokenTransaction.findById(id).lean();
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Token transaction not found');
@@ -120,4 +118,3 @@ export const deleteTokenTransaction = async (
 
   await TokenTransaction.findByIdAndUpdate(id, { is_deleted: true });
 };
-

@@ -1,5 +1,10 @@
 import mongoose, { Document, Model, Types } from 'mongoose';
 
+export type TPackagePrice = {
+  USD: number;
+  BDT: number;
+};
+
 export type TPackageHistory = {
   package: mongoose.Types.ObjectId;
   name: string;
@@ -8,17 +13,14 @@ export type TPackageHistory = {
   token: number;
   features: mongoose.Types.ObjectId[];
   duration: number;
-  price: number;
-  previous_price: number;
+  price: TPackagePrice;
+  previous_price?: TPackagePrice;
   is_active?: boolean;
   is_deleted?: boolean;
 };
 
-export interface TPackageHistoryDocument
-  extends TPackageHistory,
-    Document {
+export interface TPackageHistoryDocument extends TPackageHistory, Document {
   _id: Types.ObjectId;
 }
 
 export type TPackageHistoryModel = Model<TPackageHistoryDocument>;
-

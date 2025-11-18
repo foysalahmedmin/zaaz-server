@@ -5,7 +5,14 @@ const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
   message: 'Invalid ID format',
 });
 
-const currencyEnum = z.enum(['USD', 'BDT']);
+const priceSchema = z.object({
+  USD: z
+    .number({ invalid_type_error: 'Price USD must be a number' })
+    .nonnegative('Price USD must be 0 or greater'),
+  BDT: z
+    .number({ invalid_type_error: 'Price BDT must be a number' })
+    .nonnegative('Price BDT must be 0 or greater'),
+});
 
 export const createPackageValidationSchema = z.object({
   body: z.object({
@@ -30,13 +37,8 @@ export const createPackageValidationSchema = z.object({
       .int('Duration must be an integer')
       .positive('Duration must be at least 1 day')
       .optional(),
-    price: z
-      .number({ invalid_type_error: 'Price must be a number' })
-      .nonnegative('Price must be 0 or greater'),
-    price_previous: z
-      .number({ invalid_type_error: 'Previous price must be a number' })
-      .nonnegative('Previous price must be 0 or greater'),
-    currency: currencyEnum.optional(),
+    price: priceSchema,
+    price_previous: priceSchema.optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -64,15 +66,8 @@ export const updatePackageValidationSchema = z.object({
       .int('Duration must be an integer')
       .positive('Duration must be at least 1 day')
       .optional(),
-    price: z
-      .number({ invalid_type_error: 'Price must be a number' })
-      .nonnegative('Price must be 0 or greater')
-      .optional(),
-    price_previous: z
-      .number({ invalid_type_error: 'Previous price must be a number' })
-      .nonnegative('Previous price must be 0 or greater')
-      .optional(),
-    currency: currencyEnum.optional(),
+    price: priceSchema.optional(),
+    price_previous: priceSchema.optional(),
     is_active: z.boolean().optional(),
   }),
 });

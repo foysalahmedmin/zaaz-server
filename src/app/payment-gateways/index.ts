@@ -1,6 +1,6 @@
 import { TPaymentMethod } from '../modules/payment-method/payment-method.type';
+import { SSLCommerzService } from './sslcommerz/sslcommerz.service';
 import { StripeService } from './stripe/stripe.service';
-import { SSLCommerzService } from './ssl-commerz/ssl-commerz.service';
 
 export interface InitiatePaymentData {
   amount: number;
@@ -51,7 +51,7 @@ export class PaymentGatewayFactory {
     switch (methodName) {
       case 'stripe':
         return new StripeService(paymentMethod);
-      case 'ssl-commerz':
+      case 'sslcommerz':
       case 'sslcommerz':
       case 'ssl commerz':
         return new SSLCommerzService(paymentMethod);
@@ -60,4 +60,3 @@ export class PaymentGatewayFactory {
     }
   }
 }
-

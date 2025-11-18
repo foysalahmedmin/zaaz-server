@@ -148,7 +148,7 @@ export const getPaymentTransactions = async (
     PaymentTransaction.find().populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'payment_method', select: '_id name currency' },
-      { path: 'package', select: '_id name token price' },
+      { path: 'package', select: '_id name token price price_previous' },
     ]),
     { ...rest, ...filter },
   )
@@ -235,10 +235,11 @@ export const initiatePayment = async (
     wallet = newWallet[0].toObject() as NonNullable<typeof wallet>;
   }
 
-  // Calculate amounts based on package currency
-  const amountUsd = packageData.currency === 'USD' ? packageData.price : 0;
-  const amountBdt = packageData.currency === 'BDT' ? packageData.price : 0;
-  // TODO: Add exchange rate calculation if needed for currency conversion
+  // Get amount based on payment method currency
+  const gatewayAmount =
+    paymentMethod.currency === 'USD'
+      ? packageData.price.USD
+      : packageData.price.BDT;
 
   // Create payment transaction
   const paymentTransaction = await PaymentTransaction.create(
@@ -250,8 +251,8 @@ export const initiatePayment = async (
         payment_method: paymentMethodId,
         gateway_transaction_id: '', // Will be updated after gateway response
         package: packageId,
-        amount_usd: amountUsd,
-        amount_bdt: amountBdt,
+        amount: gatewayAmount,
+        currency: paymentMethod.currency,
       },
     ],
     { session },
@@ -260,8 +261,8 @@ export const initiatePayment = async (
   // Initiate payment with gateway
   const gateway = PaymentGatewayFactory.create(paymentMethod);
   const paymentResponse = await gateway.initiatePayment({
-    amount: packageData.price,
-    currency: packageData.currency,
+    amount: gatewayAmount,
+    currency: paymentMethod.currency,
     packageId,
     userId,
     userWalletId: wallet._id.toString(),
@@ -291,6 +292,71 @@ export const initiatePayment = async (
   };
 };
 
+const prepareWebhookUpdateData = (
+  transaction: TPaymentTransaction,
+  webhookResult: { status?: string; metadata?: any },
+  payload: any,
+): { updateData: any; shouldTriggerSuccess: boolean } => {
+  const updateData: any = {
+    gateway_status: webhookResult.status,
+    gateway_response: payload,
+  };
+
+  let shouldTriggerSuccess = false;
+
+  // Handle success status
+  if (transaction.status !== 'success' && webhookResult.status === 'success') {
+    updateData.status = 'success';
+    updateData.paid_at = new Date();
+    shouldTriggerSuccess = true;
+
+    // Update customer info if available in payload
+    // Stripe: customer_email and customer_details.name
+    // SSL Commerz: cus_email and cus_name
+    if (payload.customer_email || payload.cus_email) {
+      updateData.customer_email = (payload.customer_email || payload.cus_email)
+        .toLowerCase()
+        .trim();
+    }
+    if (
+      payload.customer_details?.name ||
+      payload.cus_name ||
+      payload.customer_name
+    ) {
+      updateData.customer_name = (
+        payload.customer_details?.name ||
+        payload.cus_name ||
+        payload.customer_name
+      ).trim();
+    }
+  }
+  // Handle failed status
+  else if (
+    webhookResult.status === 'failed' &&
+    transaction.status !== 'failed'
+  ) {
+    updateData.status = 'failed';
+    updateData.failure_reason = 'Payment failed at gateway';
+    updateData.failed_at = new Date();
+  }
+
+  return { updateData, shouldTriggerSuccess };
+};
+
+const findTransactionByGatewayId = async (
+  transactionId: string,
+  session?: mongoose.ClientSession,
+): Promise<(TPaymentTransaction & { _id: mongoose.Types.ObjectId }) | null> => {
+  return await PaymentTransaction.findOne({
+    $or: [
+      { gateway_transaction_id: transactionId },
+      { gateway_session_id: transactionId },
+    ],
+  })
+    .session(session || null)
+    .lean();
+};
+
 export const handlePaymentWebhook = async (
   paymentMethodId: string,
   payload: any,
@@ -308,56 +374,34 @@ export const handlePaymentWebhook = async (
   const gateway = PaymentGatewayFactory.create(paymentMethod);
   const webhookResult = await gateway.handleWebhook(payload, signature);
 
-  if (webhookResult.success || webhookResult.status) {
-    // Find transaction by gateway_transaction_id or gateway_session_id
-    const transaction = await PaymentTransaction.findOne({
-      $or: [
-        { gateway_transaction_id: webhookResult.transactionId },
-        { gateway_session_id: webhookResult.transactionId },
-      ],
-    })
-      .session(session || null)
-      .lean();
+  if (!webhookResult.success && !webhookResult.status) {
+    return;
+  }
 
-    if (transaction) {
-      // Prepare update data with gateway information
-      const updateData: any = {
-        gateway_status: webhookResult.status,
-        gateway_response: payload, // Store raw webhook payload for debugging
-      };
+  const transaction = await findTransactionByGatewayId(
+    webhookResult.transactionId,
+    session,
+  );
 
-      // Update status only if it's not already success
-      if (
-        transaction.status !== 'success' &&
-        webhookResult.status === 'success'
-      ) {
-        updateData.status = 'success';
-        updateData.paid_at = new Date();
+  if (!transaction) {
+    return;
+  }
 
-        // Update customer info if available in metadata
-        if (webhookResult.metadata) {
-          // Customer info might come from gateway response
-        }
-      } else if (
-        webhookResult.status === 'failed' &&
-        transaction.status !== 'failed'
-      ) {
-        updateData.status = 'failed';
-        updateData.failure_reason = 'Payment failed at gateway';
-      }
+  const { updateData, shouldTriggerSuccess } = prepareWebhookUpdateData(
+    transaction,
+    webhookResult,
+    payload,
+  );
 
-      await PaymentTransaction.findByIdAndUpdate(transaction._id, updateData, {
-        session,
-      });
+  await PaymentTransaction.findByIdAndUpdate(transaction._id, updateData, {
+    session,
+  });
 
-      // If status changed to success, trigger token allocation
-      if (updateData.status === 'success' && transaction.status !== 'success') {
-        await updatePaymentTransactionStatus(
-          transaction._id.toString(),
-          'success',
-          session,
-        );
-      }
-    }
+  if (shouldTriggerSuccess) {
+    await updatePaymentTransactionStatus(
+      transaction._id.toString(),
+      'success',
+      session,
+    );
   }
 };

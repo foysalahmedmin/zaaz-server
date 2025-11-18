@@ -39,15 +39,11 @@ export const getPublicPackages = async (
   data: TPackage[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const { currency, ...rest } = query;
+  const { ...rest } = query;
 
   const filter: Record<string, unknown> = {
     is_active: true,
   };
-
-  if (currency) {
-    filter.currency = currency;
-  }
 
   const packageQuery = new AppQuery<TPackage>(
     Package.find().populate([{ path: 'features' }]),
@@ -71,13 +67,9 @@ export const getPackages = async (
   data: TPackage[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const { currency, ...rest } = query;
+  const { ...rest } = query;
 
   const filter: Record<string, unknown> = {};
-
-  if (currency) {
-    filter.currency = currency;
-  }
 
   const packageQuery = new AppQuery<TPackage>(
     Package.find().populate([{ path: 'features' }]),
@@ -124,7 +116,7 @@ export const updatePackage = async (
         content: packageData.content,
         token: packageData.token,
         features: packageData.features,
-        duration: packageData.duration,
+        duration: packageData.duration || 0,
         price: packageData.price,
         previous_price: packageData.price_previous,
         is_active: packageData.is_active,

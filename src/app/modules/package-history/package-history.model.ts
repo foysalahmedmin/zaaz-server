@@ -43,14 +43,26 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
       min: [1, 'Duration must be at least 1 day'],
     },
     price: {
-      type: Number,
-      required: [true, 'Price is required'],
-      min: [0, 'Price must be 0 or greater'],
+      USD: {
+        type: Number,
+        required: [true, 'Price USD is required'],
+        min: [0, 'Price USD must be 0 or greater'],
+      },
+      BDT: {
+        type: Number,
+        required: [true, 'Price BDT is required'],
+        min: [0, 'Price BDT must be 0 or greater'],
+      },
     },
     previous_price: {
-      type: Number,
-      required: [true, 'Previous price is required'],
-      min: [0, 'Previous price must be 0 or greater'],
+      USD: {
+        type: Number,
+        min: [0, 'Previous price USD must be 0 or greater'],
+      },
+      BDT: {
+        type: Number,
+        min: [0, 'Previous price BDT must be 0 or greater'],
+      },
     },
     is_active: {
       type: Boolean,
