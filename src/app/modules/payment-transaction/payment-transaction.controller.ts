@@ -78,3 +78,55 @@ export const deletePaymentTransaction = catchAsync(async (req, res) => {
   });
 });
 
+export const initiatePayment = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  const {
+    package: packageId,
+    payment_method: paymentMethodId,
+    return_url: returnUrl,
+    cancel_url: cancelUrl,
+  } = req.body;
+
+  const result = await PaymentTransactionServices.initiatePayment(
+    userId,
+    packageId,
+    paymentMethodId,
+    returnUrl,
+    cancelUrl,
+  );
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment initiated successfully',
+    data: result,
+  });
+});
+
+export const handleWebhook = catchAsync(async (req, res) => {
+  const { payment_method_id } = req.params;
+  
+  // Get signature from headers (Stripe uses 'stripe-signature', SSL Commerz might use 'x-signature')
+  const signature =
+    (req.headers['stripe-signature'] as string) ||
+    (req.headers['x-signature'] as string) ||
+    '';
+
+  // For Stripe, use raw body if available, otherwise use parsed body
+  // For SSL Commerz, use parsed body (form data)
+  const payload = (req as any).rawBody || req.body;
+
+  await PaymentTransactionServices.handlePaymentWebhook(
+    payment_method_id,
+    payload,
+    signature,
+  );
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Webhook processed successfully',
+    data: null,
+  });
+});
+

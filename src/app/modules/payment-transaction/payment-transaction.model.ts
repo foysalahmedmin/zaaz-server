@@ -33,6 +33,16 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: String,
       required: [true, 'Gateway transaction ID is required'],
       trim: true,
+      index: true,
+    },
+    gateway_session_id: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    gateway_status: {
+      type: String,
+      trim: true,
     },
     package: {
       type: Schema.Types.ObjectId,
@@ -52,6 +62,40 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
     exchange_rate: {
       type: Number,
       min: [0, 'Exchange rate must be 0 or greater'],
+    },
+    gateway_fee: {
+      type: Number,
+      min: [0, 'Gateway fee must be 0 or greater'],
+    },
+    failure_reason: {
+      type: String,
+      trim: true,
+    },
+    refund_id: {
+      type: String,
+      trim: true,
+    },
+    refunded_at: {
+      type: Date,
+    },
+    paid_at: {
+      type: Date,
+    },
+    failed_at: {
+      type: Date,
+    },
+    customer_email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+    customer_name: {
+      type: String,
+      trim: true,
+    },
+    gateway_response: {
+      type: Schema.Types.Mixed,
+      select: false, // Don't include in default queries (large data)
     },
     is_deleted: { type: Boolean, default: false, select: false },
   },

@@ -20,6 +20,10 @@ export const createPaymentMethodValidationSchema = z.object({
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
+    webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
+    test_mode: z.boolean().optional(),
+    supported_currencies: z.array(z.string().length(3)).optional(),
+    config: z.record(z.any()).optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -43,6 +47,10 @@ export const updatePaymentMethodValidationSchema = z.object({
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
+    webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
+    test_mode: z.boolean().optional(),
+    supported_currencies: z.array(z.string().length(3)).optional(),
+    config: z.record(z.any()).optional(),
     is_active: z.boolean().optional(),
   }),
 });

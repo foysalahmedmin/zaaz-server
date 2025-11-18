@@ -12,10 +12,21 @@ export type TPaymentTransaction = {
   status: TPaymentTransactionStatus;
   payment_method: mongoose.Types.ObjectId;
   gateway_transaction_id: string;
+  gateway_session_id?: string; // Stripe session ID or SSL Commerz session ID
+  gateway_status?: string; // Gateway-specific status (paid, VALID, etc.)
   package: mongoose.Types.ObjectId;
   amount_usd: number;
   amount_bdt: number;
   exchange_rate?: number;
+  gateway_fee?: number; // Fee charged by payment gateway
+  failure_reason?: string; // Reason if payment failed
+  refund_id?: string; // Gateway refund transaction ID
+  refunded_at?: Date; // Date when refund was processed
+  paid_at?: Date; // Date when payment was completed
+  failed_at?: Date; // Date when payment failed
+  customer_email?: string; // Customer email from gateway
+  customer_name?: string; // Customer name from gateway
+  gateway_response?: Record<string, any>; // Raw response data from gateway (for debugging)
   is_deleted?: boolean;
 };
 
@@ -26,4 +37,3 @@ export interface TPaymentTransactionDocument
 }
 
 export type TPaymentTransactionModel = Model<TPaymentTransactionDocument>;
-

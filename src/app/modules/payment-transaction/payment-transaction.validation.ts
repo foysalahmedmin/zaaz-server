@@ -35,6 +35,12 @@ export const updatePaymentTransactionValidationSchema = z.object({
   body: z.object({
     status: statusEnum.optional(),
     gateway_transaction_id: z.string().trim().min(1, 'Gateway transaction ID is required').optional(),
+    gateway_session_id: z.string().trim().optional(),
+    gateway_status: z.string().trim().optional(),
+    failure_reason: z.string().trim().optional(),
+    refund_id: z.string().trim().optional(),
+    customer_email: z.string().email('Invalid email format').optional(),
+    customer_name: z.string().trim().optional(),
   }),
 });
 
@@ -52,6 +58,21 @@ export const getPaymentTransactionsValidationSchema = z.object({
 export const paymentTransactionOperationValidationSchema = z.object({
   params: z.object({
     id: idSchema,
+  }),
+});
+
+export const initiatePaymentValidationSchema = z.object({
+  body: z.object({
+    package: idSchema,
+    payment_method: idSchema,
+    return_url: z.string().url('Return URL must be a valid URL'),
+    cancel_url: z.string().url('Cancel URL must be a valid URL'),
+  }),
+});
+
+export const webhookValidationSchema = z.object({
+  params: z.object({
+    payment_method_id: idSchema,
   }),
 });
 

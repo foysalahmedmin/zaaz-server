@@ -36,6 +36,22 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       trim: true,
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
+    webhook_url: {
+      type: String,
+      trim: true,
+    },
+    test_mode: {
+      type: Boolean,
+      default: false,
+    },
+    supported_currencies: {
+      type: [String],
+      default: [],
+    },
+    config: {
+      type: Schema.Types.Mixed,
+      select: false, // Don't include in default queries
+    },
     is_active: {
       type: Boolean,
       default: true,
@@ -62,10 +78,7 @@ paymentMethodSchema.methods.toJSON = function () {
 };
 
 paymentMethodSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<
-    TPaymentMethod,
-    TPaymentMethod
-  >;
+  const query = this as unknown as Query<TPaymentMethod, TPaymentMethod>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -101,4 +114,3 @@ export const PaymentMethod = mongoose.model<
   TPaymentMethodDocument,
   TPaymentMethodModel
 >('PaymentMethod', paymentMethodSchema);
-

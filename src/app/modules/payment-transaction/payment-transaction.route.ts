@@ -32,7 +32,47 @@ router.get(
   PaymentTransactionControllers.getPaymentTransaction,
 );
 
-// POST
+// POST - Initiate payment
+router.post(
+  '/initiate',
+  auth('user', 'admin'),
+  validation(PaymentTransactionValidations.initiatePaymentValidationSchema),
+  PaymentTransactionControllers.initiatePayment,
+);
+
+// POST - Webhook handler (no auth, handles both JSON and form data)
+// Note: Webhook routes should be placed before other routes to avoid conflicts
+router.post(
+  '/webhook/:payment_method_id',
+  express.raw({ type: ['application/json', 'application/x-www-form-urlencoded'] }),
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Store raw body for signature verification (Stripe needs this)
+    (req as any).rawBody = req.body;
+    
+    // Try to parse as JSON first, then as URL-encoded
+    try {
+      const bodyString = req.body.toString();
+      const contentType = req.headers['content-type'] || '';
+      
+      if (contentType.includes('application/json')) {
+        (req as any).body = JSON.parse(bodyString);
+      } else if (contentType.includes('application/x-www-form-urlencoded')) {
+        // Parse as URL-encoded form data
+        (req as any).body = Object.fromEntries(new URLSearchParams(bodyString));
+      } else {
+        // Keep as raw buffer
+        (req as any).body = req.body;
+      }
+    } catch (error) {
+      // If parsing fails, keep raw body
+      (req as any).body = req.body;
+    }
+    next();
+  },
+  PaymentTransactionControllers.handleWebhook,
+);
+
+// POST - Create payment transaction (admin only)
 router.post(
   '/',
   auth('admin'),
