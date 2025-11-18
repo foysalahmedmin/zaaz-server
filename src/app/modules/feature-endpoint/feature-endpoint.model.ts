@@ -11,6 +11,7 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
       type: Schema.Types.ObjectId,
       ref: 'Feature',
       required: [true, 'Feature is required'],
+      index: true,
     },
     name: {
       type: String,
@@ -27,7 +28,6 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
     endpoint: {
       type: String,
       required: [true, 'Endpoint is required'],
-      unique: true,
       trim: true,
     },
     method: {
@@ -35,6 +35,7 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
       required: [true, 'Method is required'],
       enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
       uppercase: true,
+      index: true,
     },
     token: {
       type: Number,
@@ -57,6 +58,16 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
   },
 );
 
+// Compound unique index: feature + endpoint + method (only for non-deleted records)
+featureEndpointSchema.index(
+  { feature: 1, endpoint: 1, method: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_deleted: { $ne: true } },
+    name: 'feature_endpoint_method_unique',
+  },
+);
+
 // toJSON override to remove sensitive fields from output
 featureEndpointSchema.methods.toJSON = function () {
   const featureEndpoint = this.toObject();
@@ -65,10 +76,7 @@ featureEndpointSchema.methods.toJSON = function () {
 };
 
 featureEndpointSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<
-    TFeatureEndpoint,
-    TFeatureEndpoint
-  >;
+  const query = this as unknown as Query<TFeatureEndpoint, TFeatureEndpoint>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -104,4 +112,3 @@ export const FeatureEndpoint = mongoose.model<
   TFeatureEndpointDocument,
   TFeatureEndpointModel
 >('FeatureEndpoint', featureEndpointSchema);
-

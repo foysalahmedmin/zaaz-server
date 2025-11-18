@@ -54,7 +54,7 @@ export const getPublicFeatures = async (
     Feature.find().populate([{ path: 'children' }]),
     { ...rest, ...filter },
   )
-    .search(['name', 'slug', 'description'])
+    .search(['name', 'description', 'path'])
     .filter()
     .sort()
     .paginate()
@@ -90,7 +90,7 @@ export const getFeatures = async (
     Feature.find().populate([{ path: 'children' }]),
     { ...rest, ...filter },
   )
-    .search(['name', 'slug', 'description'])
+    .search(['name', 'description', 'path'])
     .filter()
     .sort()
     .paginate()

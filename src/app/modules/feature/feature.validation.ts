@@ -11,19 +11,18 @@ export const createFeatureValidationSchema = z.object({
   body: z.object({
     parent: idSchema.optional(),
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-    slug: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .min(2, 'Slug must be at least 2 characters')
-      .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    type: featureTypeEnum.optional(),
+    path: z
+      .string()
+      .trim()
+      .max(200, 'Path cannot exceed 200 characters')
+      .optional(),
     prefix: z.string().trim().optional(),
+    type: featureTypeEnum.optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -35,20 +34,18 @@ export const updateFeatureValidationSchema = z.object({
   body: z.object({
     parent: idSchema.optional(),
     name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
-    slug: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .min(2, 'Slug must be at least 2 characters')
-      .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens')
-      .optional(),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    type: featureTypeEnum.optional(),
+    path: z
+      .string()
+      .trim()
+      .max(200, 'Path cannot exceed 200 characters')
+      .optional(),
     prefix: z.string().trim().optional(),
+    type: featureTypeEnum.optional(),
     is_active: z.boolean().optional(),
   }),
 });

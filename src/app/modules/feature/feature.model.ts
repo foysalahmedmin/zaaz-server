@@ -14,25 +14,23 @@ const featureSchema = new Schema<TFeatureDocument>(
       minlength: [2, 'Name must be at least 2 characters'],
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
-    slug: {
-      type: String,
-      required: [true, 'Slug is required'],
-      unique: true,
-      trim: true,
-      lowercase: true,
-    },
     description: {
       type: String,
       trim: true,
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
-    type: {
+    path: {
       type: String,
-      enum: ['writing', 'generation', 'other'],
+      trim: true,
+      maxlength: [200, 'Path cannot exceed 200 characters'],
     },
     prefix: {
       type: String,
       trim: true,
+    },
+    type: {
+      type: String,
+      enum: ['writing', 'generation', 'other'],
     },
     is_active: {
       type: Boolean,
@@ -100,4 +98,3 @@ export const Feature = mongoose.model<TFeatureDocument, TFeatureModel>(
   'Feature',
   featureSchema,
 );
-

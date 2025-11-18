@@ -5,10 +5,10 @@ export type TFeatureType = 'writing' | 'generation' | 'other';
 export type TFeature = {
   parent?: mongoose.Types.ObjectId | null;
   name: string;
-  slug: string;
   description?: string;
-  type?: TFeatureType;
+  path?: string; // Frontend route path
   prefix?: string;
+  type?: TFeatureType;
   is_active: boolean;
   is_deleted?: boolean;
 };
@@ -21,4 +21,3 @@ export interface TFeatureDocument extends TFeature, Document {
 export type TFeatureModel = Model<TFeatureDocument> & {
   isFeatureExist(_id: string): Promise<TFeatureDocument | null>;
 };
-
