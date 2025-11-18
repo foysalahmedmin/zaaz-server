@@ -206,14 +206,6 @@ History of updates to TokenProfit settings.
 erDiagram
     User {
         ObjectId _id PK "Required, Primary Key"
-        string username "Required, Unique"
-        string email "Required, Unique"
-        string password "Required"
-        string role "Required"
-        boolean is_active "Optional, Default: true"
-        boolean is_deleted "Optional, Default: false"
-        timestamp created_at "Optional, Auto-generated"
-        timestamp updated_at "Optional, Auto-generated"
     }
 
     Feature {
@@ -417,6 +409,8 @@ Here are the instructions:
 - The project uses modular folder structure with each module containing: schema/model, types, routes, controller, service.
 - Maintain the same naming conventions, patterns, and code style as in the existing project.
 - Use this data model as the source of truth for fields, types, and relations.
+- In this project, a separate **User Module** cannot be created because **user and auth are handled from a different server**. However, the user information can still be accessed from `req` since `auth.middleware` attaches `req.user`. And even though the **User schema/model is not defined** in this project, both this project's database and the **user-auth service database are the same**, so the required user data will still be available.
+- Mongoose session will be used, where multiple operations will be executed.
 
 **Action**:
 Analyze the project folder structure, then generate the new modules for each collection in the data model, respecting all the above instructions.

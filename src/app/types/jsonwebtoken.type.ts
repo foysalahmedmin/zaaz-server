@@ -6,7 +6,5 @@ export type TJwtPayload = {
   email: string;
   is_verified?: boolean;
   role?: TRole;
-  sub?: string;
   image?: string;
-  package?: string;
 };
