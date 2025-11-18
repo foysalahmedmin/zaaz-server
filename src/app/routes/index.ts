@@ -1,15 +1,13 @@
 import express from 'express';
-import CategoryRoutes from '../modules/category/category.route';
 import ContactRoutes from '../modules/contact/contact.route';
-import EventRoutes from '../modules/event/event.route';
-import FeatureRoutes from '../modules/feature/feature.route';
 import FeatureEndpointRoutes from '../modules/feature-endpoint/feature-endpoint.route';
-import PackageRoutes from '../modules/package/package.route';
+import FeatureRoutes from '../modules/feature/feature.route';
 import PackageHistoryRoutes from '../modules/package-history/package-history.route';
+import PackageRoutes from '../modules/package/package.route';
 import PaymentMethodRoutes from '../modules/payment-method/payment-method.route';
 import PaymentTransactionRoutes from '../modules/payment-transaction/payment-transaction.route';
-import TokenProfitRoutes from '../modules/token-profit/token-profit.route';
 import TokenProfitHistoryRoutes from '../modules/token-profit-history/token-profit-history.route';
+import TokenProfitRoutes from '../modules/token-profit/token-profit.route';
 import TokenTransactionRoutes from '../modules/token-transaction/token-transaction.route';
 import UserWalletRoutes from '../modules/user-wallet/user-wallet.route';
 
@@ -19,14 +17,6 @@ const moduleRoutes = [
   {
     path: '/contact',
     route: ContactRoutes,
-  },
-  {
-    path: '/categories',
-    route: CategoryRoutes,
-  },
-  {
-    path: '/events',
-    route: EventRoutes,
   },
   {
     path: '/features',
