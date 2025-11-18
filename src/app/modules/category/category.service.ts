@@ -97,8 +97,8 @@ export const getPublicCategories = async (
   }
 
   const categoryQuery = new AppQuery<TCategory>(
-    Category.find(filter).populate([{ path: 'children' }]),
-    rest,
+    Category.find().populate([{ path: 'children' }]),
+    { ...rest, ...filter },
   )
     .search(['name'])
     .filter()

@@ -1,0 +1,24 @@
+import mongoose, { Document, Model, Types } from 'mongoose';
+
+export type TFeatureType = 'writing' | 'generation' | 'other';
+
+export type TFeature = {
+  parent?: mongoose.Types.ObjectId | null;
+  name: string;
+  slug: string;
+  description?: string;
+  type?: TFeatureType;
+  prefix?: string;
+  is_active: boolean;
+  is_deleted?: boolean;
+};
+
+export interface TFeatureDocument extends TFeature, Document {
+  _id: Types.ObjectId;
+  softDelete(): Promise<TFeatureDocument | null>;
+}
+
+export type TFeatureModel = Model<TFeatureDocument> & {
+  isFeatureExist(_id: string): Promise<TFeatureDocument | null>;
+};
+

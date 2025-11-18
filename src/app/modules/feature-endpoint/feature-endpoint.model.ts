@@ -1,0 +1,107 @@
+import mongoose, { Query, Schema } from 'mongoose';
+import {
+  TFeatureEndpoint,
+  TFeatureEndpointDocument,
+  TFeatureEndpointModel,
+} from './feature-endpoint.type';
+
+const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
+  {
+    feature: {
+      type: Schema.Types.ObjectId,
+      ref: 'Feature',
+      required: [true, 'Feature is required'],
+    },
+    name: {
+      type: String,
+      required: [true, 'Name is required'],
+      trim: true,
+      minlength: [2, 'Name must be at least 2 characters'],
+      maxlength: [100, 'Name cannot exceed 100 characters'],
+    },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Description cannot exceed 500 characters'],
+    },
+    endpoint: {
+      type: String,
+      required: [true, 'Endpoint is required'],
+      unique: true,
+      trim: true,
+    },
+    method: {
+      type: String,
+      required: [true, 'Method is required'],
+      enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      uppercase: true,
+    },
+    token: {
+      type: Number,
+      required: [true, 'Token is required'],
+      min: [0, 'Token must be 0 or greater'],
+    },
+    is_active: {
+      type: Boolean,
+      default: true,
+    },
+    is_deleted: { type: Boolean, default: false, select: false },
+  },
+  {
+    timestamps: {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// toJSON override to remove sensitive fields from output
+featureEndpointSchema.methods.toJSON = function () {
+  const featureEndpoint = this.toObject();
+  delete featureEndpoint.is_deleted;
+  return featureEndpoint;
+};
+
+featureEndpointSchema.pre(/^find/, function (next) {
+  const query = this as unknown as Query<
+    TFeatureEndpoint,
+    TFeatureEndpoint
+  >;
+  const opts = query.getOptions();
+
+  if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
+    query.setQuery({
+      ...query.getQuery(),
+      is_deleted: { $ne: true },
+    });
+  }
+
+  next();
+});
+
+// Aggregation pipeline
+featureEndpointSchema.pre('aggregate', function (next) {
+  this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
+  next();
+});
+
+// Static methods
+featureEndpointSchema.statics.isFeatureEndpointExist = async function (
+  _id: string,
+) {
+  return await this.findById(_id);
+};
+
+// Instance methods
+featureEndpointSchema.methods.softDelete = async function () {
+  this.is_deleted = true;
+  return await this.save();
+};
+
+export const FeatureEndpoint = mongoose.model<
+  TFeatureEndpointDocument,
+  TFeatureEndpointModel
+>('FeatureEndpoint', featureEndpointSchema);
+

@@ -1,0 +1,102 @@
+import mongoose, { Query, Schema } from 'mongoose';
+import {
+  TPaymentTransaction,
+  TPaymentTransactionDocument,
+  TPaymentTransactionModel,
+} from './payment-transaction.type';
+
+const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      required: [true, 'User is required'],
+      index: true,
+    },
+    user_wallet: {
+      type: Schema.Types.ObjectId,
+      ref: 'UserWallet',
+      required: [true, 'User wallet is required'],
+      index: true,
+    },
+    status: {
+      type: String,
+      required: [true, 'Status is required'],
+      enum: ['pending', 'success', 'failed', 'refunded'],
+      default: 'pending',
+    },
+    payment_method: {
+      type: Schema.Types.ObjectId,
+      ref: 'PaymentMethod',
+      required: [true, 'Payment method is required'],
+    },
+    gateway_transaction_id: {
+      type: String,
+      required: [true, 'Gateway transaction ID is required'],
+      trim: true,
+    },
+    package: {
+      type: Schema.Types.ObjectId,
+      ref: 'Package',
+      required: [true, 'Package is required'],
+    },
+    amount_usd: {
+      type: Number,
+      required: [true, 'Amount USD is required'],
+      min: [0, 'Amount USD must be 0 or greater'],
+    },
+    amount_bdt: {
+      type: Number,
+      required: [true, 'Amount BDT is required'],
+      min: [0, 'Amount BDT must be 0 or greater'],
+    },
+    exchange_rate: {
+      type: Number,
+      min: [0, 'Exchange rate must be 0 or greater'],
+    },
+    is_deleted: { type: Boolean, default: false, select: false },
+  },
+  {
+    timestamps: {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
+
+// toJSON override to remove sensitive fields from output
+paymentTransactionSchema.methods.toJSON = function () {
+  const paymentTransaction = this.toObject();
+  delete paymentTransaction.is_deleted;
+  return paymentTransaction;
+};
+
+paymentTransactionSchema.pre(/^find/, function (next) {
+  const query = this as unknown as Query<
+    TPaymentTransaction,
+    TPaymentTransaction
+  >;
+  const opts = query.getOptions();
+
+  if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
+    query.setQuery({
+      ...query.getQuery(),
+      is_deleted: { $ne: true },
+    });
+  }
+
+  next();
+});
+
+// Aggregation pipeline
+paymentTransactionSchema.pre('aggregate', function (next) {
+  this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
+  next();
+});
+
+export const PaymentTransaction = mongoose.model<
+  TPaymentTransactionDocument,
+  TPaymentTransactionModel
+>('PaymentTransaction', paymentTransactionSchema);
+
