@@ -43,8 +43,9 @@ Specific API endpoint for a feature and its token requirement.
 - `feature` — ObjectId (Ref: Feature) (required, parent feature reference)
 - `name` — String (required, API name or label)
 - `description` — String (optional)
-- `endpoint` — String (required, unique, e.g., `/api/v1/blog`)
+- `endpoint` — String (required, e.g., `/api/v1/blog`)
 - `method` — Enum: `GET | POST | PUT | PATCH | DELETE` (required, HTTP method)
+- **Note**: The combination of `feature`, `endpoint`, and `method` must be unique for non-deleted records (compound unique index)
 - `token` — Number (required, minimum token needed to access this endpoint)
 - `is_active` — Boolean (default: true, endpoint availability)
 - `is_deleted` — Boolean (default: false, soft delete flag)
@@ -249,7 +250,7 @@ erDiagram
         ObjectId feature FK "Required, Reference: Feature._id"
         string name "Required, API name/label"
         string description "Optional"
-        string endpoint "Required, Unique, e.g. /api/v1/blog"
+        string endpoint "Required, e.g. /api/v1/blog"
         string method "Required, Enum: GET | POST | PUT | PATCH | DELETE"
         number token "Required, Minimum token needed"
         boolean is_active "Optional, Default: true, Endpoint availability"
@@ -266,12 +267,8 @@ erDiagram
         number token "Required, Total tokens included"
         array features "Required, Reference: Feature._id[]"
         number duration "Optional, Validity in days"
-        object price "Required, Current price in both currencies"
-        number price.USD "Required, Price in USD"
-        number price.BDT "Required, Price in BDT"
-        object price_previous "Optional, Previous price for reference"
-        number price_previous.USD "Optional, Previous price in USD"
-        number price_previous.BDT "Optional, Previous price in BDT"
+        object price "Required, Current price object with USD and BDT"
+        object price_previous "Optional, Previous price object with USD and BDT"
         boolean is_active "Optional, Default: true, Package availability"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
@@ -287,12 +284,8 @@ erDiagram
         number token "Required"
         array features "Required, Reference: Feature._id[]"
         number duration "Required, Validity in days at that time"
-        object price "Required, Price at that time"
-        number price.USD "Required, Price in USD at that time"
-        number price.BDT "Required, Price in BDT at that time"
-        object previous_price "Optional, Previous price at that time"
-        number previous_price.USD "Optional, Previous price in USD"
-        number previous_price.BDT "Optional, Previous price in BDT"
+        object price "Required, Price object with USD and BDT at that time"
+        object previous_price "Optional, Previous price object with USD and BDT at that time"
         boolean is_active "Optional"
         boolean is_deleted "Optional"
         timestamp created_at "Optional, Auto-generated"

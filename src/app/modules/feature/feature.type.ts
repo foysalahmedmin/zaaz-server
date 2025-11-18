@@ -6,7 +6,7 @@ export type TFeature = {
   parent?: mongoose.Types.ObjectId | null;
   name: string;
   description?: string;
-  path?: string; // Frontend route path
+  path?: string;
   prefix?: string;
   type?: TFeatureType;
   is_active: boolean;
