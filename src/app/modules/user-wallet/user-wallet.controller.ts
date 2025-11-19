@@ -15,8 +15,8 @@ export const getSelfWallet = catchAsync(async (req, res) => {
 });
 
 export const getUserWallet = catchAsync(async (req, res) => {
-  const { userId } = req.params;
-  const result = await UserWalletServices.getUserWallet(userId || req.user._id);
+  const userId = req.params.user_id || req.user._id;
+  const result = await UserWalletServices.getUserWallet(userId);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,

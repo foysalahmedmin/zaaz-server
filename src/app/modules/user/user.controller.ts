@@ -15,8 +15,8 @@ export const getSelf = catchAsync(async (req, res) => {
 });
 
 export const getUser = catchAsync(async (req, res) => {
-  const { id } = req.params;
-  const result = await UserServices.getUser(id || req.user._id);
+  const userId = req.params.id || req.user._id;
+  const result = await UserServices.getUser(userId);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,

@@ -9,7 +9,7 @@ const router = express.Router();
 // GET
 router.get('/self', auth('user', 'admin'), UserWalletControllers.getSelfWallet);
 router.get(
-  '/user/:userId',
+  '/user/:user_id',
   auth('admin'),
   validation(UserWalletValidations.getUserWalletValidationSchema),
   UserWalletControllers.getUserWallet,
