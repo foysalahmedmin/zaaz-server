@@ -122,6 +122,26 @@ export const updateUserWalletByUser = async (
   return result!;
 };
 
+export const getUserWallets = async (
+  query_params: Record<string, unknown>,
+): Promise<{ data: TUserWallet[]; meta: any }> => {
+  const AppQuery = (await import('../../builder/AppQuery')).default;
+  const query = UserWallet.find().populate('package').populate('user');
+  const appQuery = new AppQuery<TUserWallet>(query, query_params);
+
+  appQuery
+    .search(['user'])
+    .filter()
+    .sort()
+    .paginate()
+    .fields()
+    .tap((q) => q.lean());
+
+  const result = await appQuery.execute();
+
+  return result;
+};
+
 export const deleteUserWallet = async (id: string): Promise<void> => {
   const wallet = await UserWallet.findById(id);
   if (!wallet) {

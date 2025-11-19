@@ -25,6 +25,17 @@ export const getUserWallet = catchAsync(async (req, res) => {
   });
 });
 
+export const getUserWallets = catchAsync(async (req, res) => {
+  const result = await UserWalletServices.getUserWallets(req.query);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'User wallets retrieved successfully',
+    meta: result.meta,
+    data: result.data,
+  });
+});
+
 export const getUserWalletById = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await UserWalletServices.getUserWalletById(id);
