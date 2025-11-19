@@ -8,10 +8,10 @@ const router = express.Router();
 
 // GET
 router.get(
-  '/me',
+  '/self',
   auth('user', 'admin'),
   validation(TokenTransactionValidations.getTokenTransactionsValidationSchema),
-  TokenTransactionControllers.getMyTokenTransactions,
+  TokenTransactionControllers.getSelfTokenTransactions,
 );
 router.get(
   '/',
@@ -51,4 +51,3 @@ router.delete(
 const TokenTransactionRoutes = router;
 
 export default TokenTransactionRoutes;
-

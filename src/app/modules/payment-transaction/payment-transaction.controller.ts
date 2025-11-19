@@ -28,7 +28,7 @@ export const updatePaymentTransaction = catchAsync(async (req, res) => {
   });
 });
 
-export const getMyPaymentTransactions = catchAsync(async (req, res) => {
+export const getSelfPaymentTransactions = catchAsync(async (req, res) => {
   const userId = req.user._id;
   const result = await PaymentTransactionServices.getPaymentTransactions({
     ...req.query,

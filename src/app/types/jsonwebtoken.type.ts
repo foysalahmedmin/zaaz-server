@@ -4,7 +4,7 @@ export type TJwtPayload = {
   _id: string;
   name: string;
   email: string;
-  is_verified?: boolean;
-  role?: TRole;
   image?: string;
+  role?: TRole;
+  is_verified?: boolean;
 };

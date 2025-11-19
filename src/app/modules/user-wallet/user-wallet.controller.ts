@@ -3,7 +3,7 @@ import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import * as UserWalletServices from './user-wallet.service';
 
-export const getMyWallet = catchAsync(async (req, res) => {
+export const getSelfWallet = catchAsync(async (req, res) => {
   const userId = req.user._id;
   const result = await UserWalletServices.getUserWallet(userId);
   sendResponse(res, {
@@ -67,4 +67,3 @@ export const deleteUserWallet = catchAsync(async (req, res) => {
     data: null,
   });
 });
-

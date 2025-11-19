@@ -15,7 +15,7 @@ export const createTokenTransaction = catchAsync(async (req, res) => {
   });
 });
 
-export const getMyTokenTransactions = catchAsync(async (req, res) => {
+export const getSelfTokenTransactions = catchAsync(async (req, res) => {
   const userId = req.user._id;
   const result = await TokenTransactionServices.getTokenTransactions({
     ...req.query,
@@ -62,4 +62,3 @@ export const deleteTokenTransaction = catchAsync(async (req, res) => {
     data: null,
   });
 });
-

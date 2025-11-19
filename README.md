@@ -22,6 +22,8 @@ A robust, scalable token-based payment system server built with Node.js, Express
 ## ✨ Features
 
 ### Core Functionality
+- **User Management**: Complete user authentication and authorization system with role-based access control
+- **Authentication**: JWT-based authentication with signup, signin, password reset, and email verification
 - **Token-Based System**: Manage user tokens for accessing premium features
 - **Package Management**: Create and manage token packages with multi-currency support (USD/BDT)
 - **Payment Processing**: Integrated payment gateways (Stripe & SSL Commerz)
@@ -141,6 +143,8 @@ src/
 │   │   ├── validation.middleware.ts
 │   │   └── ...
 │   ├── modules/              # Feature modules
+│   │   ├── auth/             # Authentication module
+│   │   ├── user/             # User management module
 │   │   ├── contact/
 │   │   ├── feature/
 │   │   ├── feature-endpoint/
@@ -175,6 +179,17 @@ src/
 erDiagram
     User {
         ObjectId _id PK "Required, Primary Key"
+        string image "Optional, User profile image URL"
+        string name "Required, 2-50 characters"
+        string email "Required, Unique, Lowercase, Indexed"
+        string password "Required, 6-12 characters, Hashed"
+        date password_changed_at "Optional, Auto-updated on password change"
+        string role "Required, Enum: super-admin | admin | editor | author | contributor | subscriber | user"
+        string status "Optional, Enum: in-progress | blocked, Default: in-progress"
+        boolean is_verified "Optional, Default: false, Email verification status"
+        boolean is_deleted "Optional, Default: false, Soft delete"
+        timestamp created_at "Optional, Auto-generated"
+        timestamp updated_at "Optional, Auto-generated"
     }
 
     Feature {
@@ -375,6 +390,8 @@ erDiagram
 
 | Module | Base Path | Description |
 |--------|-----------|-------------|
+| Auth | `/api/auth` | Authentication and authorization |
+| Users | `/api/users` | User management |
 | Contact | `/api/contact` | Contact form submissions |
 | Features | `/api/features` | System features management |
 | Feature Endpoints | `/api/feature-endpoints` | API endpoint definitions |
@@ -396,6 +413,33 @@ Most modules follow RESTful conventions:
 - `POST /api/{module}` - Create new item
 - `PATCH /api/{module}/:id` - Update item
 - `DELETE /api/{module}/:id` - Soft delete item
+
+### Auth-Specific Endpoints
+
+- `POST /api/auth/signin` - User sign in
+- `POST /api/auth/signup` - User sign up
+- `POST /api/auth/refresh-token` - Refresh access token
+- `PATCH /api/auth/change-password` - Change password (authenticated)
+- `POST /api/auth/forget-password` - Request password reset
+- `PATCH /api/auth/reset-password` - Reset password with token
+- `POST /api/auth/email-verification-source` - Request email verification (authenticated)
+- `POST /api/auth/email-verification` - Verify email with token
+
+### User-Specific Endpoints
+
+- `GET /api/users/self` - Get current user profile (authenticated)
+- `GET /api/users/writers` - Get writers list (public)
+- `GET /api/users` - Get all users (admin only)
+- `GET /api/users/:id` - Get user by ID (admin only)
+- `PATCH /api/users/self` - Update own profile (authenticated)
+- `PATCH /api/users/bulk` - Bulk update users (admin only)
+- `PATCH /api/users/:id` - Update user by ID (admin only)
+- `DELETE /api/users/:id` - Soft delete user (admin only)
+- `DELETE /api/users/bulk` - Bulk soft delete users (admin only)
+- `DELETE /api/users/:id/permanent` - Permanently delete user (admin only)
+- `DELETE /api/users/bulk/permanent` - Bulk permanent delete (admin only)
+- `POST /api/users/:id/restore` - Restore soft-deleted user (admin only)
+- `POST /api/users/bulk/restore` - Bulk restore users (admin only)
 
 ### Payment-Specific Endpoints
 

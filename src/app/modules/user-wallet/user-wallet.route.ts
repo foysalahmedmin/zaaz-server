@@ -7,7 +7,7 @@ import * as UserWalletValidations from './user-wallet.validation';
 const router = express.Router();
 
 // GET
-router.get('/me', auth('user', 'admin'), UserWalletControllers.getMyWallet);
+router.get('/self', auth('user', 'admin'), UserWalletControllers.getSelfWallet);
 router.get(
   '/user/:userId',
   auth('admin'),
@@ -48,4 +48,3 @@ router.delete(
 const UserWalletRoutes = router;
 
 export default UserWalletRoutes;
-
