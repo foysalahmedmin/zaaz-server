@@ -17,7 +17,6 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     value: {
       type: String,
       required: [true, 'Name is required'],
-      unique: true,
       trim: true,
       lowercase: true,
       minlength: [2, 'Name must be at least 2 characters'],
@@ -73,6 +72,15 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     },
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
+  },
+);
+
+// Compound unique index
+paymentMethodSchema.index(
+  { value: 1, is_test: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_deleted: { $ne: true } },
   },
 );
 
