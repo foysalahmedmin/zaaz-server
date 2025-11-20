@@ -2,6 +2,8 @@ import express from 'express';
 import ContactRoutes from '../modules/contact/contact.route';
 import FeatureEndpointRoutes from '../modules/feature-endpoint/feature-endpoint.route';
 import FeatureRoutes from '../modules/feature/feature.route';
+import NotificationRecipientRoutes from '../modules/notification-recipient/notification-recipient.route';
+import NotificationRoutes from '../modules/notification/notification.route';
 import PackageHistoryRoutes from '../modules/package-history/package-history.route';
 import PackageRoutes from '../modules/package/package.route';
 import PaymentMethodRoutes from '../modules/payment-method/payment-method.route';
@@ -10,14 +12,20 @@ import TokenProfitHistoryRoutes from '../modules/token-profit-history/token-prof
 import TokenProfitRoutes from '../modules/token-profit/token-profit.route';
 import TokenTransactionRoutes from '../modules/token-transaction/token-transaction.route';
 import UserWalletRoutes from '../modules/user-wallet/user-wallet.route';
+import UserRoutes from '../modules/user/user.route';
 
 const router = express.Router();
 
 const moduleRoutes = [
   {
-    path: '/contact',
-    route: ContactRoutes,
+    path: '/users',
+    route: UserRoutes,
   },
+  {
+    path: '/user-wallets',
+    route: UserWalletRoutes,
+  },
+
   {
     path: '/features',
     route: FeatureRoutes,
@@ -55,8 +63,16 @@ const moduleRoutes = [
     route: TokenTransactionRoutes,
   },
   {
-    path: '/user-wallets',
-    route: UserWalletRoutes,
+    path: '/contact',
+    route: ContactRoutes,
+  },
+  {
+    path: '/notifications',
+    route: NotificationRoutes,
+  },
+  {
+    path: '/notification-recipients',
+    route: NotificationRecipientRoutes,
   },
 ];
 

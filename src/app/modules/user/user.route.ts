@@ -101,6 +101,6 @@ router.post(
   UserControllers.restoreUser,
 );
 
-const userRoutes = router;
+const UserRoutes = router;
 
-export default userRoutes;
+export default UserRoutes;

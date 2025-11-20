@@ -22,6 +22,7 @@ A robust, scalable token-based payment system server built with Node.js, Express
 ## ✨ Features
 
 ### Core Functionality
+
 - **User Management**: Complete user authentication and authorization system with role-based access control
 - **Authentication**: JWT-based authentication with signup, signin, password reset, and email verification
 - **Token-Based System**: Manage user tokens for accessing premium features
@@ -31,8 +32,11 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Transaction History**: Complete audit trail for all token and payment transactions
 - **Feature Access Control**: Define features and endpoints with token requirements
 - **Profit Management**: Configurable profit percentage settings with history tracking
+- **Notification System**: Comprehensive notification system with multi-channel support (web, push, email)
+- **Notification Recipients**: User-specific notification delivery and read status tracking
 
 ### Technical Features
+
 - **Modular Architecture**: Clean, maintainable codebase with separation of concerns
 - **Type Safety**: Full TypeScript implementation with strict type checking
 - **Validation**: Zod schema validation for request/response data
@@ -49,6 +53,7 @@ A robust, scalable token-based payment system server built with Node.js, Express
 ## 🛠 Tech Stack
 
 ### Core Technologies
+
 - **Runtime**: Node.js
 - **Framework**: Express.js 5.x
 - **Language**: TypeScript 5.x
@@ -57,6 +62,7 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Real-time**: Socket.io 4.x
 
 ### Key Libraries
+
 - **Validation**: Zod 3.x
 - **Authentication**: JWT (jsonwebtoken)
 - **Payment Gateways**: Stripe SDK, SSL Commerz API
@@ -65,6 +71,7 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Session**: express-session with MongoDB store
 
 ### Development Tools
+
 - **Linting**: ESLint
 - **Formatting**: Prettier
 - **Git Hooks**: Husky
@@ -148,6 +155,8 @@ src/
 │   │   ├── contact/
 │   │   ├── feature/
 │   │   ├── feature-endpoint/
+│   │   ├── notification/
+│   │   ├── notification-recipient/
 │   │   ├── package/
 │   │   ├── package-history/
 │   │   ├── payment-method/
@@ -352,6 +361,33 @@ erDiagram
         timestamp updated_at "Optional, Auto-generated"
     }
 
+    Notification {
+        ObjectId _id PK "Required, Primary Key"
+        string title "Required, Notification title"
+        string message "Required, Notification message content"
+        string type "Required, Enum: request | approval"
+        string priority "Optional, Enum: low | medium | high | urgent, Default: medium"
+        array channels "Required, Enum: web | push | email[]"
+        ObjectId sender FK "Required, Reference: User._id, Notification sender"
+        date expires_at "Optional, Default: 1 year from creation"
+        string status "Optional, Enum: active | inactive | archived, Default: active"
+        boolean is_deleted "Optional, Default: false, Soft delete"
+        timestamp created_at "Optional, Auto-generated"
+        timestamp updated_at "Optional, Auto-generated"
+    }
+
+    NotificationRecipient {
+        ObjectId _id PK "Required, Primary Key"
+        ObjectId notification FK "Required, Reference: Notification._id"
+        ObjectId recipient FK "Required, Reference: User._id, Notification recipient"
+        object metadata "Optional, Notification metadata with url, image, source, reference, actions"
+        boolean is_read "Optional, Default: false, Read status"
+        date read_at "Optional, Date when notification was read"
+        boolean is_deleted "Optional, Default: false, Soft delete"
+        timestamp created_at "Optional, Auto-generated"
+        timestamp updated_at "Optional, Auto-generated"
+    }
+
     %% Relationships
     User ||--o{ UserWallet : "has (One-to-Many)"
     User ||--o{ TokenTransaction : "performs (One-to-Many)"
@@ -367,6 +403,9 @@ erDiagram
     FeatureEndpoint ||--o{ TokenTransaction : "consumed_by (One-to-Many, via decrease_source)"
     PaymentTransaction ||--o{ TokenTransaction : "triggers (One-to-Many, via payment_transaction)"
     TokenProfit ||--o{ TokenProfitHistory : "maintains_history (One-to-Many)"
+    User ||--o{ Notification : "sends (One-to-Many, via sender)"
+    Notification ||--o{ NotificationRecipient : "delivered_to (One-to-Many)"
+    User ||--o{ NotificationRecipient : "receives (One-to-Many, via recipient)"
 ```
 
 ### Key Relationships
@@ -376,33 +415,39 @@ erDiagram
 3. **Feature → FeatureEndpoint**: One-to-Many (Each feature has multiple endpoints)
 4. **UserWallet → TokenTransaction**: One-to-Many (Wallet records all token movements)
 5. **PaymentTransaction → TokenTransaction**: One-to-Many (Payment triggers token increase)
+6. **User → Notification**: One-to-Many (Users can send multiple notifications)
+7. **Notification → NotificationRecipient**: One-to-Many (Notifications can have multiple recipients)
+8. **User → NotificationRecipient**: One-to-Many (Users can receive multiple notifications)
 
 ---
 
 ## 🔌 API Endpoints
 
 ### Base URL
+
 ```
 /api
 ```
 
 ### Available Modules
 
-| Module | Base Path | Description |
-|--------|-----------|-------------|
-| Auth | `/api/auth` | Authentication and authorization |
-| Users | `/api/users` | User management |
-| Contact | `/api/contact` | Contact form submissions |
-| Features | `/api/features` | System features management |
-| Feature Endpoints | `/api/feature-endpoints` | API endpoint definitions |
-| Packages | `/api/packages` | Token package management |
-| Package History | `/api/package-histories` | Package change history |
-| Payment Methods | `/api/payment-methods` | Payment gateway configurations |
-| Payment Transactions | `/api/payment-transactions` | Payment processing |
-| Token Profits | `/api/token-profits` | Profit percentage settings |
-| Token Profit History | `/api/token-profit-histories` | Profit setting history |
-| Token Transactions | `/api/token-transactions` | Token movement history |
-| User Wallets | `/api/user-wallets` | User wallet management |
+| Module                  | Base Path                      | Description                           |
+| ----------------------- | ------------------------------ | ------------------------------------- |
+| Auth                    | `/api/auth`                    | Authentication and authorization      |
+| Users                   | `/api/users`                   | User management                       |
+| Contact                 | `/api/contact`                 | Contact form submissions              |
+| Features                | `/api/features`                | System features management            |
+| Feature Endpoints       | `/api/feature-endpoints`       | API endpoint definitions              |
+| Notifications           | `/api/notifications`           | Notification management               |
+| Notification Recipients | `/api/notification-recipients` | Notification delivery and read status |
+| Packages                | `/api/packages`                | Token package management              |
+| Package History         | `/api/package-histories`       | Package change history                |
+| Payment Methods         | `/api/payment-methods`         | Payment gateway configurations        |
+| Payment Transactions    | `/api/payment-transactions`    | Payment processing                    |
+| Token Profits           | `/api/token-profits`           | Profit percentage settings            |
+| Token Profit History    | `/api/token-profit-histories`  | Profit setting history                |
+| Token Transactions      | `/api/token-transactions`      | Token movement history                |
+| User Wallets            | `/api/user-wallets`            | User wallet management                |
 
 ### Common Endpoints Pattern
 
@@ -448,6 +493,34 @@ Most modules follow RESTful conventions:
 - `GET /api/payment-transactions/:id/status` - Check payment status
 - `POST /api/payment-transactions/:id/verify` - Verify payment
 
+### Notification-Specific Endpoints
+
+- `GET /api/notifications` - Get all notifications (admin only)
+- `GET /api/notifications/:id` - Get single notification (admin only)
+- `POST /api/notifications` - Create notification (admin only)
+- `PATCH /api/notifications/:id` - Update notification (admin only)
+- `PATCH /api/notifications/bulk` - Bulk update notifications (admin only)
+- `DELETE /api/notifications/:id` - Soft delete notification (admin only)
+- `DELETE /api/notifications/bulk` - Bulk soft delete notifications (admin only)
+- `POST /api/notifications/:id/restore` - Restore notification (admin only)
+- `POST /api/notifications/bulk/restore` - Bulk restore notifications (admin only)
+
+### Notification Recipient-Specific Endpoints
+
+- `GET /api/notification-recipients` - Get all notification recipients (admin only)
+- `GET /api/notification-recipients/self` - Get own notification recipients (admin/user)
+- `GET /api/notification-recipients/:id` - Get single notification recipient (admin only)
+- `GET /api/notification-recipients/:id/self` - Get own notification recipient by ID (admin/user)
+- `POST /api/notification-recipients` - Create notification recipient (admin/user)
+- `PATCH /api/notification-recipients/:id/read` - Mark notification as read (admin/user)
+- `PATCH /api/notification-recipients/read-all/self` - Mark all own notifications as read (admin/user)
+- `PATCH /api/notification-recipients/bulk/self` - Bulk update own notification recipients (admin/user)
+- `DELETE /api/notification-recipients/:id` - Soft delete notification recipient (admin only)
+- `DELETE /api/notification-recipients/bulk` - Bulk soft delete notification recipients (admin only)
+- `POST /api/notification-recipients/:id/restore` - Restore notification recipient (admin only)
+- `POST /api/notification-recipients/bulk/restore` - Bulk restore notification recipients (admin only)
+- `POST /api/notification-recipients/bulk/restore/self` - Bulk restore own notification recipients (admin/user)
+
 ---
 
 ## 🚀 Getting Started
@@ -462,12 +535,14 @@ Most modules follow RESTful conventions:
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd payment-system-server
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    # or
@@ -475,12 +550,14 @@ Most modules follow RESTful conventions:
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 4. **Build the project**
+
    ```bash
    pnpm build
    # or
@@ -488,6 +565,7 @@ Most modules follow RESTful conventions:
    ```
 
 5. **Start the development server**
+
    ```bash
    pnpm start:dev
    # or
@@ -510,6 +588,7 @@ The server will start on `http://localhost:5000` (or the port specified in your 
 Create a `.env` file in the root directory with the following variables:
 
 ### Server Configuration
+
 ```env
 NODE_ENV=development
 PORT=5000
@@ -518,11 +597,13 @@ CLUSTER_ENABLED=false
 ```
 
 ### Database
+
 ```env
 DATABASE_URL=mongodb://localhost:27017/payment-system
 ```
 
 ### Redis (Optional)
+
 ```env
 REDIS_ENABLED=true
 REDIS_URL=redis://localhost:6379
@@ -530,6 +611,7 @@ REDIS_PASSWORD=
 ```
 
 ### Authentication
+
 ```env
 JWT_ACCESS_SECRET=your-access-secret-key
 JWT_ACCESS_SECRET_EXPIRES_IN=7d
@@ -543,6 +625,7 @@ SESSION_SECRET=your-session-secret
 ```
 
 ### Frontend & Email
+
 ```env
 FRONT_END_URL=http://localhost:3000
 RESET_PASSWORD_UI_LINK=http://localhost:3000/reset-password
@@ -552,12 +635,14 @@ AUTH_USER_EMAIL_PASSWORD=your-app-password
 ```
 
 ### Security
+
 ```env
 BCRYPT_SALT_ROUNDS=12
 DEFAULT_PASSWORD=default-password
 ```
 
 **Note**: Generate secure random strings for JWT secrets:
+
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
@@ -584,7 +669,7 @@ sequenceDiagram
     API->>Gateway: Initiate Payment
     Gateway-->>API: Payment URL/Session
     API-->>Client: Redirect URL
-    
+
     Client->>Gateway: Complete Payment
     Gateway->>Webhook: Payment Status Update
     Webhook->>API: POST /api/payment-transactions/webhook/:id
@@ -610,6 +695,7 @@ const response = await gateway.initiatePayment(data);
 2. **SSL Commerz**: Configure webhook URL in SSL Commerz panel
 
 Webhook URL format:
+
 ```
 POST /api/payment-transactions/webhook/:payment_method_id
 ```
@@ -738,4 +824,3 @@ For support, email your-email@example.com or open an issue in the repository.
 ---
 
 **Built with ❤️ using TypeScript, Express.js, and MongoDB**
-
