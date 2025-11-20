@@ -26,8 +26,9 @@ export class SSLCommerzService implements IPaymentGateway {
     this.storePassword = credentials[1].trim();
 
     // Use environment variable or default to sandbox
-    this.baseUrl =
-      process.env.SSL_COMMERZ_URL || 'https://sandbox.sslcommerz.com';
+    this.baseUrl = paymentMethod.is_test
+      ? 'https://sandbox.sslcommerz.com'
+      : 'https://securepay.sslcommerz.com';
   }
 
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse> {
