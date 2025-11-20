@@ -228,7 +228,7 @@ export const forgetPassword = async (payload: TForgetPassword) => {
 
   sendEmail({
     to: user.email,
-    subject: 'Z-News Password Change Link',
+    subject: 'Password Change Link',
     text: 'Reset your password within 10 minuets',
     html: content,
   });
@@ -303,7 +303,7 @@ export const emailVerificationSource = async (user: TJwtPayload) => {
 
   sendEmail({
     to: user.email,
-    subject: 'Z-News Email Verification Link',
+    subject: 'Email Verification Link',
     text: 'Verify your email within 10 minuets',
     html: content,
   });
