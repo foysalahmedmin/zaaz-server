@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Types } from 'mongoose';
+import { Document, Model, Types } from 'mongoose';
 
 export type TTokenProfit = {
   name: string;
@@ -15,4 +15,3 @@ export interface TTokenProfitDocument extends TTokenProfit, Document {
 export type TTokenProfitModel = Model<TTokenProfitDocument> & {
   isTokenProfitExist(_id: string): Promise<TTokenProfitDocument | null>;
 };
-

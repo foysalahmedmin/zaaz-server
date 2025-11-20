@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
 import AppError from '../../builder/AppError';
 import { ExpiresIn } from '../../config';
-import { TJwtPayload } from './auth.type';
+import { TJwtPayload } from '../../types/jsonwebtoken.type';
 
 export const createToken = (
   jwtPayload: Partial<TJwtPayload>,

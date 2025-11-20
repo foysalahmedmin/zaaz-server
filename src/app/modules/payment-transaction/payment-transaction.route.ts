@@ -65,7 +65,11 @@ router.post(
   express.raw({
     type: ['application/json', 'application/x-www-form-urlencoded'],
   }),
-  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  (
+    req: express.Request,
+    _res: express.Response,
+    next: express.NextFunction,
+  ) => {
     // Store raw body for signature verification (Stripe needs this)
     (req as any).rawBody = req.body;
 
