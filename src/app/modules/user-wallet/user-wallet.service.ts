@@ -21,19 +21,21 @@ export const createUserWallet = async (
     );
   }
 
-  // Get package to calculate expires_at if duration exists
-  const packageData = await Package.findById(data.package)
-    .session(session || null)
-    .lean();
-
-  if (!packageData) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
-  }
-
+  // Get package to calculate expires_at if duration exists (if package is provided)
   let expiresAt: Date | undefined;
-  if (packageData.duration) {
-    expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + packageData.duration);
+  if (data.package) {
+    const packageData = await Package.findById(data.package)
+      .session(session || null)
+      .lean();
+
+    if (!packageData) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+    }
+
+    if (packageData.duration) {
+      expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + packageData.duration);
+    }
   }
 
   const walletData = {
@@ -80,14 +82,10 @@ export const updateUserWallet = async (
     updateData.expires_at = new Date(payload.expires_at);
   }
 
-  const result = await UserWallet.findByIdAndUpdate(
-    id,
-    updateData,
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).session(session || null);
+  const result = await UserWallet.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: true,
+  }).session(session || null);
 
   return result!;
 };
@@ -150,4 +148,3 @@ export const deleteUserWallet = async (id: string): Promise<void> => {
 
   await UserWallet.findByIdAndDelete(id);
 };
-

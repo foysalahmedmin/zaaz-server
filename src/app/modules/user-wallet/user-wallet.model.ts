@@ -16,7 +16,7 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
     package: {
       type: Schema.Types.ObjectId,
       ref: 'Package',
-      required: [true, 'Package is required'],
+      default: null,
     },
     token: {
       type: Number,
@@ -61,8 +61,7 @@ userWalletSchema.pre(/^find/, function (next) {
   next();
 });
 
-export const UserWallet = mongoose.model<
-  TUserWalletDocument,
-  TUserWalletModel
->('UserWallet', userWalletSchema);
-
+export const UserWallet = mongoose.model<TUserWalletDocument, TUserWalletModel>(
+  'UserWallet',
+  userWalletSchema,
+);

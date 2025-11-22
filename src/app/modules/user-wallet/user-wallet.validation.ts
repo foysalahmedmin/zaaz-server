@@ -14,7 +14,7 @@ export const getUserWalletValidationSchema = z.object({
 export const createUserWalletValidationSchema = z.object({
   body: z.object({
     user: idSchema,
-    package: idSchema,
+    package: idSchema.optional(),
     token: z
       .number({ invalid_type_error: 'Token must be a number' })
       .int('Token must be an integer')
@@ -42,4 +42,3 @@ export const userWalletOperationValidationSchema = z.object({
     id: idSchema,
   }),
 });
-

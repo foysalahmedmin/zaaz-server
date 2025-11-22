@@ -363,12 +363,11 @@ export const initiatePayment = async (options: {
     .lean();
 
   if (!wallet) {
-    // Create wallet if doesn't exist
+    // Create wallet if doesn't exist (without package - will be set on payment success)
     const newWallet = await UserWallet.create(
       [
         {
           user: userId,
-          package: packageId,
           token: 0,
         },
       ],
@@ -399,7 +398,7 @@ export const initiatePayment = async (options: {
         user_wallet: wallet._id,
         status: 'pending',
         payment_method: paymentMethodId,
-        gateway_transaction_id: '', // Will be updated after gateway response
+        gateway_transaction_id: '',
         package: packageId,
         amount: gatewayAmount,
         currency: paymentMethod.currency,
