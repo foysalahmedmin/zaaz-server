@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
 import AppQuery from '../../builder/AppQuery';
+import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
 import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
@@ -455,6 +456,11 @@ export const initiatePayment = async (options: {
   );
 
   try {
+    // Construct webhook URL for SSLCommerz IPN
+    const webhookUrl =
+      paymentMethod.webhook_url ||
+      `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
+
     // Initiate payment with gateway
     const gateway = PaymentGatewayFactory.create(paymentMethod);
     const paymentResponse = await gateway.initiatePayment({
@@ -465,6 +471,7 @@ export const initiatePayment = async (options: {
       userWalletId: wallet._id.toString(),
       returnUrl,
       cancelUrl,
+      ipnUrl: webhookUrl, // Pass IPN URL for SSLCommerz webhook notifications
       customerEmail,
       customerName,
     });

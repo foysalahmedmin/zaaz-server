@@ -10,6 +10,7 @@ export interface InitiatePaymentData {
   userWalletId: string;
   returnUrl: string;
   cancelUrl: string;
+  ipnUrl?: string; // IPN/Webhook URL for SSLCommerz
   customerEmail?: string;
   customerName?: string;
 }

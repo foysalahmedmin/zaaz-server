@@ -37,7 +37,7 @@ export class SSLCommerzService implements IPaymentGateway {
         .toString(36)
         .substring(2, 11)}`;
 
-      const postData = {
+      const postData: any = {
         store_id: this.storeId,
         store_passwd: this.storePassword,
         total_amount: data.amount,
@@ -59,6 +59,11 @@ export class SSLCommerzService implements IPaymentGateway {
         value_b: data.userWalletId,
         value_c: data.packageId,
       };
+
+      // Add IPN URL if provided (for SSLCommerz webhook notifications)
+      if (data.ipnUrl) {
+        postData.ipn_url = data.ipnUrl;
+      }
 
       const response = await axios.post(
         `${this.baseUrl}/gwprocess/v4/api.php`,

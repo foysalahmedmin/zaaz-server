@@ -1,13 +1,31 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
 import AppQuery from '../../builder/AppQuery';
+import config from '../../config';
 import { PaymentMethod } from './payment-method.model';
 import { TPaymentMethod } from './payment-method.type';
 
 export const createPaymentMethod = async (
   data: TPaymentMethod,
 ): Promise<TPaymentMethod> => {
+  // Create payment method first
   const result = await PaymentMethod.create(data);
+  const paymentMethodId = result._id.toString();
+
+  // Auto-generate webhook_url if not provided
+  if (!data.webhook_url) {
+    const webhookUrl = `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
+
+    // Update with generated webhook URL
+    const updatedResult = await PaymentMethod.findByIdAndUpdate(
+      paymentMethodId,
+      { webhook_url: webhookUrl },
+      { new: true, runValidators: true },
+    );
+
+    return updatedResult!.toObject();
+  }
+
   return result.toObject();
 };
 
@@ -24,9 +42,7 @@ export const getPublicPaymentMethod = async (
   return result;
 };
 
-export const getPaymentMethod = async (
-  id: string,
-): Promise<TPaymentMethod> => {
+export const getPaymentMethod = async (id: string): Promise<TPaymentMethod> => {
   const result = await PaymentMethod.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
@@ -262,4 +278,3 @@ export const restorePaymentMethods = async (
     not_found_ids: notFoundIds,
   };
 };
-
