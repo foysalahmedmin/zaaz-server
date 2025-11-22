@@ -16,8 +16,8 @@ export class StripeService implements IPaymentGateway {
     this.stripe = new Stripe(paymentMethod.secret, {
       apiVersion: '2025-10-29.clover',
     });
-    // Webhook secret can be stored in public_key field or separate config
-    this.webhookSecret = paymentMethod.public_key || undefined;
+    // Webhook secret key for signature verification
+    this.webhookSecret = paymentMethod.webhook_key || undefined;
   }
 
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse> {

@@ -38,6 +38,10 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       type: String,
       trim: true,
     },
+    webhook_key: {
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
       trim: true,
@@ -90,6 +94,7 @@ paymentMethodSchema.methods.toJSON = function () {
   delete paymentMethod.is_deleted;
   delete paymentMethod.secret;
   delete paymentMethod.public_key;
+  delete paymentMethod.webhook_key;
   return paymentMethod;
 };
 

@@ -20,6 +20,7 @@ export const createPaymentMethodValidationSchema = z.object({
       .toUpperCase(),
     secret: z.string().trim().min(1, 'Secret is required'),
     public_key: z.string().trim().optional(),
+    webhook_key: z.string().trim().optional(),
     description: z
       .string()
       .trim()
@@ -57,6 +58,7 @@ export const updatePaymentMethodValidationSchema = z.object({
       .optional(),
     secret: z.string().trim().min(1, 'Secret is required').optional(),
     public_key: z.string().trim().optional(),
+    webhook_key: z.string().trim().optional(),
     description: z
       .string()
       .trim()
