@@ -536,18 +536,42 @@ export const handlePaymentWebhook = async (
   signature: string,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
+  console.log(
+    `[Webhook] Received webhook for payment method: ${paymentMethodId}`,
+  );
+
   const paymentMethod = await PaymentMethod.findById(paymentMethodId)
     .session(session || null)
     .lean();
 
   if (!paymentMethod) {
+    console.error(`[Webhook] Payment method not found: ${paymentMethodId}`);
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
 
-  const gateway = PaymentGatewayFactory.create(paymentMethod);
-  const webhookResult = await gateway.handleWebhook(payload, signature);
+  console.log(
+    `[Webhook] Processing webhook for payment method: ${paymentMethod.name} (${paymentMethod.value})`,
+  );
+
+  let webhookResult;
+  try {
+    const gateway = PaymentGatewayFactory.create(paymentMethod);
+    webhookResult = await gateway.handleWebhook(payload, signature);
+  } catch (error: any) {
+    console.error(
+      `[Webhook] Gateway webhook processing failed for ${paymentMethod.name}:`,
+      error.message,
+    );
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Webhook processing failed: ${error.message}`,
+    );
+  }
 
   if (!webhookResult.success && !webhookResult.status) {
+    console.log(
+      `[Webhook] Webhook event ignored (no status): ${paymentMethod.name}`,
+    );
     return;
   }
 
@@ -557,8 +581,15 @@ export const handlePaymentWebhook = async (
   );
 
   if (!transaction) {
+    console.warn(
+      `[Webhook] Transaction not found for gateway ID: ${webhookResult.transactionId}`,
+    );
     return;
   }
+
+  console.log(
+    `[Webhook] Processing transaction ${transaction._id} with status: ${webhookResult.status}`,
+  );
 
   const { updateData, shouldTriggerSuccess } = prepareWebhookUpdateData(
     transaction,
@@ -580,6 +611,17 @@ export const handlePaymentWebhook = async (
     },
   );
 
+  if (!updateResult) {
+    console.log(
+      `[Webhook] Transaction ${transaction._id} already processed (status: success)`,
+    );
+    return;
+  }
+
+  console.log(
+    `[Webhook] Transaction ${transaction._id} updated to status: ${updateResult.status}`,
+  );
+
   // Only trigger success if update was successful and status changed to success
   if (
     shouldTriggerSuccess &&
@@ -590,6 +632,9 @@ export const handlePaymentWebhook = async (
       transaction._id.toString(),
       'success',
       session,
+    );
+    console.log(
+      `[Webhook] Successfully processed payment transaction ${transaction._id}`,
     );
   }
 };

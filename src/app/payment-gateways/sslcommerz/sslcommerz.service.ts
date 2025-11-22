@@ -142,15 +142,29 @@ export class SSLCommerzService implements IPaymentGateway {
     _signature: string, // SSL Commerz uses verify_sign from payload, not header signature
   ): Promise<WebhookResponse> {
     try {
+      // Validate required fields
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid webhook payload: payload is required');
+      }
+
       const { status, tran_id, val_id, amount, currency, verify_sign } =
         payload;
 
+      // Validate required fields
+      if (!tran_id) {
+        throw new Error('Invalid webhook payload: tran_id is required');
+      }
+
+      if (!verify_sign) {
+        throw new Error('Invalid webhook payload: verify_sign is required');
+      }
+
       // Verify signature/hash (SSL Commerz sends verify_sign in payload, not header)
+      // Handle null/undefined values in hash calculation
+      const hashString = `${this.storeId}${tran_id || ''}${val_id || ''}${amount || ''}${currency || ''}${this.storePassword}`;
       const hash = crypto
         .createHash('md5')
-        .update(
-          `${this.storeId}${tran_id}${val_id}${amount}${currency}${this.storePassword}`,
-        )
+        .update(hashString)
         .digest('hex')
         .toLowerCase();
 

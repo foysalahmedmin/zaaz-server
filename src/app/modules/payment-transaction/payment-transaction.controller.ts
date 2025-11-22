@@ -124,18 +124,42 @@ export const handleWebhook = catchAsync(async (req, res) => {
   // For SSL Commerz, use parsed body (form data)
   const payload = (req as any).rawBody || req.body;
 
-  await PaymentTransactionServices.handlePaymentWebhook(
-    payment_method_id,
-    payload,
-    signature,
-  );
+  try {
+    await PaymentTransactionServices.handlePaymentWebhook(
+      payment_method_id,
+      payload,
+      signature,
+    );
 
-  sendResponse(res, {
-    status: httpStatus.OK,
-    success: true,
-    message: 'Webhook processed successfully',
-    data: null,
-  });
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: 'Webhook processed successfully',
+      data: null,
+    });
+  } catch (error: any) {
+    // Log error but still return 200 to prevent gateway retries for invalid requests
+    // Only return error status for critical issues that need retry
+    console.error(
+      `[Webhook] Error processing webhook for payment method ${payment_method_id}:`,
+      error.message,
+    );
+
+    // Return 200 OK for validation errors to prevent gateway retries
+    // Return 500 for unexpected errors that might need retry
+    const statusCode =
+      error.status === httpStatus.NOT_FOUND ||
+      error.status === httpStatus.BAD_REQUEST
+        ? httpStatus.OK
+        : httpStatus.INTERNAL_SERVER_ERROR;
+
+    sendResponse(res, {
+      status: statusCode,
+      success: false,
+      message: error.message || 'Webhook processing failed',
+      data: null,
+    });
+  }
 });
 
 export const getPaymentTransactionStatus = catchAsync(async (req, res) => {
