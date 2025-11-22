@@ -325,9 +325,9 @@ export const initiatePayment = async (options: {
   customerName?: string;
   session?: mongoose.ClientSession;
 }): Promise<{
-  paymentTransaction: TPaymentTransaction;
-  redirectUrl?: string;
-  paymentUrl?: string;
+  payment_transaction: TPaymentTransaction;
+  redirect_url?: string;
+  payment_url?: string;
 }> => {
   const {
     userId,
@@ -439,9 +439,9 @@ export const initiatePayment = async (options: {
     );
 
     return {
-      paymentTransaction: paymentTransaction[0].toObject(),
-      redirectUrl: paymentResponse.redirectUrl,
-      paymentUrl: paymentResponse.paymentUrl,
+      payment_transaction: paymentTransaction[0].toObject(),
+      redirect_url: paymentResponse.redirectUrl,
+      payment_url: paymentResponse.paymentUrl,
     };
   } catch (error: any) {
     // If gateway call fails, mark transaction as failed

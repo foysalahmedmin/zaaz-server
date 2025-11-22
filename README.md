@@ -23,17 +23,19 @@ A robust, scalable token-based payment system server built with Node.js, Express
 
 ### Core Functionality
 
-- **User Management**: Complete user authentication and authorization system with role-based access control
-- **Authentication**: JWT-based authentication with signup, signin, password reset, and email verification
-- **Token-Based System**: Manage user tokens for accessing premium features
-- **Package Management**: Create and manage token packages with multi-currency support (USD/BDT)
-- **Payment Processing**: Integrated payment gateways (Stripe & SSL Commerz)
-- **Wallet Management**: User wallet system with token balance tracking
-- **Transaction History**: Complete audit trail for all token and payment transactions
-- **Feature Access Control**: Define features and endpoints with token requirements
-- **Profit Management**: Configurable profit percentage settings with history tracking
-- **Notification System**: Comprehensive notification system with multi-channel support (web, push, email)
-- **Notification Recipients**: User-specific notification delivery and read status tracking
+- **User Management**: Complete user authentication and authorization system with role-based access control (7 roles: super-admin, admin, editor, author, contributor, subscriber, user)
+- **Authentication**: JWT-based authentication with signup, signin, password reset, email verification, and refresh token support
+- **Token-Based System**: Manage user tokens for accessing premium features with complete transaction tracking
+- **Package Management**: Create and manage token packages with multi-currency support (USD/BDT), feature associations, and complete history tracking
+- **Payment Processing**: Integrated payment gateways (Stripe for USD & SSL Commerz for BDT) with webhook support
+- **Wallet Management**: User wallet system with token balance tracking, expiration dates, and package associations
+- **Transaction History**: Complete audit trail for all token and payment transactions with detailed status tracking
+- **Feature Access Control**: Define features with parent-child relationships and endpoints with token requirements
+- **Profit Management**: Configurable profit percentage settings with complete history tracking
+- **Notification System**: Comprehensive notification system with multi-channel support (web, push, email), priority levels, and expiration dates
+- **Notification Recipients**: User-specific notification delivery with read status tracking, metadata support, and action buttons
+- **Public API Access**: Public endpoints for features, feature-endpoints, packages, and payment methods (no authentication required)
+- **Contact Management**: Contact form submission handling
 
 ### Technical Features
 
@@ -149,22 +151,22 @@ src/
 │   │   ├── error.middleware.ts
 │   │   ├── validation.middleware.ts
 │   │   └── ...
-│   ├── modules/              # Feature modules
+│   ├── modules/              # Feature modules (15 total)
 │   │   ├── auth/             # Authentication module
 │   │   ├── user/             # User management module
-│   │   ├── contact/
-│   │   ├── feature/
-│   │   ├── feature-endpoint/
-│   │   ├── notification/
-│   │   ├── notification-recipient/
-│   │   ├── package/
-│   │   ├── package-history/
-│   │   ├── payment-method/
-│   │   ├── payment-transaction/
-│   │   ├── token-profit/
-│   │   ├── token-profit-history/
-│   │   ├── token-transaction/
-│   │   └── user-wallet/
+│   │   ├── contact/          # Contact form submissions
+│   │   ├── feature/         # System features management
+│   │   ├── feature-endpoint/ # API endpoint definitions
+│   │   ├── notification/    # Notification management
+│   │   ├── notification-recipient/ # Notification delivery and read status
+│   │   ├── package/         # Token package management
+│   │   ├── package-history/ # Package change history
+│   │   ├── payment-method/   # Payment gateway configurations
+│   │   ├── payment-transaction/ # Payment processing
+│   │   ├── token-profit/    # Profit percentage settings
+│   │   ├── token-profit-history/ # Profit setting history
+│   │   ├── token-transaction/ # Token movement tracking
+│   │   └── user-wallet/     # User wallet management
 │   ├── payment-gateways/     # Payment gateway integrations
 │   │   ├── index.ts          # Gateway factory
 │   │   ├── stripe/
@@ -486,12 +488,26 @@ Most modules follow RESTful conventions:
 - `POST /api/users/:id/restore` - Restore soft-deleted user (admin only)
 - `POST /api/users/bulk/restore` - Bulk restore users (admin only)
 
+### Public Endpoints (No Authentication Required)
+
+These endpoints are available for client-side access without authentication:
+
+- `GET /api/features/public` - Get all active public features
+- `GET /api/features/:id/public` - Get single public feature by ID
+- `GET /api/feature-endpoints/public` - Get all active public feature endpoints
+- `GET /api/feature-endpoints/:id/public` - Get single public feature endpoint by ID
+- `GET /api/packages/public` - Get all active public packages
+- `GET /api/packages/:id/public` - Get single public package by ID
+- `GET /api/payment-methods/public` - Get all active public payment methods
+- `GET /api/payment-methods/:id/public` - Get single public payment method by ID
+- `GET /api/users/writers` - Get public writers list
+
 ### Payment-Specific Endpoints
 
-- `POST /api/payment-transactions/initiate` - Initiate payment
-- `POST /api/payment-transactions/webhook/:payment_method_id` - Webhook handler
-- `GET /api/payment-transactions/:id/status` - Check payment status
-- `POST /api/payment-transactions/:id/verify` - Verify payment
+- `POST /api/payment-transactions/initiate` - Initiate payment (authenticated)
+- `POST /api/payment-transactions/webhook/:payment_method_id` - Webhook handler (no auth, signature verified)
+- `GET /api/payment-transactions/:id/status` - Check payment status (authenticated)
+- `POST /api/payment-transactions/:id/verify` - Verify payment (authenticated)
 
 ### Notification-Specific Endpoints
 
