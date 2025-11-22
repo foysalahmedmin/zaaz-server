@@ -42,6 +42,11 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
       required: [true, 'Token is required'],
       min: [0, 'Token must be 0 or greater'],
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     is_active: {
       type: Boolean,
       default: true,

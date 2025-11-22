@@ -15,6 +15,7 @@ export type TPackageHistory = {
   duration: number;
   price: TPackagePrice;
   previous_price?: TPackagePrice;
+  sequence?: number;
   is_active?: boolean;
   is_deleted?: boolean;
 };

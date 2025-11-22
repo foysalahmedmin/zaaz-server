@@ -32,6 +32,11 @@ const featureSchema = new Schema<TFeatureDocument>(
       type: String,
       enum: ['writing', 'generation', 'other'],
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     is_active: {
       type: Boolean,
       default: true,

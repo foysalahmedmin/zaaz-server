@@ -30,6 +30,11 @@ export const createPaymentMethodValidationSchema = z.object({
     currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -68,6 +73,11 @@ export const updatePaymentMethodValidationSchema = z.object({
     currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });

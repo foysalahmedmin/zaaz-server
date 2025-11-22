@@ -55,6 +55,11 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       type: Boolean,
       default: false,
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     currencies: {
       type: [String],
       default: [],

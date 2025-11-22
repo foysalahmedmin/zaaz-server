@@ -64,6 +64,11 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
         min: [0, 'Previous price BDT must be 0 or greater'],
       },
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     is_active: {
       type: Boolean,
     },
@@ -87,10 +92,7 @@ packageHistorySchema.methods.toJSON = function () {
 };
 
 packageHistorySchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<
-    TPackageHistory,
-    TPackageHistory
-  >;
+  const query = this as unknown as Query<TPackageHistory, TPackageHistory>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -113,4 +115,3 @@ export const PackageHistory = mongoose.model<
   TPackageHistoryDocument,
   TPackageHistoryModel
 >('PackageHistory', packageHistorySchema);
-

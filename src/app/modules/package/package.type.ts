@@ -16,6 +16,7 @@ export type TPackage = {
   duration?: number;
   price: TPackagePrice;
   price_previous?: TPackagePrice;
+  sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;
 };

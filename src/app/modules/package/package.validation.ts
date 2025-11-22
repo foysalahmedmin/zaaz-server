@@ -39,6 +39,11 @@ export const createPackageValidationSchema = z.object({
       .optional(),
     price: priceSchema,
     price_previous: priceSchema.optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -48,7 +53,11 @@ export const updatePackageValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
-    name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Name must be at least 2 characters')
+      .optional(),
     description: z
       .string()
       .trim()
@@ -60,7 +69,10 @@ export const updatePackageValidationSchema = z.object({
       .int('Token must be an integer')
       .nonnegative('Token must be 0 or greater')
       .optional(),
-    features: z.array(idSchema).nonempty('At least one feature is required').optional(),
+    features: z
+      .array(idSchema)
+      .nonempty('At least one feature is required')
+      .optional(),
     duration: z
       .number({ invalid_type_error: 'Duration must be a number' })
       .int('Duration must be an integer')
@@ -68,6 +80,11 @@ export const updatePackageValidationSchema = z.object({
       .optional(),
     price: priceSchema.optional(),
     price_previous: priceSchema.optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -95,4 +112,3 @@ export const packagesOperationValidationSchema = z.object({
     ids: z.array(idSchema).nonempty('At least one package ID is required'),
   }),
 });
-

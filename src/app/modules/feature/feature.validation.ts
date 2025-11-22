@@ -23,6 +23,11 @@ export const createFeatureValidationSchema = z.object({
       .optional(),
     prefix: z.string().trim().optional(),
     type: featureTypeEnum.optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -33,7 +38,11 @@ export const updateFeatureValidationSchema = z.object({
   }),
   body: z.object({
     parent: idSchema.optional(),
-    name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Name must be at least 2 characters')
+      .optional(),
     description: z
       .string()
       .trim()
@@ -46,6 +55,11 @@ export const updateFeatureValidationSchema = z.object({
       .optional(),
     prefix: z.string().trim().optional(),
     type: featureTypeEnum.optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -73,4 +87,3 @@ export const featuresOperationValidationSchema = z.object({
     ids: z.array(idSchema).nonempty('At least one feature ID is required'),
   }),
 });
-

@@ -9,6 +9,7 @@ export type TFeature = {
   path?: string;
   prefix?: string;
   type?: TFeatureType;
+  sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;
 };

@@ -57,6 +57,11 @@ const packageSchema = new Schema<TPackageDocument>(
         min: [0, 'Previous price BDT must be 0 or greater'],
       },
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     is_active: {
       type: Boolean,
       default: true,
@@ -115,4 +120,3 @@ export const Package = mongoose.model<TPackageDocument, TPackageModel>(
   'Package',
   packageSchema,
 );
-

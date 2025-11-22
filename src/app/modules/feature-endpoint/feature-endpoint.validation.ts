@@ -22,6 +22,11 @@ export const createFeatureEndpointValidationSchema = z.object({
       .number({ invalid_type_error: 'Token must be a number' })
       .int('Token must be an integer')
       .nonnegative('Token must be 0 or greater'),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -32,7 +37,11 @@ export const updateFeatureEndpointValidationSchema = z.object({
   }),
   body: z.object({
     feature: idSchema.optional(),
-    name: z.string().trim().min(2, 'Name must be at least 2 characters').optional(),
+    name: z
+      .string()
+      .trim()
+      .min(2, 'Name must be at least 2 characters')
+      .optional(),
     description: z
       .string()
       .trim()
@@ -44,6 +53,11 @@ export const updateFeatureEndpointValidationSchema = z.object({
       .number({ invalid_type_error: 'Token must be a number' })
       .int('Token must be an integer')
       .nonnegative('Token must be 0 or greater')
+      .optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
   }),
@@ -75,4 +89,3 @@ export const featureEndpointsOperationValidationSchema = z.object({
       .nonempty('At least one feature endpoint ID is required'),
   }),
 });
-
