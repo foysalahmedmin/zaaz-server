@@ -72,6 +72,7 @@ export const initiatePaymentValidationSchema = z.object({
     cancel_url: z.string().url('Cancel URL must be a valid URL'),
     customer_email: z.string().email('Invalid email format').optional(),
     customer_name: z.string().trim().optional(),
+    customer_phone: z.string().trim().optional(),
   }),
 });
 

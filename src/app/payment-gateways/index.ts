@@ -13,6 +13,7 @@ export interface InitiatePaymentData {
   ipnUrl?: string; // IPN/Webhook URL for SSLCommerz
   customerEmail?: string;
   customerName?: string;
+  customerPhone?: string; // Customer phone number (required for SSLCommerz)
 }
 
 export interface PaymentResponse {

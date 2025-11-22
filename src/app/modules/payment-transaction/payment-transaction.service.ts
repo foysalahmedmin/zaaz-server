@@ -371,6 +371,7 @@ export const initiatePayment = async (options: {
   cancelUrl: string;
   customerEmail?: string;
   customerName?: string;
+  customerPhone?: string;
   session?: mongoose.ClientSession;
 }): Promise<{
   payment_transaction: TPaymentTransaction;
@@ -385,6 +386,7 @@ export const initiatePayment = async (options: {
     cancelUrl,
     customerEmail,
     customerName,
+    customerPhone,
     session,
   } = options;
   // Get payment method
@@ -474,6 +476,7 @@ export const initiatePayment = async (options: {
       ipnUrl: webhookUrl, // Pass IPN URL for SSLCommerz webhook notifications
       customerEmail,
       customerName,
+      customerPhone, // Pass customer phone for SSLCommerz
     });
 
     // Update transaction with gateway ID and session ID

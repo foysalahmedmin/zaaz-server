@@ -33,6 +33,19 @@ export class SSLCommerzService implements IPaymentGateway {
 
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse> {
     try {
+      // Validate required fields
+      if (!data.amount || data.amount <= 0) {
+        throw new Error('Invalid amount: Amount must be greater than 0');
+      }
+
+      if (!data.currency) {
+        throw new Error('Currency is required');
+      }
+
+      if (!data.returnUrl || !data.cancelUrl) {
+        throw new Error('Return URL and Cancel URL are required');
+      }
+
       const transactionId = `TXN${Date.now()}${Math.random()
         .toString(36)
         .substring(2, 11)}`;
@@ -40,7 +53,7 @@ export class SSLCommerzService implements IPaymentGateway {
       const postData: any = {
         store_id: this.storeId,
         store_passwd: this.storePassword,
-        total_amount: data.amount,
+        total_amount: data.amount.toFixed(2), // Ensure proper decimal format
         currency: data.currency,
         tran_id: transactionId,
         success_url: data.returnUrl,
@@ -48,6 +61,7 @@ export class SSLCommerzService implements IPaymentGateway {
         cancel_url: data.cancelUrl,
         cus_name: data.customerName || 'Customer',
         cus_email: data.customerEmail || 'customer@example.com',
+        cus_phone: data.customerPhone || '01700000000', // Required by SSLCommerz, default to Bangladesh format
         cus_add1: 'Address',
         cus_city: 'City',
         cus_country: 'Bangladesh',
@@ -77,6 +91,21 @@ export class SSLCommerzService implements IPaymentGateway {
 
       // SSL Commerz returns HTML or JSON based on response
       if (typeof response.data === 'string') {
+        // Check for error messages in HTML response
+        const errorRegex = /(?:error|failed|status)[\s:=]+['"]?([^'"]+)['"]?/i;
+        const errorMatch = errorRegex.exec(response.data);
+
+        if (
+          errorMatch &&
+          errorMatch[1] &&
+          !errorMatch[1].toLowerCase().includes('success')
+        ) {
+          const errorMessage = errorMatch[1];
+          throw new Error(
+            `SSL Commerz payment initiation failed: ${errorMessage}`,
+          );
+        }
+
         // Parse HTML response to extract GatewayPageURL
         const urlRegex = /GatewayPageURL['"]?\s*[:=]\s*['"]([^'"]+)['"]/i;
         const urlMatch = urlRegex.exec(response.data);
@@ -90,16 +119,52 @@ export class SSLCommerzService implements IPaymentGateway {
       }
 
       // Handle JSON response
-      if (response.data.status === 'SUCCESS' && response.data.GatewayPageURL) {
-        return {
-          success: true,
-          gatewayTransactionId: transactionId,
-          redirectUrl: response.data.GatewayPageURL,
-        };
+      if (response.data && typeof response.data === 'object') {
+        // Check for success response
+        if (
+          response.data.status === 'SUCCESS' &&
+          response.data.GatewayPageURL
+        ) {
+          return {
+            success: true,
+            gatewayTransactionId: transactionId,
+            redirectUrl: response.data.GatewayPageURL,
+          };
+        }
+
+        // Extract error message from JSON response
+        // SSLCommerz typically returns: { status: 'FAILED', failedreason: 'Error message' }
+        const errorMessage =
+          response.data.failedreason ||
+          response.data.error ||
+          response.data.message ||
+          response.data.status ||
+          'Unknown error';
+
+        // Log full response for debugging (without sensitive data)
+        console.error('[SSLCommerz] Payment initiation failed:', {
+          status: response.data.status,
+          failedreason: response.data.failedreason,
+          error: response.data.error,
+          message: response.data.message,
+        });
+
+        throw new Error(
+          `SSL Commerz payment initiation failed: ${errorMessage}`,
+        );
       }
 
+      // If we reach here, response format is unexpected
+      console.error('[SSLCommerz] Unexpected response format:', {
+        type: typeof response.data,
+        data:
+          typeof response.data === 'string'
+            ? response.data.substring(0, 200)
+            : response.data,
+      });
+
       throw new Error(
-        `SSL Commerz payment initiation failed: ${response.data.status || 'Unknown error'}`,
+        `SSL Commerz payment initiation failed: Unexpected response format`,
       );
     } catch (error: any) {
       throw new Error(
@@ -147,16 +212,42 @@ export class SSLCommerzService implements IPaymentGateway {
     _signature: string, // SSL Commerz uses verify_sign from payload, not header signature
   ): Promise<WebhookResponse> {
     try {
+      // Log payload for debugging
+      console.log('[SSLCommerz Webhook] Payload type:', typeof payload);
+      console.log(
+        '[SSLCommerz Webhook] Payload:',
+        JSON.stringify(payload, null, 2),
+      );
+
       // Validate required fields
       if (!payload || typeof payload !== 'object') {
+        console.error(
+          '[SSLCommerz Webhook] Invalid payload type:',
+          typeof payload,
+        );
         throw new Error('Invalid webhook payload: payload is required');
       }
 
       const { status, tran_id, val_id, amount, currency, verify_sign } =
         payload;
 
+      console.log('[SSLCommerz Webhook] Extracted fields:', {
+        status,
+        tran_id,
+        val_id,
+        amount,
+        currency,
+        hasVerifySign: !!verify_sign,
+        allKeys: Object.keys(payload),
+      });
+
       // Validate required fields
       if (!tran_id) {
+        console.error(
+          '[SSLCommerz Webhook] Missing tran_id. Payload keys:',
+          Object.keys(payload),
+        );
+        console.error('[SSLCommerz Webhook] Full payload:', payload);
         throw new Error('Invalid webhook payload: tran_id is required');
       }
 
@@ -165,15 +256,65 @@ export class SSLCommerzService implements IPaymentGateway {
       }
 
       // Verify signature/hash (SSL Commerz sends verify_sign in payload, not header)
+      // SSLCommerz hash format: MD5(store_id + tran_id + val_id + amount + currency + store_passwd)
+      // Use store_id from payload if available, otherwise use this.storeId
+      const payloadStoreId = payload.store_id || this.storeId;
+
       // Handle null/undefined values in hash calculation
-      const hashString = `${this.storeId}${tran_id || ''}${val_id || ''}${amount || ''}${currency || ''}${this.storePassword}`;
+      const hashString = `${payloadStoreId}${tran_id || ''}${val_id || ''}${amount || ''}${currency || ''}${this.storePassword}`;
+
+      console.log('[SSLCommerz Webhook] Hash calculation:', {
+        payloadStoreId,
+        thisStoreId: this.storeId,
+        storeIdMatch: payloadStoreId === this.storeId,
+        tran_id,
+        val_id,
+        amount,
+        currency,
+        storePasswordLength: this.storePassword.length,
+        hashStringLength: hashString.length,
+        hashStringPreview: hashString.substring(0, 50) + '...',
+      });
+
       const hash = crypto
         .createHash('md5')
         .update(hashString)
         .digest('hex')
         .toLowerCase();
 
-      if (hash !== verify_sign?.toLowerCase()) {
+      console.log('[SSLCommerz Webhook] Hash comparison:', {
+        calculatedHash: hash,
+        receivedVerifySign: verify_sign?.toLowerCase(),
+        match: hash === verify_sign?.toLowerCase(),
+      });
+
+      // Also try SHA2 if MD5 fails (SSLCommerz might use SHA2 in some cases)
+      let hashMatches = hash === verify_sign?.toLowerCase();
+
+      if (!hashMatches && payload.verify_sign_sha2) {
+        const hashStringSHA2 = hashString;
+        const hashSHA2 = crypto
+          .createHash('sha256')
+          .update(hashStringSHA2)
+          .digest('hex')
+          .toLowerCase();
+
+        console.log('[SSLCommerz Webhook] SHA2 hash comparison:', {
+          calculatedSHA2Hash: hashSHA2,
+          receivedVerifySignSHA2: payload.verify_sign_sha2?.toLowerCase(),
+          match: hashSHA2 === payload.verify_sign_sha2?.toLowerCase(),
+        });
+
+        hashMatches = hashSHA2 === payload.verify_sign_sha2?.toLowerCase();
+      }
+
+      if (!hashMatches) {
+        console.error('[SSLCommerz Webhook] Signature verification failed');
+        console.error('[SSLCommerz Webhook] Expected hash:', hash);
+        console.error(
+          '[SSLCommerz Webhook] Received hash:',
+          verify_sign?.toLowerCase(),
+        );
         throw new Error('Invalid SSL Commerz webhook signature');
       }
 

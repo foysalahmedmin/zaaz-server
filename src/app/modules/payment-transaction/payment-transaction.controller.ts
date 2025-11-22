@@ -87,11 +87,13 @@ export const initiatePayment = catchAsync(async (req, res) => {
     cancel_url: cancelUrl,
     customer_email: customerEmail,
     customer_name: customerName,
+    customer_phone: customerPhone,
   } = req.body;
 
   // Use user info from JWT if customer info not provided
   const finalCustomerEmail = customerEmail || req.user.email;
   const finalCustomerName = customerName || req.user.name;
+  const finalCustomerPhone = customerPhone || req.user.phone || '01700000000'; // Default Bangladesh phone format
 
   const result = await PaymentTransactionServices.initiatePayment({
     userId,
@@ -101,6 +103,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
     cancelUrl,
     customerEmail: finalCustomerEmail,
     customerName: finalCustomerName,
+    customerPhone: finalCustomerPhone,
   });
 
   sendResponse(res, {
@@ -122,7 +125,25 @@ export const handleWebhook = catchAsync(async (req, res) => {
 
   // For Stripe, use raw body if available, otherwise use parsed body
   // For SSL Commerz, use parsed body (form data)
-  const payload = (req as any).rawBody || req.body;
+  const payload = (req as any).body || (req as any).rawBody;
+
+  // Add logging for debugging SSLCommerz webhook
+  console.log('[Webhook Controller] Payment Method ID:', payment_method_id);
+  console.log('[Webhook Controller] Payload type:', typeof payload);
+  console.log(
+    '[Webhook Controller] Payload is object:',
+    typeof payload === 'object',
+  );
+  console.log(
+    '[Webhook Controller] Payload keys:',
+    payload && typeof payload === 'object'
+      ? Object.keys(payload)
+      : 'Not an object',
+  );
+  console.log(
+    '[Webhook Controller] Payload sample:',
+    JSON.stringify(payload, null, 2).substring(0, 500),
+  );
 
   try {
     await PaymentTransactionServices.handlePaymentWebhook(
