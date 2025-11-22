@@ -41,17 +41,42 @@ export const updatePaymentTransactionStatus = async (
   status: TPaymentTransaction['status'],
   session?: mongoose.ClientSession,
 ): Promise<TPaymentTransaction> => {
-  const transaction = await PaymentTransaction.findById(id)
-    .session(session || null)
-    .lean();
+  // Use atomic update to prevent double processing for success status
+  if (status === 'success') {
+    // First, try to update status atomically (only if not already success)
+    const updateResult = await PaymentTransaction.findOneAndUpdate(
+      {
+        _id: id,
+        status: { $ne: 'success' }, // Only update if not already success
+      },
+      {
+        $set: {
+          status: 'success',
+          paid_at: new Date(),
+        },
+      },
+      {
+        new: true,
+        session,
+      },
+    ).lean();
 
-  if (!transaction) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
-  }
+    if (!updateResult) {
+      // Transaction already processed, fetch and return
+      const existing = await PaymentTransaction.findById(id)
+        .session(session || null)
+        .lean();
+      if (!existing) {
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          'Payment transaction not found',
+        );
+      }
+      return existing;
+    }
 
-  // If status is changing to success, create token transaction and update wallet
-  if (status === 'success' && transaction.status !== 'success') {
-    const packageData = await Package.findById(transaction.package)
+    // Only create token transaction if atomic update was successful
+    const packageData = await Package.findById(updateResult.package)
       .session(session || null)
       .lean();
 
@@ -62,7 +87,7 @@ export const updatePaymentTransactionStatus = async (
     // Prepare wallet update data
     const updateWalletData: any = {
       $inc: { token: packageData.token },
-      package: transaction.package, // Update to newly purchased package
+      package: updateResult.package, // Update to newly purchased package
     };
 
     // Calculate and set expires_at if package has duration
@@ -74,35 +99,53 @@ export const updatePaymentTransactionStatus = async (
 
     // Update wallet with package tokens, package reference, and expiration
     await UserWallet.findByIdAndUpdate(
-      transaction.user_wallet,
+      updateResult.user_wallet,
       updateWalletData,
       { session },
     );
 
-    // Create token transaction record
-    await TokenTransaction.create(
-      [
-        {
-          user: transaction.user,
-          user_wallet: transaction.user_wallet,
-          type: 'increase',
-          amount: packageData.token,
-          increase_source: 'payment',
-          payment_transaction: id,
-        },
-      ],
-      { session },
-    );
+    // Check if token transaction already exists for this payment transaction
+    // This prevents duplicate token transactions in case of race conditions
+    const existingTokenTransaction = await TokenTransaction.findOne({
+      payment_transaction: id,
+      type: 'increase',
+      increase_source: 'payment',
+    })
+      .session(session || null)
+      .lean();
+
+    if (!existingTokenTransaction) {
+      // Create token transaction record only if it doesn't exist
+      await TokenTransaction.create(
+        [
+          {
+            user: updateResult.user,
+            user_wallet: updateResult.user_wallet,
+            type: 'increase',
+            amount: packageData.token,
+            increase_source: 'payment',
+            payment_transaction: id,
+          },
+        ],
+        { session },
+      );
+    }
+
+    return updateResult;
   }
 
-  // Update transaction with status and timestamps
+  // For non-success status updates, use regular update
+  const transaction = await PaymentTransaction.findById(id)
+    .session(session || null)
+    .lean();
+
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
   const updateData: any = { status };
 
-  if (status === 'success' && transaction.status !== 'success') {
-    updateData.paid_at = new Date();
-  }
-
-  if (status === 'refunded') {
+  if (status === 'refunded' && transaction.status !== 'refunded') {
     updateData.refunded_at = new Date();
   }
 
@@ -115,7 +158,11 @@ export const updatePaymentTransactionStatus = async (
     runValidators: true,
   }).session(session || null);
 
-  return result!;
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  return result;
 };
 
 export const getPaymentTransactions = async (
