@@ -25,8 +25,8 @@ const tokenTransactionSchema = new Schema<TTokenTransactionDocument>(
     },
     token: {
       type: Number,
-      required: [true, 'Amount is required'],
-      min: [0, 'Amount must be 0 or greater'],
+      required: [true, 'Token is required'],
+      min: [0, 'Token must be 0 or greater'],
     },
     increase_source: {
       type: String,

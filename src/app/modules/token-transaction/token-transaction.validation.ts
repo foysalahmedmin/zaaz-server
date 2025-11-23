@@ -15,10 +15,10 @@ export const createTokenTransactionValidationSchema = z
         user: idSchema,
         user_wallet: idSchema,
         type: typeEnum,
-        amount: z
-          .number({ invalid_type_error: 'Amount must be a number' })
-          .int('Amount must be an integer')
-          .positive('Amount must be greater than 0'),
+        token: z
+          .number({ invalid_type_error: 'Token must be a number' })
+          .int('Token must be an integer')
+          .positive('Token must be greater than 0'),
         increase_source: increaseSourceEnum.optional(),
         decrease_source: idSchema.optional(),
         payment_transaction: idSchema.optional(),
