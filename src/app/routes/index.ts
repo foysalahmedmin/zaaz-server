@@ -1,6 +1,7 @@
 import express from 'express';
 import AuthRoutes from '../modules/auth/auth.route';
 import ContactRoutes from '../modules/contact/contact.route';
+import DashboardRoutes from '../modules/dashboard/dashboard.route';
 import FeatureEndpointRoutes from '../modules/feature-endpoint/feature-endpoint.route';
 import FeatureRoutes from '../modules/feature/feature.route';
 import NotificationRecipientRoutes from '../modules/notification-recipient/notification-recipient.route';
@@ -22,6 +23,10 @@ const moduleRoutes = [
   {
     path: '/auth',
     route: AuthRoutes,
+  },
+  {
+    path: '/dashboard',
+    route: DashboardRoutes,
   },
   {
     path: '/users',
