@@ -123,7 +123,7 @@ export const updatePaymentTransactionStatus = async (
             user: updateResult.user,
             user_wallet: updateResult.user_wallet,
             type: 'increase',
-            amount: packageData.token,
+            token: packageData.token,
             increase_source: 'payment',
             payment_transaction: id,
           },

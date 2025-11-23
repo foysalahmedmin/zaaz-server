@@ -297,7 +297,7 @@ erDiagram
         ObjectId user FK "Required, Reference: User._id"
         ObjectId user_wallet FK "Required, Reference: UserWallet._id"
         string type "Required, Enum: increase | decrease"
-        number amount "Required, Token amount"
+        number token "Required, Token amount"
         string increase_source "Conditional, Enum: payment | bonus, Only if type = increase"
         ObjectId decrease_source FK "Conditional, Reference: FeatureEndpoint._id, Only if type = decrease"
         ObjectId payment_transaction FK "Conditional, Reference: PaymentTransaction._id, Only if type = increase AND increase_source = payment"

@@ -200,7 +200,7 @@ History of token increases and decreases.
 - `user` — ObjectId (Ref: User, required)
 - `user_wallet` — ObjectId (Ref: UserWallet, required)
 - `type` — Enum: `increase | decrease` (required)
-- `amount` — Number (required, token amount)
+- `token` — Number (required, token amount)
 - `increase_source` — Enum: `payment | bonus` (conditional, only if type = increase)
 - `decrease_source` — ObjectId (Ref: FeatureEndpoint) (conditional, only if type = decrease, API endpoint used)
 - `payment_transaction` — ObjectId (Ref: PaymentTransaction) (conditional, only if type = increase AND increase_source = payment)
@@ -401,7 +401,7 @@ erDiagram
         ObjectId user FK "Required, Reference: User._id"
         ObjectId user_wallet FK "Required, Reference: UserWallet._id"
         string type "Required, Enum: increase | decrease"
-        number amount "Required, Token amount"
+        number token "Required, Token amount"
         string increase_source "Conditional, Enum: payment | bonus, Only if type = increase"
         ObjectId decrease_source FK "Conditional, Reference: FeatureEndpoint._id, Only if type = decrease"
         ObjectId payment_transaction FK "Conditional, Reference: PaymentTransaction._id, Only if type = increase AND increase_source = payment"

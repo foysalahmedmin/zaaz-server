@@ -163,7 +163,7 @@ export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {
           user: new mongoose.Types.ObjectId(user_id),
           user_wallet: new mongoose.Types.ObjectId(userWalletId),
           type: 'decrease',
-          amount: finalTokenCost,
+          token: finalTokenCost,
           decrease_source: new mongoose.Types.ObjectId(feature_endpoint_id),
         },
       ],

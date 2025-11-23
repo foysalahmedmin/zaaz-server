@@ -23,12 +23,12 @@ export const createTokenTransaction = async (
   if (data.type === 'increase') {
     await UserWallet.findByIdAndUpdate(
       data.user_wallet,
-      { $inc: { token: data.amount } },
+      { $inc: { token: data.token } },
       { session },
     );
   } else if (data.type === 'decrease') {
     // Check if user has enough tokens
-    if (wallet.token < data.amount) {
+    if (wallet.token < data.token) {
       throw new AppError(
         httpStatus.BAD_REQUEST,
         'Insufficient tokens in wallet',
@@ -36,7 +36,7 @@ export const createTokenTransaction = async (
     }
     await UserWallet.findByIdAndUpdate(
       data.user_wallet,
-      { $inc: { token: -data.amount } },
+      { $inc: { token: -data.token } },
       { session },
     );
   }
@@ -109,9 +109,9 @@ export const deleteTokenTransaction = async (id: string): Promise<void> => {
   const wallet = await UserWallet.findById(transaction.user_wallet);
   if (wallet) {
     if (transaction.type === 'increase') {
-      wallet.token = Math.max(0, wallet.token - transaction.amount);
+      wallet.token = Math.max(0, wallet.token - transaction.token);
     } else {
-      wallet.token += transaction.amount;
+      wallet.token += transaction.token;
     }
     await wallet.save();
   }
@@ -133,9 +133,9 @@ export const deleteTokenTransactionPermanent = async (
   const wallet = await UserWallet.findById(transaction.user_wallet);
   if (wallet) {
     if (transaction.type === 'increase') {
-      wallet.token = Math.max(0, wallet.token - transaction.amount);
+      wallet.token = Math.max(0, wallet.token - transaction.token);
     } else {
-      wallet.token += transaction.amount;
+      wallet.token += transaction.token;
     }
     await wallet.save();
   }
@@ -162,9 +162,9 @@ export const deleteTokenTransactions = async (
     const wallet = await UserWallet.findById(transaction.user_wallet);
     if (wallet) {
       if (transaction.type === 'increase') {
-        wallet.token = Math.max(0, wallet.token - transaction.amount);
+        wallet.token = Math.max(0, wallet.token - transaction.token);
       } else {
-        wallet.token += transaction.amount;
+        wallet.token += transaction.token;
       }
       await wallet.save();
     }
@@ -200,9 +200,9 @@ export const deleteTokenTransactionsPermanent = async (
     const wallet = await UserWallet.findById(transaction.user_wallet);
     if (wallet) {
       if (transaction.type === 'increase') {
-        wallet.token = Math.max(0, wallet.token - transaction.amount);
+        wallet.token = Math.max(0, wallet.token - transaction.token);
       } else {
-        wallet.token += transaction.amount;
+        wallet.token += transaction.token;
       }
       await wallet.save();
     }
@@ -238,9 +238,9 @@ export const restoreTokenTransaction = async (
   const wallet = await UserWallet.findById(transaction.user_wallet);
   if (wallet) {
     if (transaction.type === 'increase') {
-      wallet.token += transaction.amount;
+      wallet.token += transaction.token;
     } else {
-      wallet.token = Math.max(0, wallet.token - transaction.amount);
+      wallet.token = Math.max(0, wallet.token - transaction.token);
     }
     await wallet.save();
   }
@@ -272,9 +272,9 @@ export const restoreTokenTransactions = async (
     const wallet = await UserWallet.findById(transaction.user_wallet);
     if (wallet) {
       if (transaction.type === 'increase') {
-        wallet.token += transaction.amount;
+        wallet.token += transaction.token;
       } else {
-        wallet.token = Math.max(0, wallet.token - transaction.amount);
+        wallet.token = Math.max(0, wallet.token - transaction.token);
       }
       await wallet.save();
     }

@@ -23,7 +23,7 @@ const tokenTransactionSchema = new Schema<TTokenTransactionDocument>(
       required: [true, 'Type is required'],
       enum: ['increase', 'decrease'],
     },
-    amount: {
+    token: {
       type: Number,
       required: [true, 'Amount is required'],
       min: [0, 'Amount must be 0 or greater'],
@@ -59,10 +59,7 @@ const tokenTransactionSchema = new Schema<TTokenTransactionDocument>(
       ref: 'PaymentTransaction',
       validate: {
         validator: function (this: TTokenTransactionDocument, value: any) {
-          if (
-            this.type === 'increase' &&
-            this.increase_source === 'payment'
-          ) {
+          if (this.type === 'increase' && this.increase_source === 'payment') {
             return !!value;
           }
           return !value;
@@ -91,10 +88,7 @@ tokenTransactionSchema.methods.toJSON = function () {
 };
 
 tokenTransactionSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<
-    TTokenTransaction,
-    TTokenTransaction
-  >;
+  const query = this as unknown as Query<TTokenTransaction, TTokenTransaction>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -117,4 +111,3 @@ export const TokenTransaction = mongoose.model<
   TTokenTransactionDocument,
   TTokenTransactionModel
 >('TokenTransaction', tokenTransactionSchema);
-

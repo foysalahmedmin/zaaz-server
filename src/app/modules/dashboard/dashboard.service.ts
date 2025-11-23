@@ -178,7 +178,7 @@ export const getDashboardStatistics =
       {
         $group: {
           _id: null,
-          total: { $sum: '$amount' },
+          total: { $sum: '$token' },
         },
       },
     ]);
@@ -194,7 +194,7 @@ export const getDashboardStatistics =
       {
         $group: {
           _id: null,
-          total: { $sum: '$amount' },
+          total: { $sum: '$token' },
         },
       },
     ]);
@@ -433,7 +433,7 @@ export const getDashboardTokenFlow = async (
           },
           type: '$type',
         },
-        amount: { $sum: '$amount' },
+        token: { $sum: '$token' },
       },
     },
     {
@@ -442,7 +442,7 @@ export const getDashboardTokenFlow = async (
         flows: {
           $push: {
             type: '$_id.type',
-            amount: '$amount',
+            token: '$token',
           },
         },
       },
@@ -454,9 +454,9 @@ export const getDashboardTokenFlow = async (
 
   return result.map((item) => {
     const increase =
-      item.flows.find((f: any) => f.type === 'increase')?.amount || 0;
+      item.flows.find((f: any) => f.type === 'increase')?.token || 0;
     const decrease =
-      item.flows.find((f: any) => f.type === 'decrease')?.amount || 0;
+      item.flows.find((f: any) => f.type === 'decrease')?.token || 0;
     return {
       date: item._id,
       increase,
@@ -660,7 +660,7 @@ export const getDashboardFeatures =
                     },
                   },
                   as: 'tt',
-                  in: '$$tt.amount',
+                  in: '$$tt.token',
                 },
               },
             },
