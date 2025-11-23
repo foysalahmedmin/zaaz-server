@@ -41,6 +41,7 @@ export default {
   email_verification_ui_link: process.env.EMAIL_VERIFICATION_UI_LINK as string,
   auth_user_email: process.env.AUTH_USER_EMAIL as string,
   auth_user_email_password: process.env.AUTH_USER_EMAIL_PASSWORD as string,
+  server_api_key: process.env.SERVER_API_KEY as string,
 };
 
 // node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

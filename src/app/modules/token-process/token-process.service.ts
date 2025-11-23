@@ -102,7 +102,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
 
   return {
     user_id,
-    user_token: userToken,
+    token: userToken,
     status: hasAccess ? 'access-able' : 'not-access-able',
   };
 };
@@ -173,10 +173,10 @@ export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {
     await session.commitTransaction();
 
     return {
-      user: user_id,
-      status: 'return-able',
+      user_id: user_id,
       token: updatedToken,
       cost: finalTokenCost,
+      status: 'return-able',
     };
   } catch (error: any) {
     await session.abortTransaction();

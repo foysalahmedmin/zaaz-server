@@ -1,37 +1,31 @@
 export type TTokenProcessStartPayload = {
   user_id: string;
-  feature_id: string;
-  endpoint: string;
-  method: string;
-  query?: Record<string, any>;
+  feature_endpoint_id: string;
 };
 
 export type TTokenProcessStartResponse = {
   success: boolean;
+  message: string;
   data: {
-    track_id?: string; // it will be tract generated ID. Optional;
     user_id: string; // user ID;
-    user_token: number; // user current token amount;
+    token: number; // user current token amount;
     status: 'access-able' | 'not-access-able';
   };
 };
 
 export type TTokenProcessEndPayload = {
-  track_id?: string; // start payload track. Optional;
-  user_id: string; // user ID;
-  feature_id: string;
-  endpoint: string;
-  method: string;
-  query?: Record<string, any>;
-  token_cost: number; // token cost after processing;
+  user_id: string;
+  feature_endpoint_id: string;
+  cost: number; // token cost after processing;
 };
 
 export type TTokenProcessEndResponse = {
   success: boolean;
+  message: string;
   data: {
-    user: string;
+    user_id: string;
+    token: number; // user current token amount;
+    cost: number; // token cost after deducted by token profit percentage;
     status: 'return-able' | 'not-return-able';
-    token: number;
-    token_cost: number; // token cost after deducted by token profit percentage;
   };
 };

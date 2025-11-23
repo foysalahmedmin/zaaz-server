@@ -1,5 +1,5 @@
 import express from 'express';
-import auth from '../../middlewares/auth.middleware';
+import serverAuth from '../../middlewares/server-auth.middleware';
 import validation from '../../middlewares/validation.middleware';
 import * as TokenProcessControllers from './token-process.controller';
 import * as TokenProcessValidations from './token-process.validation';
@@ -9,7 +9,7 @@ const router = express.Router();
 // POST - Token Process Start
 router.post(
   '/start',
-  auth('user', 'admin'),
+  serverAuth(),
   validation(TokenProcessValidations.tokenProcessStartValidationSchema),
   TokenProcessControllers.tokenProcessStart,
 );
@@ -17,7 +17,7 @@ router.post(
 // POST - Token Process End
 router.post(
   '/end',
-  auth('user', 'admin'),
+  serverAuth(),
   validation(TokenProcessValidations.tokenProcessEndValidationSchema),
   TokenProcessControllers.tokenProcessEnd,
 );
@@ -25,4 +25,3 @@ router.post(
 const TokenProcessRoutes = router;
 
 export default TokenProcessRoutes;
-
