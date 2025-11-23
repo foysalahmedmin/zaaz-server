@@ -42,3 +42,9 @@ export const userWalletOperationValidationSchema = z.object({
     id: idSchema,
   }),
 });
+
+export const userWalletsOperationValidationSchema = z.object({
+  body: z.object({
+    ids: z.array(idSchema).nonempty('At least one user wallet ID is required'),
+  }),
+});

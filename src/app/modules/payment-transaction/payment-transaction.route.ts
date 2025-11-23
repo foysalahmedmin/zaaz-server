@@ -129,12 +129,58 @@ router.patch(
 
 // DELETE
 router.delete(
+  '/bulk/permanent',
+  auth('admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionsOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.deletePaymentTransactionsPermanent,
+);
+
+router.delete(
+  '/bulk',
+  auth('admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionsOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.deletePaymentTransactions,
+);
+
+router.delete(
+  '/:id/permanent',
+  auth('admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.deletePaymentTransactionPermanent,
+);
+
+router.delete(
   '/:id',
   auth('admin'),
   validation(
     PaymentTransactionValidations.paymentTransactionOperationValidationSchema,
   ),
   PaymentTransactionControllers.deletePaymentTransaction,
+);
+
+// POST - Restore
+router.post(
+  '/bulk/restore',
+  auth('admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionsOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.restorePaymentTransactions,
+);
+
+router.post(
+  '/:id/restore',
+  auth('admin'),
+  validation(
+    PaymentTransactionValidations.paymentTransactionOperationValidationSchema,
+  ),
+  PaymentTransactionControllers.restorePaymentTransaction,
 );
 
 const PaymentTransactionRoutes = router;

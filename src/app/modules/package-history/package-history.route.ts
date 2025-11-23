@@ -21,7 +21,56 @@ router.get(
   PackageHistoryControllers.getPackageHistory,
 );
 
+// DELETE
+router.delete(
+  '/bulk/permanent',
+  auth('admin'),
+  validation(
+    PackageHistoryValidations.packageHistoriesOperationValidationSchema,
+  ),
+  PackageHistoryControllers.deletePackageHistoriesPermanent,
+);
+
+router.delete(
+  '/bulk',
+  auth('admin'),
+  validation(
+    PackageHistoryValidations.packageHistoriesOperationValidationSchema,
+  ),
+  PackageHistoryControllers.deletePackageHistories,
+);
+
+router.delete(
+  '/:id/permanent',
+  auth('admin'),
+  validation(PackageHistoryValidations.packageHistoryOperationValidationSchema),
+  PackageHistoryControllers.deletePackageHistoryPermanent,
+);
+
+router.delete(
+  '/:id',
+  auth('admin'),
+  validation(PackageHistoryValidations.packageHistoryOperationValidationSchema),
+  PackageHistoryControllers.deletePackageHistory,
+);
+
+// POST - Restore
+router.post(
+  '/bulk/restore',
+  auth('admin'),
+  validation(
+    PackageHistoryValidations.packageHistoriesOperationValidationSchema,
+  ),
+  PackageHistoryControllers.restorePackageHistories,
+);
+
+router.post(
+  '/:id/restore',
+  auth('admin'),
+  validation(PackageHistoryValidations.packageHistoryOperationValidationSchema),
+  PackageHistoryControllers.restorePackageHistory,
+);
+
 const PackageHistoryRoutes = router;
 
 export default PackageHistoryRoutes;
-

@@ -40,12 +40,58 @@ router.post(
 
 // DELETE
 router.delete(
+  '/bulk/permanent',
+  auth('admin'),
+  validation(
+    TokenTransactionValidations.tokenTransactionsOperationValidationSchema,
+  ),
+  TokenTransactionControllers.deleteTokenTransactionsPermanent,
+);
+
+router.delete(
+  '/bulk',
+  auth('admin'),
+  validation(
+    TokenTransactionValidations.tokenTransactionsOperationValidationSchema,
+  ),
+  TokenTransactionControllers.deleteTokenTransactions,
+);
+
+router.delete(
+  '/:id/permanent',
+  auth('admin'),
+  validation(
+    TokenTransactionValidations.tokenTransactionOperationValidationSchema,
+  ),
+  TokenTransactionControllers.deleteTokenTransactionPermanent,
+);
+
+router.delete(
   '/:id',
   auth('admin'),
   validation(
     TokenTransactionValidations.tokenTransactionOperationValidationSchema,
   ),
   TokenTransactionControllers.deleteTokenTransaction,
+);
+
+// POST - Restore
+router.post(
+  '/bulk/restore',
+  auth('admin'),
+  validation(
+    TokenTransactionValidations.tokenTransactionsOperationValidationSchema,
+  ),
+  TokenTransactionControllers.restoreTokenTransactions,
+);
+
+router.post(
+  '/:id/restore',
+  auth('admin'),
+  validation(
+    TokenTransactionValidations.tokenTransactionOperationValidationSchema,
+  ),
+  TokenTransactionControllers.restoreTokenTransaction,
 );
 
 const TokenTransactionRoutes = router;

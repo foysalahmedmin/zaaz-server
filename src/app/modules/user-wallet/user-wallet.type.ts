@@ -5,6 +5,7 @@ export type TUserWallet = {
   package?: mongoose.Types.ObjectId | null;
   token: number;
   expires_at?: Date;
+  is_deleted?: boolean;
 };
 
 export interface TUserWalletDocument extends TUserWallet, Document {

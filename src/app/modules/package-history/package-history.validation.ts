@@ -9,10 +9,12 @@ export const getPackageHistoryValidationSchema = z.object({
   params: z.object({
     packageId: idSchema,
   }),
-  query: z.object({
-    page: z.string().optional(),
-    limit: z.string().optional(),
-  }).optional(),
+  query: z
+    .object({
+      page: z.string().optional(),
+      limit: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const packageHistoryOperationValidationSchema = z.object({
@@ -21,3 +23,10 @@ export const packageHistoryOperationValidationSchema = z.object({
   }),
 });
 
+export const packageHistoriesOperationValidationSchema = z.object({
+  body: z.object({
+    ids: z
+      .array(idSchema)
+      .nonempty('At least one package history ID is required'),
+  }),
+});

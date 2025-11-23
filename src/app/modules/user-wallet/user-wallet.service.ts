@@ -141,10 +141,97 @@ export const getUserWallets = async (
 };
 
 export const deleteUserWallet = async (id: string): Promise<void> => {
-  const wallet = await UserWallet.findById(id);
+  const wallet = await UserWallet.findById(id).lean();
+  if (!wallet) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  await UserWallet.findByIdAndUpdate(id, { is_deleted: true });
+};
+
+export const deleteUserWalletPermanent = async (id: string): Promise<void> => {
+  const wallet = await UserWallet.findById(id).setOptions({
+    bypassDeleted: true,
+  });
   if (!wallet) {
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
 
   await UserWallet.findByIdAndDelete(id);
+};
+
+export const deleteUserWallets = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const wallets = await UserWallet.find({ _id: { $in: ids } }).lean();
+  const foundIds = wallets.map((wallet) => wallet._id.toString());
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  await UserWallet.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const deleteUserWalletsPermanent = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const wallets = await UserWallet.find({ _id: { $in: ids } }).lean();
+  const foundIds = wallets.map((wallet) => wallet._id.toString());
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  await UserWallet.deleteMany({ _id: { $in: foundIds } }).setOptions({
+    bypassDeleted: true,
+  });
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const restoreUserWallet = async (id: string): Promise<TUserWallet> => {
+  const wallet = await UserWallet.findOneAndUpdate(
+    { _id: id, is_deleted: true },
+    { is_deleted: false },
+    { new: true },
+  ).lean();
+
+  if (!wallet) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'User wallet not found or not deleted',
+    );
+  }
+
+  return wallet;
+};
+
+export const restoreUserWallets = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const result = await UserWallet.updateMany(
+    { _id: { $in: ids }, is_deleted: true },
+    { is_deleted: false },
+  );
+
+  const restoredWallets = await UserWallet.find({ _id: { $in: ids } }).lean();
+  const restoredIds = restoredWallets.map((wallet) => wallet._id.toString());
+  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+
+  return {
+    count: result.modifiedCount,
+    not_found_ids: notFoundIds,
+  };
 };

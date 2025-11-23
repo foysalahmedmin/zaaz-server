@@ -14,7 +14,10 @@ export const createPaymentTransactionValidationSchema = z.object({
     user_wallet: idSchema,
     status: statusEnum.optional(),
     payment_method: idSchema,
-    gateway_transaction_id: z.string().trim().min(1, 'Gateway transaction ID is required'),
+    gateway_transaction_id: z
+      .string()
+      .trim()
+      .min(1, 'Gateway transaction ID is required'),
     package: idSchema,
     amount: z
       .number({ invalid_type_error: 'Amount must be a number' })
@@ -33,7 +36,11 @@ export const updatePaymentTransactionValidationSchema = z.object({
   }),
   body: z.object({
     status: statusEnum.optional(),
-    gateway_transaction_id: z.string().trim().min(1, 'Gateway transaction ID is required').optional(),
+    gateway_transaction_id: z
+      .string()
+      .trim()
+      .min(1, 'Gateway transaction ID is required')
+      .optional(),
     gateway_session_id: z.string().trim().optional(),
     gateway_status: z.string().trim().optional(),
     gateway_fee: z
@@ -82,3 +89,10 @@ export const webhookValidationSchema = z.object({
   }),
 });
 
+export const paymentTransactionsOperationValidationSchema = z.object({
+  body: z.object({
+    ids: z
+      .array(idSchema)
+      .nonempty('At least one payment transaction ID is required'),
+  }),
+});

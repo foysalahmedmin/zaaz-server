@@ -26,6 +26,7 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
     expires_at: {
       type: Date,
     },
+    is_deleted: { type: Boolean, default: false, select: false },
   },
   {
     timestamps: {
@@ -37,27 +38,40 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
   },
 );
 
-// toJSON override
+// toJSON override to remove sensitive fields from output
 userWalletSchema.methods.toJSON = function () {
   const userWallet = this.toObject();
+  delete userWallet.is_deleted;
   return userWallet;
 };
 
 userWalletSchema.pre(/^find/, function (next) {
   const query = this as unknown as Query<TUserWallet, TUserWallet>;
   const opts = query.getOptions();
+  const currentQuery = query.getQuery();
+
+  const newQuery: any = { ...currentQuery };
+
+  // Add is_deleted filter
+  if (!opts?.bypassDeleted && currentQuery.is_deleted === undefined) {
+    newQuery.is_deleted = { $ne: true };
+  }
 
   // Check if wallet is expired
   if (!opts?.bypassExpired) {
-    query.setQuery({
-      ...query.getQuery(),
-      $or: [
-        { expires_at: { $exists: false } },
-        { expires_at: { $gte: new Date() } },
-      ],
-    });
+    newQuery.$or = [
+      { expires_at: { $exists: false } },
+      { expires_at: { $gte: new Date() } },
+    ];
   }
 
+  query.setQuery(newQuery);
+  next();
+});
+
+// Aggregation pipeline
+userWalletSchema.pre('aggregate', function (next) {
+  this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
   next();
 });
 

@@ -5,6 +5,7 @@ export type TContact = {
   email: string;
   subject: string;
   message: string;
+  is_deleted?: boolean;
   created_at?: Date;
   updated_at?: Date;
 };

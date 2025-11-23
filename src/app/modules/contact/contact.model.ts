@@ -31,6 +31,7 @@ const contactSchema = new Schema<TContactDocument>(
       minlength: [10, 'Message must be at least 10 characters'],
       maxlength: [5000, 'Message cannot exceed 5000 characters'],
     },
+    is_deleted: { type: Boolean, default: false, select: false },
   },
   {
     timestamps: {
@@ -45,10 +46,32 @@ const contactSchema = new Schema<TContactDocument>(
 contactSchema.index({ email: 1 });
 contactSchema.index({ created_at: -1 });
 
+// toJSON override to remove sensitive fields from output
 contactSchema.methods.toJSON = function () {
   const contact = this.toObject();
+  delete contact.is_deleted;
   return contact;
 };
+
+contactSchema.pre(/^find/, function (next) {
+  const query = this as unknown as mongoose.Query<TContactDocument, TContactDocument>;
+  const opts = query.getOptions();
+
+  if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
+    query.setQuery({
+      ...query.getQuery(),
+      is_deleted: { $ne: true },
+    });
+  }
+
+  next();
+});
+
+// Aggregation pipeline
+contactSchema.pre('aggregate', function (next) {
+  this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
+  next();
+});
 
 export const Contact = mongoose.model<TContactDocument, TContactModel>(
   'Contact',

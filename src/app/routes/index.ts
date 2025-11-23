@@ -9,6 +9,7 @@ import PackageHistoryRoutes from '../modules/package-history/package-history.rou
 import PackageRoutes from '../modules/package/package.route';
 import PaymentMethodRoutes from '../modules/payment-method/payment-method.route';
 import PaymentTransactionRoutes from '../modules/payment-transaction/payment-transaction.route';
+import TokenProcessRoutes from '../modules/token-process/token-process.route';
 import TokenProfitHistoryRoutes from '../modules/token-profit-history/token-profit-history.route';
 import TokenProfitRoutes from '../modules/token-profit/token-profit.route';
 import TokenTransactionRoutes from '../modules/token-transaction/token-transaction.route';
@@ -78,6 +79,10 @@ const moduleRoutes = [
   {
     path: '/notification-recipients',
     route: NotificationRecipientRoutes,
+  },
+  {
+    path: '/token-process',
+    route: TokenProcessRoutes,
   },
 ];
 

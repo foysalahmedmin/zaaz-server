@@ -363,6 +363,112 @@ export const deletePaymentTransaction = async (id: string): Promise<void> => {
   await PaymentTransaction.findByIdAndUpdate(id, { is_deleted: true });
 };
 
+export const deletePaymentTransactionPermanent = async (
+  id: string,
+): Promise<void> => {
+  const transaction = await PaymentTransaction.findById(id).setOptions({
+    bypassDeleted: true,
+  });
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  await PaymentTransaction.findByIdAndDelete(id);
+};
+
+export const deletePaymentTransactions = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const transactions = await PaymentTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const foundIds = transactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  await PaymentTransaction.updateMany(
+    { _id: { $in: foundIds } },
+    { is_deleted: true },
+  );
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const deletePaymentTransactionsPermanent = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const transactions = await PaymentTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const foundIds = transactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  await PaymentTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
+    bypassDeleted: true,
+  });
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const restorePaymentTransaction = async (
+  id: string,
+): Promise<TPaymentTransaction> => {
+  const transaction = await PaymentTransaction.findOneAndUpdate(
+    { _id: id, is_deleted: true },
+    { is_deleted: false },
+    { new: true },
+  ).lean();
+
+  if (!transaction) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'Payment transaction not found or not deleted',
+    );
+  }
+
+  return transaction;
+};
+
+export const restorePaymentTransactions = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const result = await PaymentTransaction.updateMany(
+    { _id: { $in: ids }, is_deleted: true },
+    { is_deleted: false },
+  );
+
+  const restoredTransactions = await PaymentTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const restoredIds = restoredTransactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+
+  return {
+    count: result.modifiedCount,
+    not_found_ids: notFoundIds,
+  };
+};
+
 export const initiatePayment = async (options: {
   userId: string;
   packageId: string;

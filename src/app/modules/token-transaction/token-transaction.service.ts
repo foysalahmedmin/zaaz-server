@@ -118,3 +118,170 @@ export const deleteTokenTransaction = async (id: string): Promise<void> => {
 
   await TokenTransaction.findByIdAndUpdate(id, { is_deleted: true });
 };
+
+export const deleteTokenTransactionPermanent = async (
+  id: string,
+): Promise<void> => {
+  const transaction = await TokenTransaction.findById(id).setOptions({
+    bypassDeleted: true,
+  });
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Token transaction not found');
+  }
+
+  // Reverse the transaction effect on wallet before permanent delete
+  const wallet = await UserWallet.findById(transaction.user_wallet);
+  if (wallet) {
+    if (transaction.type === 'increase') {
+      wallet.token = Math.max(0, wallet.token - transaction.amount);
+    } else {
+      wallet.token += transaction.amount;
+    }
+    await wallet.save();
+  }
+
+  await TokenTransaction.findByIdAndDelete(id);
+};
+
+export const deleteTokenTransactions = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const transactions = await TokenTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const foundIds = transactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  // Reverse wallet effects for all transactions
+  for (const transaction of transactions) {
+    const wallet = await UserWallet.findById(transaction.user_wallet);
+    if (wallet) {
+      if (transaction.type === 'increase') {
+        wallet.token = Math.max(0, wallet.token - transaction.amount);
+      } else {
+        wallet.token += transaction.amount;
+      }
+      await wallet.save();
+    }
+  }
+
+  await TokenTransaction.updateMany(
+    { _id: { $in: foundIds } },
+    { is_deleted: true },
+  );
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const deleteTokenTransactionsPermanent = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const transactions = await TokenTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const foundIds = transactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  // Reverse wallet effects for all transactions before permanent delete
+  for (const transaction of transactions) {
+    const wallet = await UserWallet.findById(transaction.user_wallet);
+    if (wallet) {
+      if (transaction.type === 'increase') {
+        wallet.token = Math.max(0, wallet.token - transaction.amount);
+      } else {
+        wallet.token += transaction.amount;
+      }
+      await wallet.save();
+    }
+  }
+
+  await TokenTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
+    bypassDeleted: true,
+  });
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
+export const restoreTokenTransaction = async (
+  id: string,
+): Promise<TTokenTransaction> => {
+  const transaction = await TokenTransaction.findOneAndUpdate(
+    { _id: id, is_deleted: true },
+    { is_deleted: false },
+    { new: true },
+  ).lean();
+
+  if (!transaction) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'Token transaction not found or not deleted',
+    );
+  }
+
+  // Re-apply the transaction effect on wallet when restoring
+  const wallet = await UserWallet.findById(transaction.user_wallet);
+  if (wallet) {
+    if (transaction.type === 'increase') {
+      wallet.token += transaction.amount;
+    } else {
+      wallet.token = Math.max(0, wallet.token - transaction.amount);
+    }
+    await wallet.save();
+  }
+
+  return transaction;
+};
+
+export const restoreTokenTransactions = async (
+  ids: string[],
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const result = await TokenTransaction.updateMany(
+    { _id: { $in: ids }, is_deleted: true },
+    { is_deleted: false },
+  );
+
+  const restoredTransactions = await TokenTransaction.find({
+    _id: { $in: ids },
+  }).lean();
+  const restoredIds = restoredTransactions.map((transaction) =>
+    transaction._id.toString(),
+  );
+  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+
+  // Re-apply wallet effects for all restored transactions
+  for (const transaction of restoredTransactions) {
+    const wallet = await UserWallet.findById(transaction.user_wallet);
+    if (wallet) {
+      if (transaction.type === 'increase') {
+        wallet.token += transaction.amount;
+      } else {
+        wallet.token = Math.max(0, wallet.token - transaction.amount);
+      }
+      await wallet.save();
+    }
+  }
+
+  return {
+    count: result.modifiedCount,
+    not_found_ids: notFoundIds,
+  };
+};

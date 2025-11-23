@@ -49,10 +49,7 @@ export const createTokenTransactionValidationSchema = z
       )
       .refine(
         (data) => {
-          if (
-            data.type === 'increase' &&
-            data.increase_source === 'payment'
-          ) {
+          if (data.type === 'increase' && data.increase_source === 'payment') {
             return !!data.payment_transaction;
           }
           return true;
@@ -106,3 +103,10 @@ export const tokenTransactionOperationValidationSchema = z.object({
   }),
 });
 
+export const tokenTransactionsOperationValidationSchema = z.object({
+  body: z.object({
+    ids: z
+      .array(idSchema)
+      .nonempty('At least one token transaction ID is required'),
+  }),
+});

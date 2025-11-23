@@ -44,10 +44,46 @@ router.patch(
 
 // DELETE
 router.delete(
+  '/bulk/permanent',
+  auth('admin'),
+  validation(UserWalletValidations.userWalletsOperationValidationSchema),
+  UserWalletControllers.deleteUserWalletsPermanent,
+);
+
+router.delete(
+  '/bulk',
+  auth('admin'),
+  validation(UserWalletValidations.userWalletsOperationValidationSchema),
+  UserWalletControllers.deleteUserWallets,
+);
+
+router.delete(
+  '/:id/permanent',
+  auth('admin'),
+  validation(UserWalletValidations.userWalletOperationValidationSchema),
+  UserWalletControllers.deleteUserWalletPermanent,
+);
+
+router.delete(
   '/:id',
   auth('admin'),
   validation(UserWalletValidations.userWalletOperationValidationSchema),
   UserWalletControllers.deleteUserWallet,
+);
+
+// POST - Restore
+router.post(
+  '/bulk/restore',
+  auth('admin'),
+  validation(UserWalletValidations.userWalletsOperationValidationSchema),
+  UserWalletControllers.restoreUserWallets,
+);
+
+router.post(
+  '/:id/restore',
+  auth('admin'),
+  validation(UserWalletValidations.userWalletOperationValidationSchema),
+  UserWalletControllers.restoreUserWallet,
 );
 
 const UserWalletRoutes = router;

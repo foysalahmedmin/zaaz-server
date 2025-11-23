@@ -73,8 +73,76 @@ export const deletePaymentTransaction = catchAsync(async (req, res) => {
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
-    message: 'Payment transaction deleted successfully',
+    message: 'Payment transaction soft deleted successfully',
     data: null,
+  });
+});
+
+export const deletePaymentTransactionPermanent = catchAsync(
+  async (req, res) => {
+    const { id } = req.params;
+    await PaymentTransactionServices.deletePaymentTransactionPermanent(id);
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: 'Payment transaction permanently deleted successfully',
+      data: null,
+    });
+  },
+);
+
+export const deletePaymentTransactions = catchAsync(async (req, res) => {
+  const { ids } = req.body;
+  const result =
+    await PaymentTransactionServices.deletePaymentTransactions(ids);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: `${result.count} payment transactions soft deleted successfully`,
+    data: {
+      not_found_ids: result.not_found_ids,
+    },
+  });
+});
+
+export const deletePaymentTransactionsPermanent = catchAsync(
+  async (req, res) => {
+    const { ids } = req.body;
+    const result =
+      await PaymentTransactionServices.deletePaymentTransactionsPermanent(ids);
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: `${result.count} payment transactions permanently deleted successfully`,
+      data: {
+        not_found_ids: result.not_found_ids,
+      },
+    });
+  },
+);
+
+export const restorePaymentTransaction = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await PaymentTransactionServices.restorePaymentTransaction(id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment transaction restored successfully',
+    data: result,
+  });
+});
+
+export const restorePaymentTransactions = catchAsync(async (req, res) => {
+  const { ids } = req.body;
+  const result =
+    await PaymentTransactionServices.restorePaymentTransactions(ids);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: `${result.count} payment transactions restored successfully`,
+    data: {
+      not_found_ids: result.not_found_ids,
+    },
   });
 });
 
