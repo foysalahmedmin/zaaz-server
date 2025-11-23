@@ -127,24 +127,6 @@ export const handleWebhook = catchAsync(async (req, res) => {
   // For SSL Commerz, use parsed body (form data)
   const payload = (req as any).body || (req as any).rawBody;
 
-  // Add logging for debugging SSLCommerz webhook
-  console.log('[Webhook Controller] Payment Method ID:', payment_method_id);
-  console.log('[Webhook Controller] Payload type:', typeof payload);
-  console.log(
-    '[Webhook Controller] Payload is object:',
-    typeof payload === 'object',
-  );
-  console.log(
-    '[Webhook Controller] Payload keys:',
-    payload && typeof payload === 'object'
-      ? Object.keys(payload)
-      : 'Not an object',
-  );
-  console.log(
-    '[Webhook Controller] Payload sample:',
-    JSON.stringify(payload, null, 2).substring(0, 500),
-  );
-
   try {
     await PaymentTransactionServices.handlePaymentWebhook(
       payment_method_id,

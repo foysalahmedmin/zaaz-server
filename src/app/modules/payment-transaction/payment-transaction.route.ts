@@ -78,15 +78,8 @@ router.post(
       const bodyString = req.body.toString();
       const contentType = req.headers['content-type'] || '';
 
-      console.log('[Webhook Route] Content-Type:', contentType);
-      console.log(
-        '[Webhook Route] Body string sample:',
-        bodyString.substring(0, 300),
-      );
-
       if (contentType.includes('application/json')) {
         (req as any).body = JSON.parse(bodyString);
-        console.log('[Webhook Route] Parsed as JSON');
       } else if (
         contentType.includes('application/x-www-form-urlencoded') ||
         contentType.includes('text/plain')
@@ -94,23 +87,14 @@ router.post(
         // Parse as URL-encoded form data
         const params = new URLSearchParams(bodyString);
         (req as any).body = Object.fromEntries(params);
-        console.log(
-          '[Webhook Route] Parsed as form data. Keys:',
-          Object.keys((req as any).body),
-        );
       } else {
         // Try to parse as form data even if content-type is not set (SSLCommerz sometimes doesn't set it)
         try {
           const params = new URLSearchParams(bodyString);
           (req as any).body = Object.fromEntries(params);
-          console.log(
-            '[Webhook Route] Auto-parsed as form data. Keys:',
-            Object.keys((req as any).body),
-          );
         } catch {
           // Keep as raw buffer
           (req as any).body = req.body;
-          console.log('[Webhook Route] Kept as raw buffer');
         }
       }
     } catch (error) {
