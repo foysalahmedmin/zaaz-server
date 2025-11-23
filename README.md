@@ -36,6 +36,8 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Notification Recipients**: User-specific notification delivery with read status tracking, metadata support, and action buttons
 - **Public API Access**: Public endpoints for features, feature-endpoints, packages, and payment methods (no authentication required)
 - **Contact Management**: Contact form submission handling
+- **Admin Dashboard**: Comprehensive analytics dashboard with statistics, revenue trends, transaction status, payment method performance, token flow, user growth, package performance, and feature performance charts
+- **Token Process Module**: Server-to-server token processing system for validating user tokens, checking feature access, and managing token consumption with automatic profit calculation
 
 ### Technical Features
 
@@ -43,12 +45,14 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Type Safety**: Full TypeScript implementation with strict type checking
 - **Validation**: Zod schema validation for request/response data
 - **Error Handling**: Centralized error handling with custom error classes
-- **Soft Delete**: Soft delete pattern for data retention
+- **Soft Delete**: Soft delete pattern for data retention with restore and permanent delete capabilities across all modules
 - **Query Builder**: Advanced query builder with search, filter, sort, pagination
 - **Webhook Support**: Secure webhook handling for payment status updates
 - **Real-time Communication**: Socket.io integration for real-time updates
 - **Caching**: Redis integration for performance optimization
 - **Session Management**: MongoDB session store for scalable sessions
+- **Server-to-Server Authentication**: API key-based authentication middleware for internal service communication
+- **Aggregation Pipelines**: MongoDB aggregation for efficient analytics and dashboard data processing
 
 ---
 
@@ -148,13 +152,15 @@ src/
 │   ├── interface/            # TypeScript declarations
 │   ├── middlewares/          # Express middlewares
 │   │   ├── auth.middleware.ts
+│   │   ├── server-auth.middleware.ts  # Server-to-server authentication
 │   │   ├── error.middleware.ts
 │   │   ├── validation.middleware.ts
 │   │   └── ...
-│   ├── modules/              # Feature modules (15 total)
+│   ├── modules/              # Feature modules (17 total)
 │   │   ├── auth/             # Authentication module
 │   │   ├── user/             # User management module
 │   │   ├── contact/          # Contact form submissions
+│   │   ├── dashboard/        # Admin dashboard analytics
 │   │   ├── feature/         # System features management
 │   │   ├── feature-endpoint/ # API endpoint definitions
 │   │   ├── notification/    # Notification management
@@ -163,6 +169,7 @@ src/
 │   │   ├── package-history/ # Package change history
 │   │   ├── payment-method/   # Payment gateway configurations
 │   │   ├── payment-transaction/ # Payment processing
+│   │   ├── token-process/   # Server-to-server token processing
 │   │   ├── token-profit/    # Profit percentage settings
 │   │   ├── token-profit-history/ # Profit setting history
 │   │   ├── token-transaction/ # Token movement tracking
@@ -175,7 +182,9 @@ src/
 │   ├── routes/               # Route registration
 │   ├── socket/               # Socket.io setup
 │   ├── types/                # Shared types
-│   └── utils/                # Utility functions
+│   ├── utils/                # Utility functions
+│   │   └── withTokenProcess.ts  # Token process wrapper utility
+│   └── token-process/        # Example token-process client (for other servers)
 ├── app.ts                    # Express app configuration
 └── index.ts                  # Application entry point
 ```
@@ -449,7 +458,9 @@ erDiagram
 | Token Profits           | `/api/token-profits`           | Profit percentage settings            |
 | Token Profit History    | `/api/token-profit-histories`  | Profit setting history                |
 | Token Transactions      | `/api/token-transactions`      | Token movement history                |
+| Token Process           | `/api/token-process`           | Server-to-server token processing    |
 | User Wallets            | `/api/user-wallets`            | User wallet management                |
+| Dashboard               | `/api/dashboard`               | Admin dashboard analytics             |
 
 ### Common Endpoints Pattern
 
@@ -536,6 +547,22 @@ These endpoints are available for client-side access without authentication:
 - `POST /api/notification-recipients/:id/restore` - Restore notification recipient (admin only)
 - `POST /api/notification-recipients/bulk/restore` - Bulk restore notification recipients (admin only)
 - `POST /api/notification-recipients/bulk/restore/self` - Bulk restore own notification recipients (admin/user)
+
+### Dashboard-Specific Endpoints
+
+- `GET /api/dashboard/statistics` - Get overall dashboard statistics (admin/super-admin only)
+- `GET /api/dashboard/revenue?period=30d` - Get revenue trend data (admin/super-admin only)
+- `GET /api/dashboard/transactions` - Get transaction status distribution (admin/super-admin only)
+- `GET /api/dashboard/payment-methods` - Get payment method performance (admin/super-admin only)
+- `GET /api/dashboard/token-flow?period=30d` - Get token flow data (admin/super-admin only)
+- `GET /api/dashboard/user-growth?period=30d` - Get user growth data (admin/super-admin only)
+- `GET /api/dashboard/packages` - Get package performance data (admin/super-admin only)
+- `GET /api/dashboard/features` - Get feature performance data (admin/super-admin only)
+
+### Token Process-Specific Endpoints
+
+- `POST /api/token-process/start` - Start token process (server-to-server authentication required)
+- `POST /api/token-process/end` - End token process and update wallet (server-to-server authentication required)
 
 ---
 
@@ -655,6 +682,7 @@ AUTH_USER_EMAIL_PASSWORD=your-app-password
 ```env
 BCRYPT_SALT_ROUNDS=12
 DEFAULT_PASSWORD=default-password
+SERVER_API_KEY=your-server-api-key-for-internal-services
 ```
 
 **Note**: Generate secure random strings for JWT secrets:
@@ -722,6 +750,123 @@ POST /api/payment-transactions/webhook/:payment_method_id
 2. Implement the `IPaymentGateway` interface
 3. Add the gateway to `PaymentGatewayFactory`
 4. Update `PaymentMethod` model validation
+
+---
+
+## 📊 Admin Dashboard
+
+The dashboard module provides comprehensive analytics for administrators:
+
+### Dashboard Statistics
+
+- **Total Revenue**: Aggregated revenue in USD and BDT with USD equivalent
+- **Total Users**: Count of active users (excluding blocked and deleted)
+- **Total Transactions**: Count of all payment transactions
+- **Total Tokens**: Sum of tokens across all active user wallets
+- **Trends**: Month-over-month percentage changes for all metrics
+
+### Dashboard Charts
+
+1. **Revenue Trend**: Daily revenue over time (USD and BDT)
+2. **Transaction Status**: Distribution of transactions by status (bar chart)
+3. **Payment Method Performance**: Transaction count and revenue by payment method
+4. **Token Flow**: Daily token increases vs decreases
+5. **User Growth**: Daily user registrations
+6. **Package Performance**: Purchase count and revenue per package
+7. **Feature Performance**: Usage count and total tokens used per feature
+
+### Data Aggregation
+
+All dashboard data is generated using MongoDB aggregation pipelines for optimal performance:
+- Efficient data joining across collections
+- Real-time calculations
+- Period-based filtering (7d, 30d, 90d, 1y)
+- Trend calculations with month-over-month comparisons
+
+---
+
+## 🔄 Token Process Module
+
+The token process module provides server-to-server token processing for external services:
+
+### Features
+
+- **Token Validation**: Validates user tokens against feature endpoint requirements
+- **Feature Access Check**: Verifies if user's package includes the requested feature
+- **Token Consumption**: Calculates final cost including profit percentages and updates wallet
+- **Server-to-Server Auth**: API key-based authentication for secure internal communication
+- **Negative Balance Support**: Allows negative token balances for adjustment during next purchase
+
+### API Endpoints
+
+**Start Token Process** (`POST /api/token-process/start`):
+- Validates user wallet exists and is active
+- Checks if feature endpoint is included in user's package
+- Validates user has sufficient tokens
+- Returns access status
+
+**End Token Process** (`POST /api/token-process/end`):
+- Calculates final cost with profit percentage
+- Creates token transaction record
+- Updates user wallet balance (allows negative)
+- Returns updated token balance
+
+### Usage Example
+
+```typescript
+// From another server
+import axios from 'axios';
+
+const startResult = await axios.post(
+  'http://payment-server/api/token-process/start',
+  {
+    user_id: 'user_id_here',
+    feature_endpoint_id: 'feature_endpoint_id_here',
+  },
+  {
+    headers: {
+      'x-server-api-key': 'your-server-api-key',
+    },
+  }
+);
+
+// Execute your service logic
+const serviceResult = await yourServiceFunction();
+
+// End token process
+await axios.post(
+  'http://payment-server/api/token-process/end',
+  {
+    user_id: 'user_id_here',
+    feature_endpoint_id: 'feature_endpoint_id_here',
+    cost: serviceResult.cost,
+  },
+  {
+    headers: {
+      'x-server-api-key': 'your-server-api-key',
+    },
+  }
+);
+```
+
+### withTokenProcess Wrapper
+
+A utility wrapper is available for wrapping service functions:
+
+```typescript
+import { withTokenProcess } from './utils/withTokenProcess';
+
+const wrappedService = withTokenProcess(
+  {
+    feature_endpoint_id: 'feature_endpoint_id',
+    user_id: (args) => args[0].user_id, // Extract from arguments
+  },
+  yourServiceFunction
+);
+
+// Usage
+const result = await wrappedService({ user_id: 'user_id', ...otherData });
+```
 
 ---
 
