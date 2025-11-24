@@ -25,11 +25,6 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
       type: String,
       trim: true,
     },
-    token: {
-      type: Number,
-      required: [true, 'Token is required'],
-      min: [0, 'Token must be 0 or greater'],
-    },
     features: [
       {
         type: Schema.Types.ObjectId,
@@ -37,33 +32,12 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
         required: true,
       },
     ],
-    duration: {
-      type: Number,
-      required: [true, 'Duration is required'],
-      min: [1, 'Duration must be at least 1 day'],
-    },
-    price: {
-      USD: {
-        type: Number,
-        required: [true, 'Price USD is required'],
-        min: [0, 'Price USD must be 0 or greater'],
+    plans: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Plan',
       },
-      BDT: {
-        type: Number,
-        required: [true, 'Price BDT is required'],
-        min: [0, 'Price BDT must be 0 or greater'],
-      },
-    },
-    previous_price: {
-      USD: {
-        type: Number,
-        min: [0, 'Previous price USD must be 0 or greater'],
-      },
-      BDT: {
-        type: Number,
-        min: [0, 'Previous price BDT must be 0 or greater'],
-      },
-    },
+    ],
     sequence: {
       type: Number,
       default: 0,

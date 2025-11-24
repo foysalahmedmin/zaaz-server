@@ -68,6 +68,11 @@ const tokenTransactionSchema = new Schema<TTokenTransactionDocument>(
           'payment_transaction is required when type is increase and increase_source is payment',
       },
     },
+    plan: {
+      type: Schema.Types.ObjectId,
+      ref: 'Plan',
+      index: true,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {

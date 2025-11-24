@@ -18,6 +18,12 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
       ref: 'Package',
       default: null,
     },
+    plan: {
+      type: Schema.Types.ObjectId,
+      ref: 'Plan',
+      default: null,
+      index: true,
+    },
     token: {
       type: Number,
       required: [true, 'Token is required'],

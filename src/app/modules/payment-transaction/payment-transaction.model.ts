@@ -50,6 +50,18 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       ref: 'Package',
       required: [true, 'Package is required'],
     },
+    plan: {
+      type: Schema.Types.ObjectId,
+      ref: 'Plan',
+      required: [true, 'Plan is required'],
+      index: true,
+    },
+    price: {
+      type: Schema.Types.ObjectId,
+      ref: 'PackagePlan',
+      required: [true, 'Price (package-plan) is required'],
+      index: true,
+    },
     amount: {
       type: Number,
       required: [true, 'Amount is required'],
@@ -140,4 +152,3 @@ export const PaymentTransaction = mongoose.model<
   TPaymentTransactionDocument,
   TPaymentTransactionModel
 >('PaymentTransaction', paymentTransactionSchema);
-

@@ -12,6 +12,7 @@ export type TTokenTransaction = {
   increase_source?: TTokenTransactionIncreaseSource;
   decrease_source?: TTokenTransactionDecreaseSource;
   payment_transaction?: mongoose.Types.ObjectId;
+  plan?: mongoose.Types.ObjectId;
   is_deleted?: boolean;
 };
 

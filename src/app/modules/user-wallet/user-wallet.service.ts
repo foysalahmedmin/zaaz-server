@@ -1,7 +1,6 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import { Package } from '../package/package.model';
 import { UserWallet } from './user-wallet.model';
 import { TUserWallet } from './user-wallet.type';
 
@@ -21,20 +20,21 @@ export const createUserWallet = async (
     );
   }
 
-  // Get package to calculate expires_at if duration exists (if package is provided)
+  // Get plan to calculate expires_at if duration exists (if plan is provided)
   let expiresAt: Date | undefined;
-  if (data.package) {
-    const packageData = await Package.findById(data.package)
+  if (data.plan) {
+    const { Plan } = await import('../plan/plan.model');
+    const planData = await Plan.findById(data.plan)
       .session(session || null)
       .lean();
 
-    if (!packageData) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+    if (!planData) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
     }
 
-    if (packageData.duration) {
+    if (planData.duration) {
       expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + packageData.duration);
+      expiresAt.setDate(expiresAt.getDate() + planData.duration);
     }
   }
 
@@ -227,8 +227,10 @@ export const restoreUserWallets = async (
   );
 
   const restoredWallets = await UserWallet.find({ _id: { $in: ids } }).lean();
-  const restoredIds = restoredWallets.map((wallet) => wallet._id.toString());
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+  const restoredIds = new Set(
+    restoredWallets.map((wallet) => wallet._id.toString()),
+  );
+  const notFoundIds = ids.filter((id) => !restoredIds.has(id));
 
   return {
     count: result.modifiedCount,

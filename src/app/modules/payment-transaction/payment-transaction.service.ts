@@ -5,6 +5,8 @@ import AppQuery from '../../builder/AppQuery';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
 import { Package } from '../package/package.model';
+import { PackagePlan } from '../package-plan/package-plan.model';
+import { Plan } from '../plan/plan.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
 import { TokenTransaction } from '../token-transaction/token-transaction.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
@@ -76,29 +78,33 @@ export const updatePaymentTransactionStatus = async (
       return existing;
     }
 
-    // Only create token transaction if atomic update was successful
-    const packageData = await Package.findById(updateResult.package)
+    // Get package-plan document using transaction.price (package-plan _id)
+    const packagePlan = await PackagePlan.findById(updateResult.price)
+      .populate('plan')
       .session(session || null)
       .lean();
 
-    if (!packageData) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+    if (!packagePlan) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Package-plan not found');
     }
+
+    const planData = packagePlan.plan as any;
 
     // Prepare wallet update data
     const updateWalletData: any = {
-      $inc: { token: packageData.token },
+      $inc: { token: packagePlan.token },
       package: updateResult.package, // Update to newly purchased package
+      plan: updateResult.plan, // Update to purchased plan
     };
 
-    // Calculate and set expires_at if package has duration
-    if (packageData.duration) {
+    // Calculate and set expires_at using plan's duration
+    if (planData && planData.duration) {
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + packageData.duration);
+      expiresAt.setDate(expiresAt.getDate() + planData.duration);
       updateWalletData.expires_at = expiresAt;
     }
 
-    // Update wallet with package tokens, package reference, and expiration
+    // Update wallet with package tokens, package reference, plan, and expiration
     await UserWallet.findByIdAndUpdate(
       updateResult.user_wallet,
       updateWalletData,
@@ -123,9 +129,10 @@ export const updatePaymentTransactionStatus = async (
             user: updateResult.user,
             user_wallet: updateResult.user_wallet,
             type: 'increase',
-            token: packageData.token,
+            token: packagePlan.token,
             increase_source: 'payment',
             payment_transaction: id,
+            plan: updateResult.plan,
           },
         ],
         { session },
@@ -196,7 +203,9 @@ export const getPaymentTransactions = async (
     PaymentTransaction.find().populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'payment_method', select: '_id name currency' },
-      { path: 'package', select: '_id name token price price_previous' },
+      { path: 'package', select: '_id name' },
+      { path: 'plan', select: '_id name duration' },
+      { path: 'price', select: '_id price token' }, // package-plan
     ]),
     { ...rest, ...filter },
   )
@@ -216,7 +225,9 @@ export const getPaymentTransaction = async (
   const result = await PaymentTransaction.findById(id).populate([
     { path: 'user_wallet', select: '_id token' },
     { path: 'payment_method', select: '_id name currency' },
-    { path: 'package', select: '_id name token price price_previous' },
+    { path: 'package', select: '_id name' },
+    { path: 'plan', select: '_id name duration' },
+    { path: 'price', select: '_id price token' }, // package-plan
   ]);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
@@ -472,6 +483,7 @@ export const restorePaymentTransactions = async (
 export const initiatePayment = async (options: {
   userId: string;
   packageId: string;
+  planId: string;
   paymentMethodId: string;
   returnUrl: string;
   cancelUrl: string;
@@ -487,6 +499,7 @@ export const initiatePayment = async (options: {
   const {
     userId,
     packageId,
+    planId,
     paymentMethodId,
     returnUrl,
     cancelUrl,
@@ -513,6 +526,29 @@ export const initiatePayment = async (options: {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found or inactive');
   }
 
+  // Validate plan exists and is active
+  const plan = await Plan.findById(planId).session(session || null).lean();
+  if (!plan || !plan.is_active) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Plan not found or not active');
+  }
+
+  // Get package-plan for this package+plan combination
+  const packagePlan = await PackagePlan.findOne({
+    package: packageId,
+    plan: planId,
+    is_active: true,
+    is_deleted: { $ne: true },
+  })
+    .session(session || null)
+    .lean();
+
+  if (!packagePlan) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Package-plan not found or not active for this package and plan combination',
+    );
+  }
+
   // Get or create user wallet
   let wallet = await UserWallet.findOne({ user: userId })
     .session(session || null)
@@ -535,14 +571,14 @@ export const initiatePayment = async (options: {
   // Get amount based on payment method currency
   const gatewayAmount =
     paymentMethod.currency === 'USD'
-      ? packageData.price.USD
-      : packageData.price.BDT;
+      ? packagePlan.price.USD
+      : packagePlan.price.BDT;
 
   // Validate amount is greater than 0
   if (!gatewayAmount || gatewayAmount <= 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Package price for ${paymentMethod.currency} is not available or invalid`,
+      `Package-plan price for ${paymentMethod.currency} is not available or invalid`,
     );
   }
 
@@ -556,6 +592,8 @@ export const initiatePayment = async (options: {
         payment_method: paymentMethodId,
         gateway_transaction_id: '',
         package: packageId,
+        plan: planId,
+        price: packagePlan._id, // Store package-plan document _id
         amount: gatewayAmount,
         currency: paymentMethod.currency,
       },

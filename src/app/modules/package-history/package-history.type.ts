@@ -10,11 +10,8 @@ export type TPackageHistory = {
   name: string;
   description?: string;
   content?: string;
-  token: number;
   features: mongoose.Types.ObjectId[];
-  duration: number;
-  price: TPackagePrice;
-  previous_price?: TPackagePrice;
+  plans: mongoose.Types.ObjectId[];
   sequence?: number;
   is_active?: boolean;
   is_deleted?: boolean;

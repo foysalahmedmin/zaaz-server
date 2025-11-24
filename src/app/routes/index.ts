@@ -7,7 +7,9 @@ import FeatureRoutes from '../modules/feature/feature.route';
 import NotificationRecipientRoutes from '../modules/notification-recipient/notification-recipient.route';
 import NotificationRoutes from '../modules/notification/notification.route';
 import PackageHistoryRoutes from '../modules/package-history/package-history.route';
+import PackagePlanRoutes from '../modules/package-plan/package-plan.route';
 import PackageRoutes from '../modules/package/package.route';
+import PlanRoutes from '../modules/plan/plan.route';
 import PaymentMethodRoutes from '../modules/payment-method/payment-method.route';
 import PaymentTransactionRoutes from '../modules/payment-transaction/payment-transaction.route';
 import TokenProcessRoutes from '../modules/token-process/token-process.route';
@@ -46,8 +48,16 @@ const moduleRoutes = [
     route: FeatureEndpointRoutes,
   },
   {
+    path: '/plans',
+    route: PlanRoutes,
+  },
+  {
     path: '/packages',
     route: PackageRoutes,
+  },
+  {
+    path: '/package-plans',
+    route: PackagePlanRoutes,
   },
   {
     path: '/package-histories',

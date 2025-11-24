@@ -17,6 +17,8 @@ export type TPaymentTransaction = {
   gateway_session_id?: string; // Stripe session ID or SSL Commerz session ID
   gateway_status?: string; // Gateway-specific status (paid, VALID, etc.)
   package: mongoose.Types.ObjectId;
+  plan: mongoose.Types.ObjectId;
+  price: mongoose.Types.ObjectId; // PackagePlan document _id
   amount: number;
   currency: TCurrency;
   gateway_fee?: number; // Fee charged by payment gateway

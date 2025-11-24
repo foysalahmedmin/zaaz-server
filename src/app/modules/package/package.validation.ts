@@ -14,6 +14,17 @@ const priceSchema = z.object({
     .nonnegative('Price BDT must be 0 or greater'),
 });
 
+const packagePlanDataSchema = z.object({
+  plan: idSchema,
+  price: priceSchema,
+  token: z
+    .number({ invalid_type_error: 'Token must be a number' })
+    .int('Token must be an integer')
+    .nonnegative('Token must be 0 or greater'),
+  is_initial: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+});
+
 export const createPackageValidationSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
@@ -23,22 +34,16 @@ export const createPackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater'),
     features: z
       .array(idSchema, {
         required_error: 'At least one feature is required',
       })
       .nonempty('At least one feature is required'),
-    duration: z
-      .number({ invalid_type_error: 'Duration must be a number' })
-      .int('Duration must be an integer')
-      .positive('Duration must be at least 1 day')
-      .optional(),
-    price: priceSchema,
-    price_previous: priceSchema.optional(),
+    plans: z
+      .array(packagePlanDataSchema, {
+        required_error: 'At least one plan is required',
+      })
+      .nonempty('At least one plan is required'),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
@@ -64,22 +69,11 @@ export const updatePackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater')
-      .optional(),
     features: z
       .array(idSchema)
       .nonempty('At least one feature is required')
       .optional(),
-    duration: z
-      .number({ invalid_type_error: 'Duration must be a number' })
-      .int('Duration must be an integer')
-      .positive('Duration must be at least 1 day')
-      .optional(),
-    price: priceSchema.optional(),
-    price_previous: priceSchema.optional(),
+    plans: z.array(packagePlanDataSchema).optional(),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')

@@ -74,6 +74,7 @@ export const paymentTransactionOperationValidationSchema = z.object({
 export const initiatePaymentValidationSchema = z.object({
   body: z.object({
     package: idSchema,
+    plan: idSchema,
     payment_method: idSchema,
     return_url: z.string().url('Return URL must be a valid URL'),
     cancel_url: z.string().url('Cancel URL must be a valid URL'),
