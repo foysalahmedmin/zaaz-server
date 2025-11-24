@@ -261,6 +261,11 @@ export const getPublicPackages = async (
     is_deleted: { $ne: true },
   };
 
+  // Convert _id to ObjectId if provided
+  if (query._id) {
+    baseFilter._id = new mongoose.Types.ObjectId(query._id as string);
+  }
+
   // If plans query parameter exists, use it for MongoDB array filtering
   if (query.plans) {
     baseFilter.plans = new mongoose.Types.ObjectId(query.plans as string);
@@ -322,9 +327,10 @@ export const getPublicPackages = async (
   ];
 
   // Use AppQueryV2 for aggregation-based querying
-  // Add baseFilter to query params so filter() method can use it
+  // Exclude _id from query params since we're handling it in baseFilter
+  const { _id: _, ...restQuery } = query;
   const packageQuery = new AppQueryV2<TPackage>(Package, {
-    ...query,
+    ...restQuery,
     ...baseFilter,
   })
     .search(['name', 'description'])
