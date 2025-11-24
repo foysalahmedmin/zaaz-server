@@ -1,7 +1,6 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
 import AppQueryV2 from '../../builder/AppQueryV2';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
@@ -351,18 +350,76 @@ export const getPackages = async (
 }> => {
   const { ...rest } = query;
 
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = {
+    is_deleted: { $ne: true },
+  };
 
-  const packageQuery = new AppQuery<TPackage>(
-    Package.find().populate([{ path: 'features' }]),
-    { ...rest, ...filter },
-  )
+  // Build extra pipeline stages for lookups
+  const lookupStages: any[] = [
+    {
+      $lookup: {
+        from: 'features',
+        localField: 'features',
+        foreignField: '_id',
+        as: 'features',
+      },
+    },
+    {
+      $lookup: {
+        from: 'packageplans',
+        let: { packageId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$package', '$$packageId'] },
+              is_deleted: { $ne: true },
+            },
+          },
+          {
+            $lookup: {
+              from: 'plans',
+              localField: 'plan',
+              foreignField: '_id',
+              as: 'plan',
+            },
+          },
+          {
+            $unwind: {
+              path: '$plan',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              plan: 1,
+              price: 1,
+              previous_price: 1,
+              token: 1,
+              is_initial: 1,
+              is_active: 1,
+              _id: 1,
+            },
+          },
+          {
+            $sort: { is_initial: -1, created_at: 1 },
+          },
+        ],
+        as: 'plans',
+      },
+    },
+  ];
+
+  // Use AppQueryV2 for aggregation-based querying
+  const packageQuery = new AppQueryV2<TPackage>(Package, {
+    ...rest,
+    ...filter,
+  })
     .search(['name', 'description'])
     .filter()
+    .addPipeline(lookupStages) // Add lookup stages after filter
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await packageQuery.execute([
     {
@@ -375,31 +432,9 @@ export const getPackages = async (
     },
   ]);
 
-  // Populate plans for each package
-  const packagesWithPlans = await Promise.all(
-    result.data.map(async (pkg) => {
-      const packagePlans = await getPackagePlansByPackage(
-        (pkg as TPackage & { _id: mongoose.Types.ObjectId })._id.toString(),
-        false,
-      );
-      return {
-        ...pkg,
-        plans: packagePlans.map((pp) => ({
-          plan: pp.plan,
-          price: pp.price,
-          previous_price: pp.previous_price,
-          token: pp.token,
-          is_initial: pp.is_initial,
-          is_active: pp.is_active,
-          _id: (pp as TPackagePlan & { _id: mongoose.Types.ObjectId })._id,
-        })),
-      };
-    }),
-  );
-
   return {
     ...result,
-    data: packagesWithPlans,
+    data: result.data,
   };
 };
 
