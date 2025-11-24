@@ -9,6 +9,7 @@ import {
   deletePackagePlansByPackage,
   getPackagePlansByPackage,
 } from '../package-plan/package-plan.service';
+import { TPackagePlan } from '../package-plan/package-plan.type';
 import { Plan } from '../plan/plan.model';
 import { Package } from './package.model';
 import { TPackage } from './package.type';
@@ -34,8 +35,21 @@ export const createPackage = async (
   }
 
   // Extract plan IDs for package.plans array
-  const planIds = plans.map((p) =>
-    typeof p.plan === 'string' ? new mongoose.Types.ObjectId(p.plan) : p.plan,
+  type PlanInput = {
+    plan: mongoose.Types.ObjectId | string;
+    price: { USD: number; BDT: number };
+    token: number;
+    is_initial?: boolean;
+    is_active?: boolean;
+  };
+  const planIds: mongoose.Types.ObjectId[] = (plans as PlanInput[]).map(
+    (p: PlanInput) => {
+      const planId = p.plan;
+      if (typeof planId === 'string') {
+        return new mongoose.Types.ObjectId(planId);
+      }
+      return planId;
+    },
   );
 
   // Create package with plan IDs
@@ -60,14 +74,16 @@ export const createPackage = async (
   }
 
   // Ensure exactly one is_initial=true
-  const initialPlans = plans.filter((p) => p.is_initial === true);
+  const initialPlans = (plans as PlanInput[]).filter(
+    (p: PlanInput) => p.is_initial === true,
+  );
   if (initialPlans.length === 0) {
     // If no initial plan specified, set first one as initial
-    plans[0].is_initial = true;
+    (plans as PlanInput[])[0].is_initial = true;
   } else if (initialPlans.length > 1) {
     // If multiple initial plans, keep only the first one found
     let foundFirst = false;
-    plans.forEach((p) => {
+    (plans as PlanInput[]).forEach((p: PlanInput) => {
       if (p.is_initial === true) {
         if (!foundFirst) {
           foundFirst = true;
@@ -79,7 +95,7 @@ export const createPackage = async (
   }
 
   // Create package-plan documents with provided data
-  const packagePlanData = plans.map((planData) => ({
+  const packagePlanData = (plans as PlanInput[]).map((planData: PlanInput) => ({
     plan:
       typeof planData.plan === 'string'
         ? new mongoose.Types.ObjectId(planData.plan)
@@ -97,51 +113,142 @@ export const createPackage = async (
 };
 
 export const getPublicPackage = async (id: string): Promise<any> => {
-  const result = await Package.findOne({
-    _id: id,
-    is_active: true,
-  })
-    .populate('features')
-    .lean();
-  if (!result) {
+  const pipeline: any[] = [
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(id),
+        is_active: true,
+        is_deleted: { $ne: true },
+      },
+    },
+    {
+      $lookup: {
+        from: 'features',
+        localField: 'features',
+        foreignField: '_id',
+        as: 'features',
+      },
+    },
+    {
+      $lookup: {
+        from: 'packageplans',
+        let: { packageId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$package', '$$packageId'] },
+              is_deleted: { $ne: true },
+              is_active: true,
+            },
+          },
+          {
+            $lookup: {
+              from: 'plans',
+              localField: 'plan',
+              foreignField: '_id',
+              as: 'plan',
+            },
+          },
+          {
+            $unwind: {
+              path: '$plan',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              plan: 1,
+              price: 1,
+              previous_price: 1,
+              token: 1,
+              is_initial: 1,
+              _id: 1,
+            },
+          },
+          {
+            $sort: { is_initial: -1, created_at: 1 },
+          },
+        ],
+        as: 'plans',
+      },
+    },
+  ];
+
+  const results = await Package.aggregate(pipeline);
+  if (!results || results.length === 0) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  // Populate plans with package-plan data
-  const packagePlans = await getPackagePlansByPackage(id, true);
-  return {
-    ...result,
-    plans: packagePlans.map((pp) => ({
-      plan: pp.plan,
-      price: pp.price,
-      previous_price: pp.previous_price,
-      token: pp.token,
-      is_initial: pp.is_initial,
-      _id: pp._id,
-    })),
-  };
+  return results[0];
 };
 
 export const getPackage = async (id: string): Promise<any> => {
-  const result = await Package.findById(id).populate('features').lean();
-  if (!result) {
+  const pipeline: any[] = [
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(id),
+        is_deleted: { $ne: true },
+      },
+    },
+    {
+      $lookup: {
+        from: 'features',
+        localField: 'features',
+        foreignField: '_id',
+        as: 'features',
+      },
+    },
+    {
+      $lookup: {
+        from: 'packageplans',
+        let: { packageId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$package', '$$packageId'] },
+              is_deleted: { $ne: true },
+            },
+          },
+          {
+            $lookup: {
+              from: 'plans',
+              localField: 'plan',
+              foreignField: '_id',
+              as: 'plan',
+            },
+          },
+          {
+            $unwind: {
+              path: '$plan',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              plan: 1,
+              price: 1,
+              previous_price: 1,
+              token: 1,
+              is_initial: 1,
+              is_active: 1,
+              _id: 1,
+            },
+          },
+          {
+            $sort: { is_initial: -1, created_at: 1 },
+          },
+        ],
+        as: 'plans',
+      },
+    },
+  ];
+
+  const results = await Package.aggregate(pipeline);
+  if (!results || results.length === 0) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  // Populate plans with package-plan data
-  const packagePlans = await getPackagePlansByPackage(id, false);
-  return {
-    ...result,
-    plans: packagePlans.map((pp) => ({
-      plan: pp.plan,
-      price: pp.price,
-      previous_price: pp.previous_price,
-      token: pp.token,
-      is_initial: pp.is_initial,
-      is_active: pp.is_active,
-      _id: pp._id,
-    })),
-  };
+  return results[0];
 };
 
 export const getPublicPackages = async (
@@ -272,7 +379,7 @@ export const getPackages = async (
   const packagesWithPlans = await Promise.all(
     result.data.map(async (pkg) => {
       const packagePlans = await getPackagePlansByPackage(
-        pkg._id.toString(),
+        (pkg as TPackage & { _id: mongoose.Types.ObjectId })._id.toString(),
         false,
       );
       return {
@@ -284,7 +391,7 @@ export const getPackages = async (
           token: pp.token,
           is_initial: pp.is_initial,
           is_active: pp.is_active,
-          _id: pp._id,
+          _id: (pp as TPackagePlan & { _id: mongoose.Types.ObjectId })._id,
         })),
       };
     }),
@@ -333,6 +440,13 @@ export const updatePackage = async (
 
   // Handle plans sync if plans field is in payload
   if (payload.plans !== undefined) {
+    type UpdatePlanInput = {
+      plan: mongoose.Types.ObjectId | string;
+      price: { USD: number; BDT: number };
+      token: number;
+      is_initial?: boolean;
+      is_active?: boolean;
+    };
     const currentPackagePlans = await getPackagePlansByPackage(id, false);
     // Handle both populated and non-populated plan fields
     const oldPlanIds = currentPackagePlans.map((pp) => {
@@ -342,14 +456,14 @@ export const updatePackage = async (
           : pp.plan.toString();
       return planId;
     });
-    const newPackagePlanInputs = payload.plans;
-    const newPlanIds = newPackagePlanInputs.map((p) =>
+    const newPackagePlanInputs = payload.plans as UpdatePlanInput[];
+    const newPlanIds = newPackagePlanInputs.map((p: UpdatePlanInput) =>
       typeof p.plan === 'string' ? p.plan : p.plan.toString(),
     );
 
     // Find added, removed, and existing plans
     const addedPlanInputs = newPackagePlanInputs.filter(
-      (p) =>
+      (p: UpdatePlanInput) =>
         !oldPlanIds.includes(
           typeof p.plan === 'string' ? p.plan : p.plan.toString(),
         ),
@@ -361,10 +475,12 @@ export const updatePackage = async (
           : pp.plan.toString();
       return !newPlanIds.includes(planId);
     });
-    const existingPlanInputs = newPackagePlanInputs.filter((p) => {
-      const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
-      return oldPlanIds.includes(planId);
-    });
+    const existingPlanInputs = newPackagePlanInputs.filter(
+      (p: UpdatePlanInput) => {
+        const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
+        return oldPlanIds.includes(planId);
+      },
+    );
 
     // 1. Remove (soft delete) plans
     if (removedPackagePlans.length > 0) {
@@ -372,7 +488,13 @@ export const updatePackage = async (
         '../package-plan/package-plan.service'
       );
       await Promise.all(
-        removedPackagePlans.map((pp) => deletePackagePlan(pp._id.toString())),
+        removedPackagePlans.map((pp) =>
+          deletePackagePlan(
+            (
+              pp as TPackagePlan & { _id: mongoose.Types.ObjectId }
+            )._id.toString(),
+          ),
+        ),
       );
     }
 
@@ -427,7 +549,7 @@ export const updatePackage = async (
                 ? pp.plan._id.toString()
                 : pp.plan.toString();
             return ppPlanId === inputPlanId;
-          });
+          }) as (TPackagePlan & { _id: mongoose.Types.ObjectId }) | undefined;
           if (existingPackagePlan) {
             await updatePackagePlan(
               existingPackagePlan._id.toString(),
@@ -451,7 +573,9 @@ export const updatePackage = async (
 
     if (allCurrentPackagePlans.length > 0 && initialPlans.length === 0) {
       // If no initial plan, set the first active one as initial
-      const firstActivePlan = allCurrentPackagePlans.find((pp) => pp.is_active);
+      const firstActivePlan = allCurrentPackagePlans.find(
+        (pp) => pp.is_active,
+      ) as (TPackagePlan & { _id: mongoose.Types.ObjectId }) | undefined;
       if (firstActivePlan) {
         const { updatePackagePlan } = await import(
           '../package-plan/package-plan.service'
@@ -467,7 +591,11 @@ export const updatePackage = async (
           '../package-plan/package-plan.service'
         );
         await updatePackagePlan(
-          allCurrentPackagePlans[0]._id.toString(),
+          (
+            allCurrentPackagePlans[0] as TPackagePlan & {
+              _id: mongoose.Types.ObjectId;
+            }
+          )._id.toString(),
           { is_initial: true },
           session,
         );
@@ -482,7 +610,9 @@ export const updatePackage = async (
           .slice(1)
           .map((pp) =>
             updatePackagePlan(
-              pp._id.toString(),
+              (
+                pp as TPackagePlan & { _id: mongoose.Types.ObjectId }
+              )._id.toString(),
               { is_initial: false },
               session,
             ),
@@ -492,7 +622,7 @@ export const updatePackage = async (
 
     // Update package.plans array with new plan IDs
     const { plans: _, ...packageFieldsToUpdate } = payload;
-    const updatedPlanIds = newPackagePlanInputs.map((p) =>
+    const updatedPlanIds = newPackagePlanInputs.map((p: UpdatePlanInput) =>
       typeof p.plan === 'string' ? new mongoose.Types.ObjectId(p.plan) : p.plan,
     );
     const result = await Package.findByIdAndUpdate(
