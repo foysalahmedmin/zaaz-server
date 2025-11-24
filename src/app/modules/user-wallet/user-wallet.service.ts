@@ -235,3 +235,164 @@ export const restoreUserWallets = async (
     not_found_ids: notFoundIds,
   };
 };
+
+export const giveInitialToken = async (
+  user_id: string,
+  token?: number,
+  session?: mongoose.ClientSession,
+): Promise<TUserWallet> => {
+  const INITIAL_TOKEN = Number.parseInt(process.env.INITIAL_TOKEN || '100');
+  const amount = token || INITIAL_TOKEN;
+
+  // Check if wallet exists (bypass expired check for initial token)
+  const existingWallet = await UserWallet.findOne({ user: user_id })
+    .session(session || null)
+    .setOptions({ bypassExpired: true })
+    .lean();
+
+  // If wallet doesn't exist, create it
+  if (!existingWallet) {
+    await createUserWallet(
+      {
+        user: new mongoose.Types.ObjectId(user_id),
+        token: 0,
+        package: null,
+        initial_token_given: false,
+      },
+      session,
+    );
+  }
+
+  // Check if initial token already given using atomic operation
+  const updatedWallet = await UserWallet.findOneAndUpdate(
+    {
+      user: user_id,
+      initial_token_given: { $ne: true },
+    },
+    {
+      $inc: { token: amount },
+      $set: { initial_token_given: true },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .session(session || null)
+    .setOptions({ bypassExpired: true });
+
+  if (!updatedWallet) {
+    // Check if token was already given
+    const existingWallet = await UserWallet.findOne({ user: user_id })
+      .session(session || null)
+      .setOptions({ bypassExpired: true })
+      .lean();
+
+    if (existingWallet?.initial_token_given) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Initial token has already been given to this user',
+      );
+    }
+
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Create token transaction record for tracking
+  try {
+    const { TokenTransaction } = await import(
+      '../token-transaction/token-transaction.model'
+    );
+    await TokenTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          type: 'increase',
+          increase_source: 'bonus',
+          token: amount,
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    // Log error but don't block the operation
+    console.error('[Give Initial Token] Failed to create transaction:', error);
+  }
+
+  return updatedWallet.toObject();
+};
+
+export const giveBonusToken = async (
+  user_id: string,
+  token: number,
+  session?: mongoose.ClientSession,
+): Promise<TUserWallet> => {
+  if (token <= 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Token amount must be greater than 0',
+    );
+  }
+
+  // Check if wallet exists (bypass expired check for bonus token)
+  const existingWallet = await UserWallet.findOne({ user: user_id })
+    .session(session || null)
+    .setOptions({ bypassExpired: true })
+    .lean();
+
+  // If wallet doesn't exist, create it
+  if (!existingWallet) {
+    await createUserWallet(
+      {
+        user: new mongoose.Types.ObjectId(user_id),
+        token: 0,
+        package: null,
+        initial_token_given: false,
+      },
+      session,
+    );
+  }
+
+  // Update wallet: add bonus tokens
+  const updatedWallet = await UserWallet.findOneAndUpdate(
+    { user: user_id },
+    {
+      $inc: { token: token },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .session(session || null)
+    .setOptions({ bypassExpired: true });
+
+  if (!updatedWallet) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Create token transaction record for tracking
+  try {
+    const { TokenTransaction } = await import(
+      '../token-transaction/token-transaction.model'
+    );
+    await TokenTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          type: 'increase',
+          increase_source: 'bonus',
+          token: token,
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    // Log error but don't block the operation
+    console.error('[Give Bonus Token] Failed to create transaction:', error);
+  }
+
+  return updatedWallet.toObject();
+};

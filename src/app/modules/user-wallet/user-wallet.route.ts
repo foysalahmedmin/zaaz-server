@@ -1,5 +1,6 @@
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
+import serverAuth from '../../middlewares/server-auth.middleware';
 import validation from '../../middlewares/validation.middleware';
 import * as UserWalletControllers from './user-wallet.controller';
 import * as UserWalletValidations from './user-wallet.validation';
@@ -32,6 +33,20 @@ router.post(
   auth('admin'),
   validation(UserWalletValidations.createUserWalletValidationSchema),
   UserWalletControllers.createUserWallet,
+);
+
+router.post(
+  '/give-initial-token',
+  serverAuth(),
+  validation(UserWalletValidations.giveInitialTokenValidationSchema),
+  UserWalletControllers.giveInitialToken,
+);
+
+router.post(
+  '/give-bonus-token',
+  serverAuth(),
+  validation(UserWalletValidations.giveBonusTokenValidationSchema),
+  UserWalletControllers.giveBonusToken,
 );
 
 // PATCH

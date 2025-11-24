@@ -139,3 +139,29 @@ export const restoreUserWallets = catchAsync(async (req, res) => {
     },
   });
 });
+
+export const giveInitialToken = catchAsync(async (req, res) => {
+  const { user_id, token } = req.body;
+
+  const result = await UserWalletServices.giveInitialToken(user_id, token);
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Initial token given successfully',
+    data: result,
+  });
+});
+
+export const giveBonusToken = catchAsync(async (req, res) => {
+  const { user_id, token } = req.body;
+
+  const result = await UserWalletServices.giveBonusToken(user_id, token);
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Bonus token given successfully',
+    data: result,
+  });
+});

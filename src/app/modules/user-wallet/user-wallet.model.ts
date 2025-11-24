@@ -26,6 +26,10 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
     expires_at: {
       type: Date,
     },
+    initial_token_given: {
+      type: Boolean,
+      default: false,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {

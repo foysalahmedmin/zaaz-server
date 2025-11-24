@@ -48,3 +48,28 @@ export const userWalletsOperationValidationSchema = z.object({
     ids: z.array(idSchema).nonempty('At least one user wallet ID is required'),
   }),
 });
+
+export const giveInitialTokenValidationSchema = z.object({
+  body: z.object({
+    user_id: idSchema,
+    token: z
+      .number({
+        invalid_type_error: 'Token must be a number',
+      })
+      .int('Token must be an integer')
+      .nonnegative('Token must be 0 or greater')
+      .optional(),
+  }),
+});
+
+export const giveBonusTokenValidationSchema = z.object({
+  body: z.object({
+    user_id: idSchema,
+    token: z
+      .number({
+        invalid_type_error: 'Token must be a number',
+      })
+      .int('Token must be an integer')
+      .positive('Token must be greater than 0'),
+  }),
+});
