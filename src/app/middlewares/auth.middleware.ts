@@ -64,13 +64,17 @@ const auth = (...roles: (TRole | 'guest')[]) => {
 
       const { _id, role = 'user', iat } = decoded;
 
-      if (!_id || !role || typeof iat !== 'number') {
+      if (!_id || !(role || 'user') || typeof iat !== 'number') {
         throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid token.');
       }
 
-      const user = await getUser(_id);
+      let user = decoded;
 
-      if (user.is_deleted) {
+      if (role === 'admin' || role === 'super-admin') {
+        user = await getUser(_id);
+      }
+
+      if (user?.is_deleted) {
         throw new AppError(httpStatus.FORBIDDEN, 'User is deleted');
       }
 
@@ -90,7 +94,10 @@ const auth = (...roles: (TRole | 'guest')[]) => {
         }
       }
 
-      if (!roles.includes(role) || !roles.includes(user?.role)) {
+      if (
+        !roles.includes(role || 'user') ||
+        !roles.includes(user?.role || 'user')
+      ) {
         throw new AppError(httpStatus.FORBIDDEN, 'Access denied');
       }
 
