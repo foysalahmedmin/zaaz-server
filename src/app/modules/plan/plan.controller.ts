@@ -24,6 +24,20 @@ export const getPlan = catchAsync(async (req, res) => {
   });
 });
 
+export const getPublicPlans = catchAsync(async (req, res) => {
+  const result = await PlanServices.getPlans({
+    ...req.query,
+    is_active: true,
+  });
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Plans retrieved successfully',
+    meta: result.meta,
+    data: result.data,
+  });
+});
+
 export const getPlans = catchAsync(async (req, res) => {
   const result = await PlanServices.getPlans(req.query);
   sendResponse(res, {
@@ -128,4 +142,3 @@ export const restorePlans = catchAsync(async (req, res) => {
     },
   });
 });
-

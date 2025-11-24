@@ -6,6 +6,9 @@ import * as PlanValidations from './plan.validation';
 
 const router = express.Router();
 
+// GET Public Plans (No Auth Required)
+router.get('/public', PlanControllers.getPublicPlans);
+
 // GET
 router.get('/', auth('admin'), PlanControllers.getPlans);
 
@@ -85,4 +88,3 @@ router.post(
 const PlanRoutes = router;
 
 export default PlanRoutes;
-

@@ -2,6 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
 import AppQuery from '../../builder/AppQuery';
+import AppQueryV2 from '../../builder/AppQueryV2';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
   createPackagePlans,
@@ -29,24 +30,18 @@ export const createPackage = async (
 
   // Validate plans are provided and at least one exists
   if (!plans || plans.length === 0) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'At least one plan is required',
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, 'At least one plan is required');
   }
 
   // Extract plan IDs for package.plans array
   const planIds = plans.map((p) =>
-    typeof p.plan === 'string'
-      ? new mongoose.Types.ObjectId(p.plan)
-      : p.plan,
+    typeof p.plan === 'string' ? new mongoose.Types.ObjectId(p.plan) : p.plan,
   );
 
   // Create package with plan IDs
-  const result = await Package.create(
-    [{ ...packageData, plans: planIds }],
-    { session },
-  );
+  const result = await Package.create([{ ...packageData, plans: planIds }], {
+    session,
+  });
   const packageId = result[0]._id.toString();
 
   // Validate all plans exist and are active
@@ -155,49 +150,89 @@ export const getPublicPackages = async (
   data: any[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const { ...rest } = query;
-
-  const filter: Record<string, unknown> = {
+  const baseFilter: Record<string, unknown> = {
     is_active: true,
+    is_deleted: { $ne: true },
   };
 
-  const packageQuery = new AppQuery<TPackage>(
-    Package.find().populate([{ path: 'features' }]),
-    { ...rest, ...filter },
-  )
+  // If plans query parameter exists, use it for MongoDB array filtering
+  if (query.plans) {
+    baseFilter.plans = new mongoose.Types.ObjectId(query.plans as string);
+  }
+
+  // Build extra pipeline stages for lookups
+  const lookupStages: any[] = [
+    {
+      $lookup: {
+        from: 'features',
+        localField: 'features',
+        foreignField: '_id',
+        as: 'features',
+      },
+    },
+    {
+      $lookup: {
+        from: 'packageplans',
+        let: { packageId: '$_id' },
+        pipeline: [
+          {
+            $match: {
+              $expr: { $eq: ['$package', '$$packageId'] },
+              is_deleted: { $ne: true },
+              is_active: true,
+            },
+          },
+          {
+            $lookup: {
+              from: 'plans',
+              localField: 'plan',
+              foreignField: '_id',
+              as: 'plan',
+            },
+          },
+          {
+            $unwind: {
+              path: '$plan',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              plan: 1,
+              price: 1,
+              previous_price: 1,
+              token: 1,
+              is_initial: 1,
+              _id: 1,
+            },
+          },
+          {
+            $sort: { is_initial: -1, created_at: 1 },
+          },
+        ],
+        as: 'plans',
+      },
+    },
+  ];
+
+  // Use AppQueryV2 for aggregation-based querying
+  // Add baseFilter to query params so filter() method can use it
+  const packageQuery = new AppQueryV2<TPackage>(Package, {
+    ...query,
+    ...baseFilter,
+  })
     .search(['name', 'description'])
     .filter()
+    .addPipeline(lookupStages) // Add lookup stages after filter
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await packageQuery.execute();
 
-  // Populate plans for each package
-  const packagesWithPlans = await Promise.all(
-    result.data.map(async (pkg) => {
-      const packagePlans = await getPackagePlansByPackage(
-        pkg._id.toString(),
-        true,
-      );
-      return {
-        ...pkg,
-        plans: packagePlans.map((pp) => ({
-          plan: pp.plan,
-          price: pp.price,
-          previous_price: pp.previous_price,
-          token: pp.token,
-          is_initial: pp.is_initial,
-          _id: pp._id,
-        })),
-      };
-    }),
-  );
-
   return {
     ...result,
-    data: packagesWithPlans,
+    data: result.data,
   };
 };
 
@@ -314,7 +349,10 @@ export const updatePackage = async (
 
     // Find added, removed, and existing plans
     const addedPlanInputs = newPackagePlanInputs.filter(
-      (p) => !oldPlanIds.includes(typeof p.plan === 'string' ? p.plan : p.plan.toString()),
+      (p) =>
+        !oldPlanIds.includes(
+          typeof p.plan === 'string' ? p.plan : p.plan.toString(),
+        ),
     );
     const removedPackagePlans = currentPackagePlans.filter((pp) => {
       const planId =
@@ -324,8 +362,7 @@ export const updatePackage = async (
       return !newPlanIds.includes(planId);
     });
     const existingPlanInputs = newPackagePlanInputs.filter((p) => {
-      const planId =
-        typeof p.plan === 'string' ? p.plan : p.plan.toString();
+      const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
       return oldPlanIds.includes(planId);
     });
 
@@ -335,9 +372,7 @@ export const updatePackage = async (
         '../package-plan/package-plan.service'
       );
       await Promise.all(
-        removedPackagePlans.map((pp) =>
-          deletePackagePlan(pp._id.toString()),
-        ),
+        removedPackagePlans.map((pp) => deletePackagePlan(pp._id.toString())),
       );
     }
 
@@ -385,9 +420,7 @@ export const updatePackage = async (
       await Promise.all(
         existingPlanInputs.map(async (input) => {
           const inputPlanId =
-            typeof input.plan === 'string'
-              ? input.plan
-              : input.plan.toString();
+            typeof input.plan === 'string' ? input.plan : input.plan.toString();
           const existingPackagePlan = currentPackagePlans.find((pp) => {
             const ppPlanId =
               typeof pp.plan === 'object' && pp.plan?._id
@@ -418,9 +451,7 @@ export const updatePackage = async (
 
     if (allCurrentPackagePlans.length > 0 && initialPlans.length === 0) {
       // If no initial plan, set the first active one as initial
-      const firstActivePlan = allCurrentPackagePlans.find(
-        (pp) => pp.is_active,
-      );
+      const firstActivePlan = allCurrentPackagePlans.find((pp) => pp.is_active);
       if (firstActivePlan) {
         const { updatePackagePlan } = await import(
           '../package-plan/package-plan.service'
@@ -447,22 +478,22 @@ export const updatePackage = async (
         '../package-plan/package-plan.service'
       );
       await Promise.all(
-        initialPlans.slice(1).map((pp) =>
-          updatePackagePlan(
-            pp._id.toString(),
-            { is_initial: false },
-            session,
+        initialPlans
+          .slice(1)
+          .map((pp) =>
+            updatePackagePlan(
+              pp._id.toString(),
+              { is_initial: false },
+              session,
+            ),
           ),
-        ),
       );
     }
 
     // Update package.plans array with new plan IDs
     const { plans: _, ...packageFieldsToUpdate } = payload;
     const updatedPlanIds = newPackagePlanInputs.map((p) =>
-      typeof p.plan === 'string'
-        ? new mongoose.Types.ObjectId(p.plan)
-        : p.plan,
+      typeof p.plan === 'string' ? new mongoose.Types.ObjectId(p.plan) : p.plan,
     );
     const result = await Package.findByIdAndUpdate(
       id,
@@ -478,14 +509,10 @@ export const updatePackage = async (
 
   // Update package fields (excluding plans, as they are handled separately)
   const { plans: _, ...packageFieldsToUpdate } = payload;
-  const result = await Package.findByIdAndUpdate(
-    id,
-    packageFieldsToUpdate,
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).session(session || null);
+  const result = await Package.findByIdAndUpdate(id, packageFieldsToUpdate, {
+    new: true,
+    runValidators: true,
+  }).session(session || null);
 
   return result!;
 };
@@ -645,4 +672,3 @@ export const restorePackages = async (
     not_found_ids: notFoundIds,
   };
 };
-
