@@ -9,6 +9,8 @@ import { cacheClient } from '../redis';
 import { TJwtPayload, TRole } from '../types/jsonwebtoken.type';
 import catchAsync from '../utils/catchAsync';
 
+const DEFAULT_ROLE = 'user';
+
 const getUser = async (_id: string) => {
   const redisKey = `auth:user:${_id}`;
   const User = mongoose.connection.collection('users');
@@ -62,9 +64,9 @@ const auth = (...roles: (TRole | 'guest')[]) => {
         throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid token');
       }
 
-      const { _id, role = 'user', iat } = decoded;
+      const { _id, role = DEFAULT_ROLE, iat } = decoded;
 
-      if (!_id || !(role || 'user') || typeof iat !== 'number') {
+      if (!_id || !(role || DEFAULT_ROLE) || typeof iat !== 'number') {
         throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid token.');
       }
 
@@ -95,8 +97,8 @@ const auth = (...roles: (TRole | 'guest')[]) => {
       }
 
       if (
-        !roles.includes(role || 'user') ||
-        !roles.includes(user?.role || 'user')
+        !roles.includes(role || DEFAULT_ROLE) ||
+        !roles.includes(user?.role || DEFAULT_ROLE)
       ) {
         throw new AppError(httpStatus.FORBIDDEN, 'Access denied');
       }
