@@ -34,6 +34,9 @@ export const createPackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
+    type: z.enum(['token', 'subscription']).optional(),
+    badge: z.string().trim().optional(),
+    points: z.array(z.string().trim()).optional(),
     features: z
       .array(idSchema, {
         required_error: 'At least one feature is required',
@@ -69,6 +72,9 @@ export const updatePackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
+    type: z.enum(['token', 'subscription']).optional(),
+    badge: z.string().trim().optional(),
+    points: z.array(z.string().trim()).optional(),
     features: z
       .array(idSchema)
       .nonempty('At least one feature is required')

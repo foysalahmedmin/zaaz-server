@@ -19,6 +19,21 @@ const packageSchema = new Schema<TPackageDocument>(
       type: String,
       trim: true,
     },
+    type: {
+      type: String,
+      enum: ['token', 'subscription'],
+      default: 'token',
+    },
+    badge: {
+      type: String,
+      trim: true,
+    },
+    points: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     features: [
       {
         type: Schema.Types.ObjectId,

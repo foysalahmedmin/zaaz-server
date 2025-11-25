@@ -25,6 +25,20 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
       type: String,
       trim: true,
     },
+    type: {
+      type: String,
+      enum: ['token', 'subscription'],
+    },
+    badge: {
+      type: String,
+      trim: true,
+    },
+    points: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     // Embedded feature objects (not references)
     features: [
       {

@@ -49,6 +49,9 @@ export type TPackageHistory = {
   name: string;
   description?: string;
   content?: string;
+  type?: 'token' | 'subscription';
+  badge?: string;
+  points?: string[];
   features: TFeatureHistory[];
   plans: TPackagePlanHistory[];
   sequence?: number;
