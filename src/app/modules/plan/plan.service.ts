@@ -28,7 +28,7 @@ export const getPlans = async (
   const filter: Record<string, unknown> = {};
 
   const planQuery = new AppQuery<TPlan>(Plan.find(), { ...rest, ...filter })
-    .search(['name'])
+    .search(['name', 'description'])
     .filter()
     .sort()
     .paginate()

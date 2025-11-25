@@ -11,6 +11,11 @@ const planSchema = new Schema<TPlanDocument>(
       maxlength: [100, 'Name cannot exceed 100 characters'],
       index: true,
     },
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Description cannot exceed 500 characters'],
+    },
     duration: {
       type: Number,
       required: [true, 'Duration is required'],

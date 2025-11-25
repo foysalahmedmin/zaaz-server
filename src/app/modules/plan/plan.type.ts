@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 
 export type TPlan = {
   name: string;
+  description?: string;
   duration: number;
   is_active: boolean;
   is_deleted?: boolean;

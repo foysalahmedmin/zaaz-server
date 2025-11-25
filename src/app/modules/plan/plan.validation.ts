@@ -8,6 +8,11 @@ const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
 export const createPlanValidationSchema = z.object({
   body: z.object({
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+    description: z
+      .string()
+      .trim()
+      .max(500, 'Description cannot exceed 500 characters')
+      .optional(),
     duration: z
       .number({ invalid_type_error: 'Duration must be a number' })
       .int('Duration must be an integer')
@@ -25,6 +30,11 @@ export const updatePlanValidationSchema = z.object({
       .string()
       .trim()
       .min(2, 'Name must be at least 2 characters')
+      .optional(),
+    description: z
+      .string()
+      .trim()
+      .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     duration: z
       .number({ invalid_type_error: 'Duration must be a number' })
