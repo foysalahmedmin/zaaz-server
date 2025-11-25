@@ -1,6 +1,7 @@
 export type TGiveInitialTokenPayload = {
   user_id: string;
   token?: number;
+  duration?: number;
 };
 
 export type TGiveInitialTokenResponse = {
@@ -21,6 +22,7 @@ export type TGiveInitialTokenResponse = {
 export type TGiveBonusTokenPayload = {
   user_id: string;
   token: number;
+  duration?: number;
 };
 
 export type TGiveBonusTokenResponse = {

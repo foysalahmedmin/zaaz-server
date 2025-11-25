@@ -141,9 +141,13 @@ export const restoreUserWallets = catchAsync(async (req, res) => {
 });
 
 export const giveInitialToken = catchAsync(async (req, res) => {
-  const { user_id, token } = req.body;
+  const { user_id, token, duration } = req.body;
 
-  const result = await UserWalletServices.giveInitialToken(user_id, token);
+  const result = await UserWalletServices.giveInitialToken(
+    user_id,
+    token,
+    duration,
+  );
 
   sendResponse(res, {
     status: httpStatus.OK,

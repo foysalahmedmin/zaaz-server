@@ -10,6 +10,7 @@ export type TTokenProcessStartResponse = {
     user_id: string; // user ID;
     token: number; // user current token amount;
     status: 'access-able' | 'not-access-able';
+    message?: string;
   };
 };
 
@@ -27,5 +28,6 @@ export type TTokenProcessEndResponse = {
     token: number; // user current token amount;
     cost: number; // token cost after deducted by token profit percentage;
     status: 'return-able' | 'not-return-able';
+    message?: string;
   };
 };

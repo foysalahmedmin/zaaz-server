@@ -13,98 +13,147 @@ import {
 export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
   const { user_id, feature_endpoint_id } = payload;
 
-  // Fetch user wallet with package features and feature endpoint in parallel using aggregation
-  const [walletResult, featureEndpoint] = await Promise.all([
-    // Aggregation to get only needed fields: token and package features
-    UserWallet.aggregate([
-      {
-        $match: {
-          user: new mongoose.Types.ObjectId(user_id),
-          is_deleted: { $ne: true },
-          $or: [
-            { expires_at: { $exists: false } },
-            { expires_at: { $gte: new Date() } },
-          ],
+  try {
+    // Fetch user wallet with package features and feature endpoint in parallel using aggregation
+    const [walletResult, featureEndpoint] = await Promise.all([
+      // Aggregation to get only needed fields: token and package features
+      UserWallet.aggregate([
+        {
+          $match: {
+            user: new mongoose.Types.ObjectId(user_id),
+            is_deleted: { $ne: true },
+            $or: [
+              { expires_at: { $exists: false } },
+              { expires_at: { $gte: new Date() } },
+            ],
+          },
         },
-      },
-      {
-        $lookup: {
-          from: 'packages',
-          localField: 'package',
-          foreignField: '_id',
-          as: 'packageData',
+        {
+          $lookup: {
+            from: 'packages',
+            localField: 'package',
+            foreignField: '_id',
+            as: 'package_data',
+          },
         },
-      },
-      {
-        $unwind: {
-          path: '$packageData',
-          preserveNullAndEmptyArrays: true,
+        {
+          $unwind: {
+            path: '$package_data',
+            preserveNullAndEmptyArrays: true,
+          },
         },
-      },
-      {
-        $project: {
-          token: 1,
-          'packageData.features': 1,
+        {
+          $project: {
+            token: 1,
+            'package_data.features': 1,
+            package: 1,
+          },
         },
-      },
-    ]),
-    // Get feature endpoint with only needed fields
-    FeatureEndpoint.findById(feature_endpoint_id)
-      .select('feature token is_active')
-      .lean(),
-  ]);
+      ]),
+      // Get feature endpoint with only needed fields
+      FeatureEndpoint.findById(feature_endpoint_id)
+        .select('feature token is_active')
+        .lean(),
+    ]);
 
-  // Validate wallet exists
-  if (!walletResult || walletResult.length === 0 || !walletResult[0]) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
-  }
-
-  const wallet = walletResult[0];
-  const userToken = wallet.token || 0;
-  const packageFeatures = wallet.packageData?.features || [];
-
-  // Validate feature endpoint exists and is active
-  if (!featureEndpoint) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
-  }
-
-  if (!featureEndpoint.is_active) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'Feature endpoint is not active',
-    );
-  }
-
-  // Validate package features: Check if feature_endpoint's feature_id exists in user's package features
-  if (packageFeatures.length > 0) {
-    const featureEndpointFeatureId = featureEndpoint.feature.toString();
-    const hasFeatureInPackage = packageFeatures.some(
-      (feature: any) =>
-        (typeof feature === 'string'
-          ? feature
-          : feature._id?.toString() || feature.toString()) ===
-        featureEndpointFeatureId,
-    );
-
-    if (!hasFeatureInPackage) {
-      throw new AppError(
-        httpStatus.FORBIDDEN,
-        'Feature endpoint is not available in your package',
-      );
+    // Validate feature endpoint exists
+    if (!featureEndpoint) {
+      return {
+        user_id,
+        token: 0,
+        status: 'not-access-able',
+        message: 'Feature endpoint not found',
+      };
     }
-  } else {
-    throw new AppError(httpStatus.NOT_FOUND, 'User wallet package not found');
+
+    // Validate feature endpoint is active
+    if (!featureEndpoint.is_active) {
+      return {
+        user_id,
+        token: 0,
+        status: 'not-access-able',
+        message: 'Feature endpoint is not active',
+      };
+    }
+
+    let wallet: any;
+    let userToken = 0;
+    let packageFeatures: any[] = [];
+
+    // If wallet doesn't exist, create a new one
+    if (!walletResult || walletResult.length === 0 || !walletResult[0]) {
+      try {
+        // Create new wallet for user with default token (0)
+        await UserWallet.create({
+          user: new mongoose.Types.ObjectId(user_id),
+          token: 0,
+          // package is optional, so we don't set it
+        });
+        wallet = {
+          token: 0,
+          package: null,
+          package_data: null,
+        };
+        packageFeatures = [];
+      } catch (walletError: any) {
+        // If wallet creation fails, return error response instead of throwing
+        return {
+          user_id,
+          token: 0,
+          status: 'not-access-able',
+          message: `Failed to create wallet: ${walletError.message || 'Unknown error'}`,
+        };
+      }
+    } else {
+      wallet = walletResult[0];
+      packageFeatures = wallet.package_data?.features || [];
+    }
+
+    // Get user token from wallet
+    userToken = wallet.token || 0;
+
+    // If wallet has a package, validate package features
+    if (wallet.package && packageFeatures.length > 0) {
+      const featureEndpointFeatureId = featureEndpoint.feature.toString();
+      const hasFeatureInPackage = packageFeatures.some(
+        (feature: any) =>
+          (typeof feature === 'string'
+            ? feature
+            : feature._id?.toString() || feature.toString()) ===
+          featureEndpointFeatureId,
+      );
+
+      if (!hasFeatureInPackage) {
+        return {
+          user_id,
+          token: userToken,
+          status: 'not-access-able',
+          message: 'Feature endpoint is not available in your package',
+        };
+      }
+    }
+
+    // Validate user token >= minimum token (feature endpoint token)
+    const minimumToken = featureEndpoint.token || 0;
+    const hasAccess = userToken >= minimumToken;
+
+    return {
+      user_id,
+      token: userToken,
+      status: hasAccess ? 'access-able' : 'not-access-able',
+      message: hasAccess
+        ? undefined
+        : `Insufficient tokens. Required: ${minimumToken}, Available: ${userToken}`,
+    };
+  } catch (error: any) {
+    // Catch any unexpected errors and return a response instead of throwing
+    return {
+      user_id,
+      token: 0,
+      status: 'not-access-able',
+      message: `Token process start failed: ${error.message || 'Unknown error'}`,
+    };
   }
-
-  // Validate user token >= minimum token (feature endpoint token)
-  const minimumToken = featureEndpoint.token || 0;
-  const hasAccess = userToken >= minimumToken;
-
-  return {
-    user_id,
-    token: userToken,
-    status: hasAccess ? 'access-able' : 'not-access-able',
-  };
 };
 
 export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {

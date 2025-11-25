@@ -59,6 +59,13 @@ export const giveInitialTokenValidationSchema = z.object({
       .int('Token must be an integer')
       .nonnegative('Token must be 0 or greater')
       .optional(),
+    duration: z
+      .number({
+        invalid_type_error: 'Duration must be a number',
+      })
+      .int('Duration must be an integer')
+      .positive('Duration must be greater than 0')
+      .optional(),
   }),
 });
 

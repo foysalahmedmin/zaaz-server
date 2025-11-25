@@ -241,10 +241,18 @@ export const restoreUserWallets = async (
 export const giveInitialToken = async (
   user_id: string,
   token?: number,
+  duration?: number,
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
   const INITIAL_TOKEN = Number.parseInt(process.env.INITIAL_TOKEN || '100');
   const amount = token || INITIAL_TOKEN;
+
+  // Calculate expires_at if duration is provided (duration in days)
+  let expiresAt: Date | undefined;
+  if (duration && duration > 0) {
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + duration);
+  }
 
   // Check if wallet exists (bypass expired check for initial token)
   const existingWallet = await UserWallet.findOne({ user: user_id })
@@ -260,6 +268,7 @@ export const giveInitialToken = async (
         token: 0,
         package: null,
         initial_token_given: false,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
     );
@@ -274,6 +283,7 @@ export const giveInitialToken = async (
     {
       $inc: { token: amount },
       $set: { initial_token_given: true },
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
     },
     {
       new: true,
