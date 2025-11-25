@@ -26,7 +26,9 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **User Management**: Complete user authentication and authorization system with role-based access control (7 roles: super-admin, admin, editor, author, contributor, subscriber, user)
 - **Authentication**: JWT-based authentication with signup, signin, password reset, email verification, and refresh token support
 - **Token-Based System**: Manage user tokens for accessing premium features with complete transaction tracking
-- **Package Management**: Create and manage token packages with multi-currency support (USD/BDT), feature associations, and complete history tracking
+- **Package Management**: Create and manage token packages with multiple plans per package, each with its own price, duration, and token amount. Supports multi-currency (USD/BDT), feature associations, and complete history tracking
+- **Plan Management**: Reusable plan templates (name, duration, description) that can be associated with multiple packages
+- **Package-Plan Management**: Link plans to packages with pricing, token amounts, and initial plan designation
 - **Payment Processing**: Integrated payment gateways (Stripe for USD & SSL Commerz for BDT) with webhook support
 - **Wallet Management**: User wallet system with token balance tracking, expiration dates, and package associations
 - **Transaction History**: Complete audit trail for all token and payment transactions with detailed status tracking
@@ -46,13 +48,17 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Validation**: Zod schema validation for request/response data
 - **Error Handling**: Centralized error handling with custom error classes
 - **Soft Delete**: Soft delete pattern for data retention with restore and permanent delete capabilities across all modules
-- **Query Builder**: Advanced query builder with search, filter, sort, pagination
+- **Query Builders**: Advanced query builders with search, filter, sort, pagination
+  - **AppQuery**: Standard Mongoose query builder
+  - **AppQueryV2**: Aggregation-based query builder for complex joins and single database hits
 - **Webhook Support**: Secure webhook handling for payment status updates
 - **Real-time Communication**: Socket.io integration for real-time updates
 - **Caching**: Redis integration for performance optimization
 - **Session Management**: MongoDB session store for scalable sessions
 - **Server-to-Server Authentication**: API key-based authentication middleware for internal service communication
 - **Aggregation Pipelines**: MongoDB aggregation for efficient analytics and dashboard data processing
+- **Package Plans System**: Multiple plans per package with individual pricing, duration, and token amounts
+- **Embedded History**: PackageHistory stores embedded feature and plan data for immutable snapshots
 
 ---
 
@@ -142,7 +148,8 @@ src/
 ├── app/
 │   ├── builder/              # Core utility classes
 │   │   ├── AppError.ts       # Custom error class
-│   │   └── AppQuery.ts       # Advanced query builder
+│   │   ├── AppQuery.ts       # Standard query builder
+│   │   └── AppQueryV2.ts     # Aggregation-based query builder
 │   ├── config/               # Configuration management
 │   ├── errors/               # Error handlers
 │   │   ├── handleCastError.ts
@@ -156,16 +163,18 @@ src/
 │   │   ├── error.middleware.ts
 │   │   ├── validation.middleware.ts
 │   │   └── ...
-│   ├── modules/              # Feature modules (17 total)
+│   ├── modules/              # Feature modules (19 total)
 │   │   ├── auth/             # Authentication module
 │   │   ├── user/             # User management module
 │   │   ├── contact/          # Contact form submissions
 │   │   ├── dashboard/        # Admin dashboard analytics
 │   │   ├── feature/         # System features management
 │   │   ├── feature-endpoint/ # API endpoint definitions
+│   │   ├── plan/            # Plan management (reusable templates)
 │   │   ├── notification/    # Notification management
 │   │   ├── notification-recipient/ # Notification delivery and read status
 │   │   ├── package/         # Token package management
+│   │   ├── package-plan/    # Package-plan linking
 │   │   ├── package-history/ # Package change history
 │   │   ├── payment-method/   # Payment gateway configurations
 │   │   ├── payment-transaction/ # Payment processing
@@ -240,16 +249,39 @@ erDiagram
         timestamp updated_at "Optional, Auto-generated"
     }
 
+    Plan {
+        ObjectId _id PK "Required, Primary Key"
+        string name "Required, 2-100 characters, Indexed"
+        string description "Optional, Max 500 characters"
+        number duration "Required, Min: 1 day, Indexed"
+        boolean is_active "Optional, Default: true, Indexed"
+        boolean is_deleted "Optional, Default: false, Soft delete"
+        timestamp created_at "Optional, Auto-generated"
+        timestamp updated_at "Optional, Auto-generated"
+    }
+
+    PackagePlan {
+        ObjectId _id PK "Required, Primary Key"
+        ObjectId plan FK "Required, Reference: Plan._id, Indexed"
+        ObjectId package FK "Required, Reference: Package._id, Indexed"
+        object price "Required, Price object with USD and BDT (both >= 0)"
+        object previous_price "Optional, Previous price object with USD and BDT"
+        number token "Required, Min: 0, Indexed"
+        boolean is_initial "Optional, Default: false, Indexed (one per package)"
+        boolean is_active "Optional, Default: true, Indexed"
+        boolean is_deleted "Optional, Default: false, Soft delete"
+        timestamp created_at "Optional, Auto-generated"
+        timestamp updated_at "Optional, Auto-generated"
+    }
+
     Package {
         ObjectId _id PK "Required, Primary Key"
         string name "Required, Package title"
         string description "Optional"
         string content "Optional, HTML allowed, Detailed info"
-        number token "Required, Total tokens included"
         array features "Required, Reference: Feature._id[]"
-        number duration "Optional, Validity in days"
-        object price "Required, Current price object with USD and BDT"
-        object price_previous "Optional, Previous price object with USD and BDT"
+        array plans "Optional, Reference: Plan._id[]"
+        number sequence "Optional, Default: 0"
         boolean is_active "Optional, Default: true, Package availability"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
@@ -262,11 +294,9 @@ erDiagram
         string name "Required"
         string description "Optional"
         string content "Optional"
-        number token "Required"
-        array features "Required, Reference: Feature._id[]"
-        number duration "Required, Validity in days at that time"
-        object price "Required, Price object with USD and BDT at that time"
-        object previous_price "Optional, Previous price object with USD and BDT at that time"
+        array features "Required, Embedded feature objects (not references)"
+        array plans "Required, Embedded package-plan objects with plan (not references)"
+        number sequence "Optional"
         boolean is_active "Optional"
         boolean is_deleted "Optional"
         timestamp created_at "Optional, Auto-generated"
@@ -294,9 +324,12 @@ erDiagram
     UserWallet {
         ObjectId _id PK "Required, Primary Key"
         ObjectId user FK "Required, Unique, Reference: User._id, One wallet per user"
-        ObjectId package FK "Required, Reference: Package._id, Purchased package"
+        ObjectId package FK "Optional, Reference: Package._id, Purchased package"
+        ObjectId plan FK "Optional, Reference: Plan._id, Purchased plan, Indexed"
         number token "Required, Remaining available tokens"
-        date expires_at "Optional, Calculated from package duration"
+        date expires_at "Optional, Calculated from plan duration"
+        boolean initial_token_given "Optional, Default: false"
+        boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
         timestamp updated_at "Optional, Auto-generated"
     }
@@ -310,6 +343,7 @@ erDiagram
         string increase_source "Conditional, Enum: payment | bonus, Only if type = increase"
         ObjectId decrease_source FK "Conditional, Reference: FeatureEndpoint._id, Only if type = decrease"
         ObjectId payment_transaction FK "Conditional, Reference: PaymentTransaction._id, Only if type = increase AND increase_source = payment"
+        ObjectId plan FK "Optional, Reference: Plan._id, Indexed"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
         timestamp updated_at "Optional, Auto-generated"
@@ -325,6 +359,8 @@ erDiagram
         string gateway_session_id "Optional, Gateway session ID, Indexed"
         string gateway_status "Optional, Gateway-specific status, e.g. paid, VALID, FAILED"
         ObjectId package FK "Required, Reference: Package._id"
+        ObjectId plan FK "Required, Reference: Plan._id, Indexed"
+        ObjectId price FK "Required, Reference: PackagePlan._id (stores package-plan document _id), Indexed"
         number amount "Required, Payment amount"
         string currency "Required, Enum: USD | BDT, Payment currency"
         number gateway_fee "Optional, Fee charged by payment gateway"
@@ -423,12 +459,19 @@ erDiagram
 
 1. **User → UserWallet**: One-to-Many (A user can have multiple wallets over time)
 2. **Package → Features**: Many-to-Many (Packages include multiple features)
-3. **Feature → FeatureEndpoint**: One-to-Many (Each feature has multiple endpoints)
-4. **UserWallet → TokenTransaction**: One-to-Many (Wallet records all token movements)
-5. **PaymentTransaction → TokenTransaction**: One-to-Many (Payment triggers token increase)
-6. **User → Notification**: One-to-Many (Users can send multiple notifications)
-7. **Notification → NotificationRecipient**: One-to-Many (Notifications can have multiple recipients)
-8. **User → NotificationRecipient**: One-to-Many (Users can receive multiple notifications)
+3. **Package → Plans**: Many-to-Many via PackagePlan (Packages can have multiple plans)
+4. **Plan → PackagePlan**: One-to-Many (A plan can be used in multiple packages)
+5. **Package → PackagePlan**: One-to-Many (A package can have multiple plans)
+6. **Feature → FeatureEndpoint**: One-to-Many (Each feature has multiple endpoints)
+7. **UserWallet → TokenTransaction**: One-to-Many (Wallet records all token movements)
+8. **PaymentTransaction → TokenTransaction**: One-to-Many (Payment triggers token increase)
+9. **PaymentTransaction → Plan**: Many-to-One (Each payment is for a specific plan)
+10. **PaymentTransaction → PackagePlan**: Many-to-One (Each payment references a package-plan for price)
+11. **UserWallet → Plan**: Many-to-One (Wallet can be associated with a plan)
+12. **TokenTransaction → Plan**: Many-to-One (Token transactions can reference a plan)
+13. **User → Notification**: One-to-Many (Users can send multiple notifications)
+14. **Notification → NotificationRecipient**: One-to-Many (Notifications can have multiple recipients)
+15. **User → NotificationRecipient**: One-to-Many (Users can receive multiple notifications)
 
 ---
 
@@ -449,9 +492,9 @@ erDiagram
 | Contact                 | `/api/contact`                 | Contact form submissions              |
 | Features                | `/api/features`                | System features management            |
 | Feature Endpoints       | `/api/feature-endpoints`       | API endpoint definitions              |
-| Notifications           | `/api/notifications`           | Notification management               |
-| Notification Recipients | `/api/notification-recipients` | Notification delivery and read status |
+| Plans                   | `/api/plans`                   | Plan management (reusable templates) |
 | Packages                | `/api/packages`                | Token package management              |
+| Package Plans           | `/api/package-plans`           | Package-plan linking                  |
 | Package History         | `/api/package-histories`       | Package change history                |
 | Payment Methods         | `/api/payment-methods`         | Payment gateway configurations        |
 | Payment Transactions    | `/api/payment-transactions`    | Payment processing                    |
@@ -460,6 +503,8 @@ erDiagram
 | Token Transactions      | `/api/token-transactions`      | Token movement history                |
 | Token Process           | `/api/token-process`           | Server-to-server token processing    |
 | User Wallets            | `/api/user-wallets`            | User wallet management                |
+| Notifications           | `/api/notifications`           | Notification management               |
+| Notification Recipients | `/api/notification-recipients` | Notification delivery and read status |
 | Dashboard               | `/api/dashboard`               | Admin dashboard analytics             |
 
 ### Common Endpoints Pattern
@@ -507,7 +552,8 @@ These endpoints are available for client-side access without authentication:
 - `GET /api/features/:id/public` - Get single public feature by ID
 - `GET /api/feature-endpoints/public` - Get all active public feature endpoints
 - `GET /api/feature-endpoints/:id/public` - Get single public feature endpoint by ID
-- `GET /api/packages/public` - Get all active public packages
+- `GET /api/plans/public` - Get all active public plans
+- `GET /api/packages/public` - Get all active public packages (supports `plans` query parameter for filtering)
 - `GET /api/packages/:id/public` - Get single public package by ID
 - `GET /api/payment-methods/public` - Get all active public payment methods
 - `GET /api/payment-methods/:id/public` - Get single public payment method by ID
@@ -515,7 +561,7 @@ These endpoints are available for client-side access without authentication:
 
 ### Payment-Specific Endpoints
 
-- `POST /api/payment-transactions/initiate` - Initiate payment (authenticated)
+- `POST /api/payment-transactions/initiate` - Initiate payment (authenticated, requires `plan_id` in request body)
 - `POST /api/payment-transactions/webhook/:payment_method_id` - Webhook handler (no auth, signature verified)
 - `GET /api/payment-transactions/:id/status` - Check payment status (authenticated)
 - `POST /api/payment-transactions/:id/verify` - Verify payment (authenticated)
