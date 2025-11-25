@@ -462,7 +462,48 @@ export const updatePackage = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  // Create history before update
+  // Get populated package data for history (with features and plans)
+  const populatedPackage = await getPackage(id);
+
+  // Transform features to embedded format
+  const embeddedFeatures = (populatedPackage.features || []).map(
+    (feature: any) => ({
+      _id: feature._id,
+      parent: feature.parent || null,
+      name: feature.name,
+      description: feature.description,
+      path: feature.path,
+      prefix: feature.prefix,
+      type: feature.type,
+      sequence: feature.sequence,
+      is_active: feature.is_active,
+      created_at: feature.created_at,
+      updated_at: feature.updated_at,
+    }),
+  );
+
+  // Transform plans to embedded format
+  const embeddedPlans = (populatedPackage.plans || []).map((pp: any) => ({
+    _id: pp._id,
+    plan: {
+      _id: pp.plan._id,
+      name: pp.plan.name,
+      description: pp.plan.description,
+      duration: pp.plan.duration,
+      is_active: pp.plan.is_active,
+      created_at: pp.plan.created_at,
+      updated_at: pp.plan.updated_at,
+    },
+    price: pp.price,
+    previous_price: pp.previous_price,
+    token: pp.token,
+    is_initial: pp.is_initial,
+    is_active: pp.is_active,
+    created_at: pp.created_at,
+    updated_at: pp.updated_at,
+  }));
+
+  // Create history before update with embedded data
   await PackageHistory.create(
     [
       {
@@ -470,8 +511,9 @@ export const updatePackage = async (
         name: packageData.name,
         description: packageData.description,
         content: packageData.content,
-        features: packageData.features,
-        plans: packageData.plans || [],
+        features: embeddedFeatures,
+        plans: embeddedPlans,
+        sequence: packageData.sequence,
         is_active: packageData.is_active,
         is_deleted: packageData.is_deleted,
       },

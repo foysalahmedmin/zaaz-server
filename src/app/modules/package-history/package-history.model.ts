@@ -25,17 +25,120 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
       type: String,
       trim: true,
     },
+    // Embedded feature objects (not references)
     features: [
       {
-        type: Schema.Types.ObjectId,
-        ref: 'Feature',
-        required: true,
+        _id: {
+          type: Schema.Types.ObjectId,
+          required: true,
+        },
+        parent: {
+          type: Schema.Types.ObjectId,
+          default: null,
+          required: false,
+        },
+        name: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        description: {
+          type: String,
+          trim: true,
+        },
+        path: {
+          type: String,
+          trim: true,
+        },
+        prefix: {
+          type: String,
+          trim: true,
+        },
+        type: {
+          type: String,
+          enum: ['writing', 'generation', 'other'],
+        },
+        sequence: {
+          type: Number,
+          default: 0,
+        },
+        is_active: {
+          type: Boolean,
+          default: true,
+        },
+        created_at: Date,
+        updated_at: Date,
       },
     ],
+    // Embedded package-plan objects with plan populated (not references)
     plans: [
       {
-        type: Schema.Types.ObjectId,
-        ref: 'Plan',
+        _id: {
+          type: Schema.Types.ObjectId,
+          required: true,
+        },
+        plan: {
+          _id: {
+            type: Schema.Types.ObjectId,
+            required: true,
+          },
+          name: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          description: {
+            type: String,
+            trim: true,
+          },
+          duration: {
+            type: Number,
+            required: true,
+          },
+          is_active: {
+            type: Boolean,
+            default: true,
+          },
+          created_at: Date,
+          updated_at: Date,
+        },
+        price: {
+          USD: {
+            type: Number,
+            required: true,
+            min: 0,
+          },
+          BDT: {
+            type: Number,
+            required: true,
+            min: 0,
+          },
+        },
+        previous_price: {
+          USD: {
+            type: Number,
+            min: 0,
+          },
+          BDT: {
+            type: Number,
+            min: 0,
+          },
+        },
+        token: {
+          type: Number,
+          required: true,
+          min: 0,
+        },
+        is_initial: {
+          type: Boolean,
+          default: false,
+        },
+        is_active: {
+          type: Boolean,
+          default: true,
+        },
+        created_at: Date,
+        updated_at: Date,
       },
     ],
     sequence: {

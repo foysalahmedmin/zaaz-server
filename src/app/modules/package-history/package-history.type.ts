@@ -5,13 +5,52 @@ export type TPackagePrice = {
   BDT: number;
 };
 
+// Embedded feature data structure for history
+export type TFeatureHistory = {
+  _id: mongoose.Types.ObjectId;
+  parent?: mongoose.Types.ObjectId | null;
+  name: string;
+  description?: string;
+  path?: string;
+  prefix?: string;
+  type?: 'writing' | 'generation' | 'other';
+  sequence?: number;
+  is_active: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+};
+
+// Embedded plan data structure for history
+export type TPlanHistory = {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  description?: string;
+  duration: number;
+  is_active: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+};
+
+// Embedded package-plan data structure for history
+export type TPackagePlanHistory = {
+  _id: mongoose.Types.ObjectId;
+  plan: TPlanHistory;
+  price: TPackagePrice;
+  previous_price?: TPackagePrice;
+  token: number;
+  is_initial: boolean;
+  is_active: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+};
+
 export type TPackageHistory = {
   package: mongoose.Types.ObjectId;
   name: string;
   description?: string;
   content?: string;
-  features: mongoose.Types.ObjectId[];
-  plans: mongoose.Types.ObjectId[];
+  features: TFeatureHistory[];
+  plans: TPackagePlanHistory[];
   sequence?: number;
   is_active?: boolean;
   is_deleted?: boolean;
