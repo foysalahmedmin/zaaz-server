@@ -22,6 +22,11 @@ const planSchema = new Schema<TPlanDocument>(
       min: [1, 'Duration must be at least 1 day'],
       index: true,
     },
+    sequence: {
+      type: Number,
+      default: 0,
+      min: [0, 'Sequence must be 0 or greater'],
+    },
     is_active: {
       type: Boolean,
       default: true,
@@ -81,5 +86,7 @@ planSchema.methods.softDelete = async function () {
   return await this.save();
 };
 
-export const Plan = mongoose.model<TPlanDocument, TPlanModel>('Plan', planSchema);
-
+export const Plan = mongoose.model<TPlanDocument, TPlanModel>(
+  'Plan',
+  planSchema,
+);

@@ -17,6 +17,11 @@ export const createPlanValidationSchema = z.object({
       .number({ invalid_type_error: 'Duration must be a number' })
       .int('Duration must be an integer')
       .positive('Duration must be at least 1 day'),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
+      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -40,6 +45,11 @@ export const updatePlanValidationSchema = z.object({
       .number({ invalid_type_error: 'Duration must be a number' })
       .int('Duration must be an integer')
       .positive('Duration must be at least 1 day')
+      .optional(),
+    sequence: z
+      .number({ invalid_type_error: 'Sequence must be a number' })
+      .int('Sequence must be an integer')
+      .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
   }),

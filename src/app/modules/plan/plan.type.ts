@@ -4,6 +4,7 @@ export type TPlan = {
   name: string;
   description?: string;
   duration: number;
+  sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;
 };
