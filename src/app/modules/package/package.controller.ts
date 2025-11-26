@@ -151,3 +151,26 @@ export const restorePackages = catchAsync(async (req, res) => {
   });
 });
 
+export const updatePackageIsInitial = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { is_initial } = req.body;
+  const result = await PackageServices.updatePackageIsInitial(id, is_initial);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Package initial status updated successfully',
+    data: result,
+  });
+});
+
+export const giveInitialPackage = catchAsync(async (req, res) => {
+  const { user_id } = req.body;
+  const result = await PackageServices.giveInitialPackage(user_id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Initial package given successfully',
+    data: result,
+  });
+});
+

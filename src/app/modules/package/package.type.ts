@@ -18,6 +18,7 @@ export type TPackage = {
   plans: mongoose.Types.ObjectId[];
   sequence?: number;
   is_active: boolean;
+  is_initial?: boolean;
   is_deleted?: boolean;
 };
 

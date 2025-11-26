@@ -1,5 +1,6 @@
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
+import serverAuth from '../../middlewares/server-auth.middleware';
 import validation from '../../middlewares/validation.middleware';
 import * as PackageControllers from './package.controller';
 import * as PackageValidations from './package.validation';
@@ -31,6 +32,13 @@ router.patch(
   auth('admin'),
   validation(PackageValidations.updatePackageValidationSchema),
   PackageControllers.updatePackage,
+);
+
+router.patch(
+  '/:id/is-initial',
+  auth('admin'),
+  validation(PackageValidations.updatePackageIsInitialValidationSchema),
+  PackageControllers.updatePackageIsInitial,
 );
 
 // DELETE
@@ -82,6 +90,13 @@ router.post(
   auth('admin'),
   validation(PackageValidations.packageOperationValidationSchema),
   PackageControllers.restorePackage,
+);
+
+router.post(
+  '/give-initial-package',
+  serverAuth(),
+  validation(PackageValidations.giveInitialPackageValidationSchema),
+  PackageControllers.giveInitialPackage,
 );
 
 const PackageRoutes = router;

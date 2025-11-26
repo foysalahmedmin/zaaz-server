@@ -7,6 +7,7 @@ export type TUserWallet = {
   token: number;
   expires_at?: Date;
   initial_token_given?: boolean;
+  initial_package_given?: boolean;
   is_deleted?: boolean;
 };
 

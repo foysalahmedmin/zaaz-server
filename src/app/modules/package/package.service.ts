@@ -33,6 +33,15 @@ export const createPackage = async (
     throw new AppError(httpStatus.BAD_REQUEST, 'At least one plan is required');
   }
 
+  // If is_initial is true, ensure no other package has is_initial=true
+  if (packageData.is_initial === true) {
+    await Package.updateMany(
+      { is_initial: true, _id: { $ne: null } },
+      { $set: { is_initial: false } },
+      { session },
+    );
+  }
+
   // Extract plan IDs for package.plans array
   type PlanInput = {
     plan: mongoose.Types.ObjectId | string;
@@ -706,6 +715,15 @@ export const updatePackage = async (
       );
     }
 
+    // If is_initial is being set to true, ensure no other package has is_initial=true
+    if (payload.is_initial === true) {
+      await Package.updateMany(
+        { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
+        { $set: { is_initial: false } },
+        { session },
+      );
+    }
+
     // Update package.plans array with new plan IDs
     const { plans: _, ...packageFieldsToUpdate } = payload;
     const updatedPlanIds = newPackagePlanInputs.map((p: UpdatePlanInput) =>
@@ -721,6 +739,15 @@ export const updatePackage = async (
     ).session(session || null);
 
     return result!;
+  }
+
+  // If is_initial is being set to true, ensure no other package has is_initial=true
+  if (payload.is_initial === true) {
+    await Package.updateMany(
+      { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
+      { $set: { is_initial: false } },
+      { session },
+    );
   }
 
   // Update package fields (excluding plans, as they are handled separately)
@@ -887,4 +914,191 @@ export const restorePackages = async (
     count: result.modifiedCount,
     not_found_ids: notFoundIds,
   };
+};
+
+export const updatePackageIsInitial = async (
+  id: string,
+  is_initial: boolean,
+  session?: mongoose.ClientSession,
+): Promise<TPackage> => {
+  const packageData = await Package.findById(id)
+    .session(session || null)
+    .lean();
+
+  if (!packageData) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+  }
+
+  // If setting is_initial to true, ensure no other package has is_initial=true
+  if (is_initial === true) {
+    await Package.updateMany(
+      { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
+      { $set: { is_initial: false } },
+      { session },
+    );
+  }
+
+  const result = await Package.findByIdAndUpdate(
+    id,
+    { is_initial },
+    {
+      new: true,
+      runValidators: true,
+    },
+  ).session(session || null);
+
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+  }
+
+  return result.toObject();
+};
+
+export const giveInitialPackage = async (
+  user_id: string,
+  session?: mongoose.ClientSession,
+): Promise<any> => {
+  // Find the initial package
+  const initialPackage = await Package.findOne({
+    is_initial: true,
+    is_active: true,
+    is_deleted: { $ne: true },
+  })
+    .session(session || null)
+    .lean();
+
+  if (!initialPackage) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'No initial package found. Please set a package as initial first.',
+    );
+  }
+
+  // Get the initial plan for this package
+  const { getPackagePlansByPackage } = await import(
+    '../package-plan/package-plan.service'
+  );
+  const packagePlans = await getPackagePlansByPackage(
+    initialPackage._id.toString(),
+    false,
+  );
+
+  const initialPlan = packagePlans.find((pp) => pp.is_initial === true);
+
+  if (!initialPlan) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'No initial plan found for the initial package.',
+    );
+  }
+
+  // Get plan details
+  const planData = await Plan.findById(initialPlan.plan)
+    .session(session || null)
+    .lean();
+
+  if (!planData) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
+  }
+
+  // Calculate expires_at if plan has duration
+  let expiresAt: Date | undefined;
+  if (planData.duration && planData.duration > 0) {
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + planData.duration);
+  }
+
+  // Check if wallet exists (bypass expired check for initial package)
+  const { UserWallet } = await import('../user-wallet/user-wallet.model');
+  const { createUserWallet } = await import(
+    '../user-wallet/user-wallet.service'
+  );
+  const existingWallet = await UserWallet.findOne({ user: user_id })
+    .session(session || null)
+    .setOptions({ bypassExpired: true })
+    .lean();
+
+  // If wallet doesn't exist, create it
+  if (!existingWallet) {
+    await createUserWallet(
+      {
+        user: new mongoose.Types.ObjectId(user_id),
+        token: 0,
+        package: null,
+        plan: null,
+        initial_token_given: false,
+        initial_package_given: false,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+      },
+      session,
+    );
+  }
+
+  // Check if initial package already given using atomic operation
+  const updatedWallet = await UserWallet.findOneAndUpdate(
+    {
+      user: user_id,
+      initial_package_given: { $ne: true },
+    },
+    {
+      $inc: { token: initialPlan.token },
+      $set: {
+        package: initialPackage._id,
+        plan: planData._id,
+        initial_package_given: true,
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+      },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .session(session || null)
+    .setOptions({ bypassExpired: true });
+
+  if (!updatedWallet) {
+    // Check if package was already given
+    const existingWallet = await UserWallet.findOne({ user: user_id })
+      .session(session || null)
+      .setOptions({ bypassExpired: true })
+      .lean();
+
+    if (existingWallet?.initial_package_given) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Initial package has already been given to this user',
+      );
+    }
+
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Create token transaction record for tracking
+  try {
+    const { TokenTransaction } = await import(
+      '../token-transaction/token-transaction.model'
+    );
+    await TokenTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          type: 'increase',
+          increase_source: 'bonus',
+          token: initialPlan.token,
+          plan: planData._id,
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    // Log error but don't block the operation
+    console.error(
+      '[Give Initial Package] Failed to create transaction:',
+      error,
+    );
+  }
+
+  return updatedWallet.toObject();
 };

@@ -36,6 +36,10 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
       type: Boolean,
       default: false,
     },
+    initial_package_given: {
+      type: Boolean,
+      default: false,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {

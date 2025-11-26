@@ -56,6 +56,11 @@ const packageSchema = new Schema<TPackageDocument>(
       type: Boolean,
       default: true,
     },
+    is_initial: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {
@@ -67,6 +72,9 @@ const packageSchema = new Schema<TPackageDocument>(
     toObject: { virtuals: true },
   },
 );
+
+// Indexes
+packageSchema.index({ is_initial: 1, is_active: 1, is_deleted: 1 });
 
 // toJSON override to remove sensitive fields from output
 packageSchema.methods.toJSON = function () {

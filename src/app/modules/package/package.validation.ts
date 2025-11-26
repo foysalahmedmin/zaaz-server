@@ -53,6 +53,7 @@ export const createPackageValidationSchema = z.object({
       .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
+    is_initial: z.boolean().optional(),
   }),
 });
 
@@ -86,6 +87,25 @@ export const updatePackageValidationSchema = z.object({
       .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
+    is_initial: z.boolean().optional(),
+  }),
+});
+
+export const updatePackageIsInitialValidationSchema = z.object({
+  params: z.object({
+    id: idSchema,
+  }),
+  body: z.object({
+    is_initial: z.boolean({
+      required_error: 'is_initial is required',
+      invalid_type_error: 'is_initial must be a boolean',
+    }),
+  }),
+});
+
+export const giveInitialPackageValidationSchema = z.object({
+  body: z.object({
+    user_id: idSchema,
   }),
 });
 
