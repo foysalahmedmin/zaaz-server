@@ -29,6 +29,8 @@ export type TPaymentTransaction = {
   failed_at?: Date; // Date when payment failed
   customer_email?: string; // Customer email from gateway
   customer_name?: string; // Customer name from gateway
+  return_url?: string; // Frontend return URL (stored for redirect after payment)
+  cancel_url?: string; // Frontend cancel URL (stored for redirect after payment)
   gateway_response?: Record<string, any>; // Raw response data from gateway (for debugging)
   is_deleted?: boolean;
 };

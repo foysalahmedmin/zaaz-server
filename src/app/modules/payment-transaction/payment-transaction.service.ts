@@ -4,10 +4,10 @@ import AppError from '../../builder/AppError';
 import AppQuery from '../../builder/AppQuery';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
-import { Package } from '../package/package.model';
 import { PackagePlan } from '../package-plan/package-plan.model';
-import { Plan } from '../plan/plan.model';
+import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
+import { Plan } from '../plan/plan.model';
 import { TokenTransaction } from '../token-transaction/token-transaction.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { PaymentTransaction } from './payment-transaction.model';
@@ -527,7 +527,9 @@ export const initiatePayment = async (options: {
   }
 
   // Validate plan exists and is active
-  const plan = await Plan.findById(planId).session(session || null).lean();
+  const plan = await Plan.findById(planId)
+    .session(session || null)
+    .lean();
   if (!plan || !plan.is_active) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Plan not found or not active');
   }
@@ -582,7 +584,7 @@ export const initiatePayment = async (options: {
     );
   }
 
-  // Create payment transaction
+  // Create payment transaction with frontend URLs stored
   const paymentTransaction = await PaymentTransaction.create(
     [
       {
@@ -596,6 +598,8 @@ export const initiatePayment = async (options: {
         price: packagePlan._id, // Store package-plan document _id
         amount: gatewayAmount,
         currency: paymentMethod.currency,
+        return_url: returnUrl, // Store frontend return URL
+        cancel_url: cancelUrl, // Store frontend cancel URL
       },
     ],
     { session },
@@ -607,7 +611,11 @@ export const initiatePayment = async (options: {
       paymentMethod.webhook_url ||
       `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
 
-    // Initiate payment with gateway
+    // Construct server redirect URLs (gateway will redirect to these)
+    const serverReturnUrl = `${config.url}/api/payment-transactions/redirect?transaction_id=${paymentTransaction[0]._id}&status=success`;
+    const serverCancelUrl = `${config.url}/api/payment-transactions/redirect?transaction_id=${paymentTransaction[0]._id}&status=cancel`;
+
+    // Initiate payment with gateway (using server redirect URLs)
     const gateway = PaymentGatewayFactory.create(paymentMethod);
     const paymentResponse = await gateway.initiatePayment({
       amount: gatewayAmount,
@@ -615,8 +623,8 @@ export const initiatePayment = async (options: {
       packageId,
       userId,
       userWalletId: wallet._id.toString(),
-      returnUrl,
-      cancelUrl,
+      returnUrl: serverReturnUrl, // Use server redirect URL
+      cancelUrl: serverCancelUrl, // Use server redirect URL
       ipnUrl: webhookUrl, // Pass IPN URL for SSLCommerz webhook notifications
       customerEmail,
       customerName,
@@ -663,6 +671,169 @@ export const initiatePayment = async (options: {
       `Payment gateway error: ${error.message}`,
     );
   }
+};
+
+export const handlePaymentRedirect = async (params: {
+  transaction_id?: string | string[];
+  status?: string | string[];
+  val_id?: string | string[];
+  tran_id?: string | string[];
+  error?: string | string[];
+  [key: string]: any;
+}): Promise<{ redirectUrl: string; statusUpdated: boolean }> => {
+  // Get transaction_id from various possible params
+  const transactionId =
+    (typeof params.transaction_id === 'string'
+      ? params.transaction_id
+      : params.transaction_id?.[0]) ||
+    (typeof params.tran_id === 'string'
+      ? params.tran_id
+      : params.tran_id?.[0]) ||
+    (typeof params.val_id === 'string' ? params.val_id : params.val_id?.[0]);
+
+  if (!transactionId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Transaction ID is required for redirect',
+    );
+  }
+
+  // Get transaction to retrieve stored frontend URLs
+  const transaction = await PaymentTransaction.findById(transactionId).select(
+    'return_url cancel_url status',
+  );
+
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  // SSLCommerz success indicators: val_id (validation ID) or status=VALID
+  const hasValId = params.val_id;
+  const statusParam =
+    typeof params.status === 'string' ? params.status : params.status?.[0];
+  const hasError = params.error;
+
+  // Determine final status
+  let finalStatus: 'success' | 'failed' | 'cancel' | null = null;
+  if (hasValId || statusParam === 'VALID' || statusParam === 'success') {
+    finalStatus = 'success';
+  } else if (
+    hasError ||
+    statusParam === 'FAILED' ||
+    statusParam === 'failed' ||
+    statusParam === 'cancel'
+  ) {
+    finalStatus = statusParam === 'cancel' ? 'cancel' : 'failed';
+  } else if (statusParam) {
+    // Map other status values
+    if (statusParam.toLowerCase().includes('success')) {
+      finalStatus = 'success';
+    } else if (statusParam.toLowerCase().includes('cancel')) {
+      finalStatus = 'cancel';
+    } else {
+      finalStatus = 'failed';
+    }
+  }
+
+  // Update transaction status if needed
+  let statusUpdated = false;
+  if (finalStatus === 'success' && transaction.status !== 'success') {
+    // Only update if not already success (prevent double processing)
+    // Use updatePaymentTransactionStatus to also update wallet and create token transaction
+    try {
+      await updatePaymentTransactionStatus(transactionId, 'success');
+      statusUpdated = true;
+    } catch (error: unknown) {
+      // If update fails (e.g., already processed by webhook), just update status for display
+      // This can happen if webhook processed the payment before redirect
+      const appError = error as AppError;
+      if (appError.status === httpStatus.NOT_FOUND) {
+        // Transaction not found, re-throw
+        throw error;
+      }
+      // For other errors (e.g., already processed), update status for display
+      await PaymentTransaction.findByIdAndUpdate(transactionId, {
+        status: 'success',
+        paid_at: new Date(),
+      });
+      statusUpdated = true;
+    }
+  } else if (finalStatus === 'failed' && transaction.status === 'pending') {
+    await PaymentTransaction.findByIdAndUpdate(transactionId, {
+      status: 'failed',
+      failed_at: new Date(),
+      failure_reason: 'Payment failed or cancelled by user',
+    });
+    statusUpdated = true;
+  }
+
+  // Determine redirect URL based on status
+  let redirectUrl = transaction.return_url || '/';
+
+  // Use cancel_url if status is cancel or failed, otherwise use return_url
+  if (finalStatus === 'cancel' || finalStatus === 'failed') {
+    redirectUrl = transaction.cancel_url || transaction.return_url || '/';
+  }
+
+  // Use transaction document _id (not gateway transaction ID) for verifyPayment API
+  // This is the MongoDB ObjectId that verifyPayment expects
+  const transactionDocumentId = transactionId;
+
+  // Append transaction_id (document _id) and status to redirect URL if not already present
+  try {
+    const url = new URL(redirectUrl);
+    if (!url.searchParams.has('transaction_id')) {
+      url.searchParams.set('transaction_id', transactionDocumentId);
+    }
+    if (!url.searchParams.has('status') && finalStatus) {
+      url.searchParams.set('status', finalStatus);
+    }
+    redirectUrl = url.toString();
+  } catch {
+    // If redirectUrl is not a valid URL, append query params manually
+    const separator = redirectUrl.includes('?') ? '&' : '?';
+    redirectUrl = `${redirectUrl}${separator}transaction_id=${transactionDocumentId}`;
+    if (finalStatus) {
+      redirectUrl += `&status=${finalStatus}`;
+    }
+  }
+
+  // Update return_url and cancel_url in transaction document with proper transaction_id
+  // This ensures the URLs always have the correct transaction_id for verifyPayment
+  const updateData: any = {};
+  if (transaction.return_url) {
+    try {
+      const returnUrlObj = new URL(transaction.return_url);
+      if (!returnUrlObj.searchParams.has('transaction_id')) {
+        returnUrlObj.searchParams.set('transaction_id', transactionDocumentId);
+        updateData.return_url = returnUrlObj.toString();
+      }
+    } catch {
+      // If return_url is not a valid URL, append query params manually
+      const separator = transaction.return_url.includes('?') ? '&' : '?';
+      updateData.return_url = `${transaction.return_url}${separator}transaction_id=${transactionDocumentId}`;
+    }
+  }
+  if (transaction.cancel_url) {
+    try {
+      const cancelUrlObj = new URL(transaction.cancel_url);
+      if (!cancelUrlObj.searchParams.has('transaction_id')) {
+        cancelUrlObj.searchParams.set('transaction_id', transactionDocumentId);
+        updateData.cancel_url = cancelUrlObj.toString();
+      }
+    } catch {
+      // If cancel_url is not a valid URL, append query params manually
+      const separator = transaction.cancel_url.includes('?') ? '&' : '?';
+      updateData.cancel_url = `${transaction.cancel_url}${separator}transaction_id=${transactionDocumentId}`;
+    }
+  }
+
+  // Update transaction document with updated URLs
+  if (Object.keys(updateData).length > 0) {
+    await PaymentTransaction.findByIdAndUpdate(transactionId, updateData);
+  }
+
+  return { redirectUrl, statusUpdated };
 };
 
 const prepareWebhookUpdateData = (

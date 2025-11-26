@@ -257,3 +257,30 @@ export const verifyPayment = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+// Handle redirect for both GET and POST (Stripe and SSLCommerz)
+export const handleRedirect = catchAsync(async (req, res) => {
+  try {
+    // Support both GET (query params) and POST (body params)
+    const params = {
+      ...req.query,
+      ...req.body,
+    };
+
+    const result =
+      await PaymentTransactionServices.handlePaymentRedirect(params);
+
+    // Redirect to frontend URL
+    return res.redirect(result.redirectUrl);
+  } catch (error: any) {
+    // If error occurs, redirect to home or return error page
+    if (error.status === httpStatus.NOT_FOUND) {
+      return res.status(httpStatus.NOT_FOUND).redirect('/');
+    }
+    if (error.status === httpStatus.BAD_REQUEST) {
+      return res.status(httpStatus.BAD_REQUEST).redirect('/');
+    }
+    // For other errors, redirect to home
+    return res.redirect('/');
+  }
+});

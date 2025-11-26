@@ -48,6 +48,17 @@ router.post(
   PaymentTransactionControllers.initiatePayment,
 );
 
+// GET/POST - Redirect handler (no auth, called by payment gateways)
+// Must be placed before other routes to avoid conflicts
+// Supports both GET (SSLCommerz) and POST (Stripe) redirects
+router.get('/redirect', PaymentTransactionControllers.handleRedirect);
+router.post(
+  '/redirect',
+  express.urlencoded({ extended: true }),
+  express.json(),
+  PaymentTransactionControllers.handleRedirect,
+);
+
 // POST - Verify payment
 router.post(
   '/:id/verify',

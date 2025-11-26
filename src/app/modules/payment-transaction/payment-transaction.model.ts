@@ -102,6 +102,14 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: String,
       trim: true,
     },
+    return_url: {
+      type: String,
+      trim: true,
+    },
+    cancel_url: {
+      type: String,
+      trim: true,
+    },
     gateway_response: {
       type: Schema.Types.Mixed,
       select: false, // Don't include in default queries (large data)
