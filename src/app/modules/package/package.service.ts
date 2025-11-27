@@ -34,6 +34,8 @@ export const createPackage = async (
   }
 
   // If is_initial is true, ensure no other package has is_initial=true
+  // Note: Using _id: { $ne: null } because the new package doesn't exist yet,
+  // so we need to unset is_initial for all existing packages
   if (packageData.is_initial === true) {
     await Package.updateMany(
       { is_initial: true, _id: { $ne: null } },

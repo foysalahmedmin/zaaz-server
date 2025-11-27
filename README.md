@@ -26,11 +26,11 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **User Management**: Complete user authentication and authorization system with role-based access control (7 roles: super-admin, admin, editor, author, contributor, subscriber, user)
 - **Authentication**: JWT-based authentication with signup, signin, password reset, email verification, and refresh token support
 - **Token-Based System**: Manage user tokens for accessing premium features with complete transaction tracking
-- **Package Management**: Create and manage token packages with multiple plans per package, each with its own price, duration, and token amount. Supports multi-currency (USD/BDT), feature associations, and complete history tracking
-- **Plan Management**: Reusable plan templates (name, duration, description) that can be associated with multiple packages
-- **Package-Plan Management**: Link plans to packages with pricing, token amounts, and initial plan designation
-- **Payment Processing**: Integrated payment gateways (Stripe for USD & SSL Commerz for BDT) with webhook support
-- **Wallet Management**: User wallet system with token balance tracking, expiration dates, and package associations
+- **Package Management**: Create and manage token packages with multiple plans per package, each with its own price, duration, and token amount. Supports multi-currency (USD/BDT), feature associations, type (token/subscription), badge, points, is_initial constraint, and complete history tracking with embedded data
+- **Plan Management**: Reusable plan templates (name, duration, description, sequence) that can be associated with multiple packages
+- **Package-Plan Management**: Link plans to packages with pricing (USD/BDT), token amounts, is_initial constraint (one per package), and active status
+- **Payment Processing**: Integrated payment gateways (Stripe for USD & SSL Commerz for BDT) with webhook support and server-side redirect handling. Requires plan_id for each payment, fetches price from package-plan, and uses atomic updates to prevent duplicate processing
+- **Wallet Management**: User wallet system with token balance tracking, expiration dates (calculated from plan duration), package and plan associations, initial package/token tracking, and automatic expiration filtering via pre-find hooks
 - **Transaction History**: Complete audit trail for all token and payment transactions with detailed status tracking
 - **Feature Access Control**: Define features with parent-child relationships and endpoints with token requirements
 - **Profit Management**: Configurable profit percentage settings with complete history tracking
@@ -39,7 +39,7 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Public API Access**: Public endpoints for features, feature-endpoints, packages, and payment methods (no authentication required)
 - **Contact Management**: Contact form submission handling
 - **Admin Dashboard**: Comprehensive analytics dashboard with statistics, revenue trends, transaction status, payment method performance, token flow, user growth, package performance, and feature performance charts
-- **Token Process Module**: Server-to-server token processing system for validating user tokens, checking feature access, and managing token consumption with automatic profit calculation
+- **Token Process Module**: Server-to-server token processing system for validating user tokens, checking feature access (only if wallet has package), managing token consumption with automatic profit calculation, and auto-creating wallets if needed
 
 ### Technical Features
 
@@ -58,7 +58,11 @@ A robust, scalable token-based payment system server built with Node.js, Express
 - **Server-to-Server Authentication**: API key-based authentication middleware for internal service communication
 - **Aggregation Pipelines**: MongoDB aggregation for efficient analytics and dashboard data processing
 - **Package Plans System**: Multiple plans per package with individual pricing, duration, and token amounts
-- **Embedded History**: PackageHistory stores embedded feature and plan data for immutable snapshots
+- **Embedded History**: PackageHistory stores embedded feature and plan data for immutable snapshots (ensures data integrity even if referenced documents are deleted)
+- **Server-Side Redirect Handling**: Secure payment gateway redirect processing with atomic status updates and duplicate prevention
+- **AppQueryV2**: Aggregation-based query builder for complex joins and single database hits, supporting custom pipeline stages
+- **Wallet Expiration Logic**: Automatic filtering of expired wallets via Mongoose pre-find hooks with `$or` condition merging
+- **Initial Package/Plan Logic**: Support for initial package and plan designation with atomic constraint enforcement (only one initial per type)
 
 ---
 
@@ -254,6 +258,7 @@ erDiagram
         string name "Required, 2-100 characters, Indexed"
         string description "Optional, Max 500 characters"
         number duration "Required, Min: 1 day, Indexed"
+        number sequence "Optional, For ordering plans"
         boolean is_active "Optional, Default: true, Indexed"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
@@ -279,9 +284,13 @@ erDiagram
         string name "Required, Package title"
         string description "Optional"
         string content "Optional, HTML allowed, Detailed info"
+        string type "Optional, Enum: token | subscription, Default: token"
+        string badge "Optional, Package badge text"
+        array points "Optional, Array of string, Package selling points"
         array features "Required, Reference: Feature._id[]"
         array plans "Optional, Reference: Plan._id[]"
         number sequence "Optional, Default: 0"
+        boolean is_initial "Optional, Default: false, Only one package can be initial"
         boolean is_active "Optional, Default: true, Package availability"
         boolean is_deleted "Optional, Default: false, Soft delete"
         timestamp created_at "Optional, Auto-generated"
@@ -363,6 +372,8 @@ erDiagram
         ObjectId price FK "Required, Reference: PackagePlan._id (stores package-plan document _id), Indexed"
         number amount "Required, Payment amount"
         string currency "Required, Enum: USD | BDT, Payment currency"
+        string return_url "Required, Frontend return URL (stored, not passed to gateway)"
+        string cancel_url "Required, Frontend cancel URL (stored, not passed to gateway)"
         number gateway_fee "Optional, Fee charged by payment gateway"
         string failure_reason "Optional, Reason if payment failed"
         string refund_id "Optional, Gateway refund transaction ID"
@@ -457,21 +468,24 @@ erDiagram
 
 ### Key Relationships
 
-1. **User → UserWallet**: One-to-Many (A user can have multiple wallets over time)
+1. **User → UserWallet**: One-to-One (Unique constraint, one wallet per user)
 2. **Package → Features**: Many-to-Many (Packages include multiple features)
 3. **Package → Plans**: Many-to-Many via PackagePlan (Packages can have multiple plans)
 4. **Plan → PackagePlan**: One-to-Many (A plan can be used in multiple packages)
-5. **Package → PackagePlan**: One-to-Many (A package can have multiple plans)
-6. **Feature → FeatureEndpoint**: One-to-Many (Each feature has multiple endpoints)
-7. **UserWallet → TokenTransaction**: One-to-Many (Wallet records all token movements)
-8. **PaymentTransaction → TokenTransaction**: One-to-Many (Payment triggers token increase)
-9. **PaymentTransaction → Plan**: Many-to-One (Each payment is for a specific plan)
-10. **PaymentTransaction → PackagePlan**: Many-to-One (Each payment references a package-plan for price)
-11. **UserWallet → Plan**: Many-to-One (Wallet can be associated with a plan)
-12. **TokenTransaction → Plan**: Many-to-One (Token transactions can reference a plan)
-13. **User → Notification**: One-to-Many (Users can send multiple notifications)
-14. **Notification → NotificationRecipient**: One-to-Many (Notifications can have multiple recipients)
-15. **User → NotificationRecipient**: One-to-Many (Users can receive multiple notifications)
+5. **Package → PackagePlan**: One-to-Many (A package can have multiple plans, only one can be initial)
+6. **PackagePlan → Plan**: Many-to-One (Package-plan references a plan)
+7. **PackagePlan → Package**: Many-to-One (Package-plan belongs to a package)
+8. **Feature → FeatureEndpoint**: One-to-Many (Each feature has multiple endpoints)
+9. **UserWallet → TokenTransaction**: One-to-Many (Wallet records all token movements)
+10. **UserWallet → Package**: Many-to-One (Wallet can reference a purchased package)
+11. **UserWallet → Plan**: Many-to-One (Wallet can reference a purchased plan)
+12. **PaymentTransaction → TokenTransaction**: One-to-Many (Payment triggers token increase)
+13. **PaymentTransaction → Plan**: Many-to-One (Each payment is for a specific plan)
+14. **PaymentTransaction → PackagePlan**: Many-to-One (Each payment references a package-plan for price)
+15. **TokenTransaction → Plan**: Many-to-One (Token transactions can reference a plan)
+16. **User → Notification**: One-to-Many (Users can send multiple notifications)
+17. **Notification → NotificationRecipient**: One-to-Many (Notifications can have multiple recipients)
+18. **User → NotificationRecipient**: One-to-Many (Users can receive multiple notifications)
 
 ---
 
@@ -553,18 +567,19 @@ These endpoints are available for client-side access without authentication:
 - `GET /api/feature-endpoints/public` - Get all active public feature endpoints
 - `GET /api/feature-endpoints/:id/public` - Get single public feature endpoint by ID
 - `GET /api/plans/public` - Get all active public plans
-- `GET /api/packages/public` - Get all active public packages (supports `plans` query parameter for filtering)
-- `GET /api/packages/:id/public` - Get single public package by ID
+- `GET /api/packages/public` - Get all active public packages (supports `plans` query parameter for filtering by plan ID, uses AppQueryV2 aggregation)
+- `GET /api/packages/:id/public` - Get single public package by ID (with populated plans from package-plans)
 - `GET /api/payment-methods/public` - Get all active public payment methods
 - `GET /api/payment-methods/:id/public` - Get single public payment method by ID
 - `GET /api/users/writers` - Get public writers list
 
 ### Payment-Specific Endpoints
 
-- `POST /api/payment-transactions/initiate` - Initiate payment (authenticated, requires `plan_id` in request body)
+- `POST /api/payment-transactions/initiate` - Initiate payment (authenticated, requires `plan_id`, `return_url`, `cancel_url` in request body)
+- `GET/POST /api/payment-transactions/redirect` - Redirect handler (no auth, called by payment gateways, processes status and redirects to frontend)
 - `POST /api/payment-transactions/webhook/:payment_method_id` - Webhook handler (no auth, signature verified)
 - `GET /api/payment-transactions/:id/status` - Check payment status (authenticated)
-- `POST /api/payment-transactions/:id/verify` - Verify payment (authenticated)
+- `POST /api/payment-transactions/:id/verify` - Verify payment (authenticated, uses transaction document `_id`)
 
 ### Notification-Specific Endpoints
 
@@ -609,6 +624,15 @@ These endpoints are available for client-side access without authentication:
 
 - `POST /api/token-process/start` - Start token process (server-to-server authentication required)
 - `POST /api/token-process/end` - End token process and update wallet (server-to-server authentication required)
+
+### Package-Specific Endpoints
+
+- `POST /api/packages/give-initial-package` - Give initial package to user as bonus (server-to-server authentication required)
+- `PATCH /api/packages/:id/is-initial` - Update package is_initial status (admin only, ensures only one is initial)
+
+### User Wallet-Specific Endpoints
+
+- `POST /api/user-wallets/give-initial-token` - Give initial token to user (server-to-server authentication required, supports optional duration parameter)
 
 ---
 
@@ -753,19 +777,26 @@ sequenceDiagram
     participant Client
     participant API
     participant Gateway
+    participant Redirect
     participant Webhook
 
-    Client->>API: POST /api/payment-transactions/initiate
-    API->>Gateway: Initiate Payment
+    Client->>API: POST /api/payment-transactions/initiate<br/>(plan_id, return_url, cancel_url)
+    API->>API: Store frontend URLs<br/>Create payment transaction<br/>Validate plan & package-plan
+    API->>Gateway: Initiate Payment<br/>(with server redirect URLs)
     Gateway-->>API: Payment URL/Session
     API-->>Client: Redirect URL
 
     Client->>Gateway: Complete Payment
+    Gateway->>Redirect: GET/POST /api/payment-transactions/redirect<br/>(transaction_id, status)
     Gateway->>Webhook: Payment Status Update
     Webhook->>API: POST /api/payment-transactions/webhook/:id
-    API->>API: Update Transaction Status
-    API->>API: Allocate Tokens to Wallet
+    API->>API: Update Transaction Status<br/>(atomic: status != 'success')
+    API->>API: Allocate Tokens to Wallet<br/>(from package-plan)
     API-->>Webhook: 200 OK
+    Redirect->>API: Process redirect<br/>Determine status from params
+    API->>API: Update status if needed<br/>(atomic update prevents duplicates)
+    API->>Redirect: Frontend URL with transaction_id
+    Redirect-->>Client: Redirect to frontend<br/>(success/cancel page)
 ```
 
 ### Payment Gateway Factory
@@ -789,6 +820,38 @@ Webhook URL format:
 ```
 POST /api/payment-transactions/webhook/:payment_method_id
 ```
+
+### Redirect Handling
+
+The system implements **server-side redirect handling** for enhanced security and reliability:
+
+**Flow**:
+1. Frontend provides `return_url` and `cancel_url` during payment initiation
+2. Server stores these URLs in the payment transaction document
+3. Server constructs its own redirect URLs: `/api/payment-transactions/redirect?transaction_id={id}&status=success/cancel`
+4. Server passes these redirect URLs to the payment gateway
+5. Gateway redirects to server's redirect endpoint after payment
+6. Server processes payment status, updates transaction atomically, then redirects to stored frontend URL
+
+**Redirect Endpoint**:
+```
+GET/POST /api/payment-transactions/redirect?transaction_id={id}&status={status}
+```
+
+**Features**:
+- Supports both GET (SSLCommerz) and POST (Stripe) redirects
+- Extracts transaction ID from various gateway parameters (`transaction_id`, `tran_id`, `val_id`)
+- Determines payment status from gateway parameters
+- Uses atomic updates to prevent duplicate processing
+- Appends correct `transaction_id` (MongoDB `_id`) to frontend redirect URL
+- Updates stored URLs in transaction document for consistency
+
+**Benefits**:
+- Centralized payment status processing
+- Secure handling of payment callbacks
+- Consistent transaction ID format (always MongoDB `_id`)
+- Prevents duplicate processing with atomic operations
+- Works seamlessly with both Stripe and SSLCommerz
 
 ### Adding a New Payment Gateway
 
@@ -837,25 +900,32 @@ The token process module provides server-to-server token processing for external
 
 ### Features
 
+- **Wallet Auto-Creation**: Automatically creates wallet if user doesn't have one (with 0 tokens, no package)
 - **Token Validation**: Validates user tokens against feature endpoint requirements
-- **Feature Access Check**: Verifies if user's package includes the requested feature
-- **Token Consumption**: Calculates final cost including profit percentages and updates wallet
+- **Feature Access Check**: Verifies if user's package includes the requested feature (only if wallet has a package)
+- **Package Validation Skip**: If wallet has no package, skips package feature validation and only checks token amount
+- **Token Consumption**: Calculates final cost including profit percentages (sum of all active profit percentages) and updates wallet
 - **Server-to-Server Auth**: API key-based authentication for secure internal communication
 - **Negative Balance Support**: Allows negative token balances for adjustment during next purchase
+- **Atomic Operations**: Uses MongoDB transactions for atomic wallet updates and token transaction creation
+- **API-Friendly Responses**: Returns status objects instead of throwing errors for easier integration
 
 ### API Endpoints
 
 **Start Token Process** (`POST /api/token-process/start`):
-- Validates user wallet exists and is active
-- Checks if feature endpoint is included in user's package
+- Creates wallet if user doesn't have one (with 0 tokens)
+- Validates user wallet exists and is not expired
+- Checks if feature endpoint is included in user's package (only if wallet has a package)
 - Validates user has sufficient tokens
-- Returns access status
+- Returns access status with user token balance
+- Returns API-friendly responses (doesn't throw errors, returns status objects)
 
 **End Token Process** (`POST /api/token-process/end`):
-- Calculates final cost with profit percentage
-- Creates token transaction record
-- Updates user wallet balance (allows negative)
-- Returns updated token balance
+- Calculates final cost with profit percentage (sum of all active profit percentages)
+- Uses MongoDB transaction for atomic wallet update and token transaction creation
+- Creates token transaction record (decrease type)
+- Updates user wallet balance atomically (allows negative for adjustment)
+- Returns updated token balance and final cost
 
 ### Usage Example
 
@@ -954,7 +1024,11 @@ Follow the existing module pattern:
 3. Register route in `src/app/routes/index.ts`
 4. Follow naming conventions and patterns
 
-See `EXECUTION_GUIDE.md` for detailed module generation instructions.
+See `documents/EXECUTION_GUIDE.md` for detailed module generation instructions.
+
+For comprehensive project analysis and payment process documentation, see:
+- `PAYMENT_PROCESS_ANALYSIS.md` - Complete payment flow analysis with duplicate prevention and security measures
+- `FULL_PROJECT_ANALYSIS.md` - Full project analysis with all modules, edge cases, and production readiness checklist
 
 ---
 
