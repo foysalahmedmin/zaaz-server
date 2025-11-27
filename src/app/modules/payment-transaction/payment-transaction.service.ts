@@ -105,11 +105,39 @@ export const updatePaymentTransactionStatus = async (
     }
 
     // Update wallet with package tokens, package reference, plan, and expiration
-    await UserWallet.findByIdAndUpdate(
-      updateResult.user_wallet,
-      updateWalletData,
-      { session },
-    );
+    try {
+      const walletUpdateResult = await UserWallet.findByIdAndUpdate(
+        updateResult.user_wallet,
+        updateWalletData,
+        { session, new: true },
+      );
+
+      if (!walletUpdateResult) {
+        console.error('[Payment Success] Wallet not found for update:', {
+          walletId: updateResult.user_wallet,
+          transactionId: id,
+        });
+        throw new AppError(
+          httpStatus.NOT_FOUND,
+          'User wallet not found for update',
+        );
+      }
+
+      console.log('[Payment Success] Wallet updated successfully:', {
+        walletId: updateResult.user_wallet,
+        transactionId: id,
+        tokenAdded: packagePlan.token,
+        packageId: updateResult.package,
+        planId: updateResult.plan,
+      });
+    } catch (error) {
+      console.error('[Payment Success] Failed to update wallet:', {
+        walletId: updateResult.user_wallet,
+        transactionId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
 
     // Check if token transaction already exists for this payment transaction
     // This prevents duplicate token transactions in case of race conditions
@@ -123,19 +151,39 @@ export const updatePaymentTransactionStatus = async (
 
     if (!existingTokenTransaction) {
       // Create token transaction record only if it doesn't exist
-      await TokenTransaction.create(
-        [
-          {
-            user: updateResult.user,
-            user_wallet: updateResult.user_wallet,
-            type: 'increase',
-            token: packagePlan.token,
-            increase_source: 'payment',
-            payment_transaction: id,
-            plan: updateResult.plan,
-          },
-        ],
-        { session },
+      try {
+        await TokenTransaction.create(
+          [
+            {
+              user: updateResult.user, // ObjectId directly, not populated
+              user_wallet: updateResult.user_wallet,
+              type: 'increase',
+              token: packagePlan.token,
+              increase_source: 'payment',
+              payment_transaction: id,
+              plan: updateResult.plan,
+            },
+          ],
+          { session },
+        );
+        console.log('[Payment Success] Token transaction created:', {
+          transactionId: id,
+          tokenAmount: packagePlan.token,
+          userId: updateResult.user,
+        });
+      } catch (error) {
+        console.error('[Payment Success] Failed to create token transaction:', {
+          transactionId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    } else {
+      console.log(
+        '[Payment Success] Token transaction already exists, skipping:',
+        {
+          transactionId: id,
+        },
       );
     }
 
@@ -209,6 +257,7 @@ export const getPaymentTransactions = async (
     ]),
     { ...rest, ...filter },
   )
+    .filter()
     .sort()
     .paginate()
     .fields()
@@ -221,22 +270,43 @@ export const getPaymentTransactions = async (
 
 export const getPaymentTransaction = async (
   id: string,
+  userId?: string,
 ): Promise<TPaymentTransaction> => {
-  const result = await PaymentTransaction.findById(id).populate([
-    { path: 'user_wallet', select: '_id token' },
-    { path: 'payment_method', select: '_id name currency' },
-    { path: 'package', select: '_id name' },
-    { path: 'plan', select: '_id name duration' },
-    { path: 'price', select: '_id price token' }, // package-plan
-  ]);
+  const result = await PaymentTransaction.findById(id)
+    .populate([
+      { path: 'user_wallet', select: '_id token' },
+      { path: 'payment_method', select: '_id name currency' },
+      { path: 'package', select: '_id name' },
+      { path: 'plan', select: '_id name duration' },
+      { path: 'price', select: '_id price token' }, // package-plan
+      // Note: user is NOT populated because user database is separate
+      // user field contains ObjectId directly
+    ])
+    .lean();
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
+
+  // If userId is provided, verify the transaction belongs to this user
+  // user field is ObjectId, not populated
+  if (userId) {
+    const transactionUserId = (
+      result.user as mongoose.Types.ObjectId
+    ).toString();
+    if (transactionUserId !== userId.toString()) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You do not have permission to access this payment transaction',
+      );
+    }
+  }
+
   return result;
 };
 
 export const getPaymentTransactionStatus = async (
   id: string,
+  userId?: string,
 ): Promise<{
   status: TPaymentTransaction['status'];
   gateway_status?: string;
@@ -244,11 +314,25 @@ export const getPaymentTransactionStatus = async (
   currency: string;
 }> => {
   const transaction = await PaymentTransaction.findById(id)
-    .select('status gateway_status amount currency')
+    .select('status gateway_status amount currency user')
     .lean();
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  // If userId is provided, verify the transaction belongs to this user
+  // user field is ObjectId, not populated
+  if (userId) {
+    const transactionUserId = (
+      transaction.user as mongoose.Types.ObjectId
+    ).toString();
+    if (transactionUserId !== userId.toString()) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You do not have permission to access this payment transaction',
+      );
+    }
   }
 
   return {
@@ -262,6 +346,7 @@ export const getPaymentTransactionStatus = async (
 export const verifyPayment = async (
   id: string,
   session?: mongoose.ClientSession,
+  userId?: string,
 ): Promise<{
   verified: boolean;
   status: string;
@@ -270,10 +355,26 @@ export const verifyPayment = async (
   const transaction = await PaymentTransaction.findById(id)
     .session(session || null)
     .populate('payment_method')
+    // Note: user is NOT populated because user database is separate
+    // user field contains ObjectId directly
     .lean();
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  // If userId is provided, verify the transaction belongs to this user
+  // user field is ObjectId, not populated
+  if (userId) {
+    const transactionUserId = (
+      transaction.user as mongoose.Types.ObjectId
+    ).toString();
+    if (transactionUserId !== userId.toString()) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'You do not have permission to verify this payment transaction',
+      );
+    }
   }
 
   const paymentMethod = transaction.payment_method as any;
@@ -698,10 +799,13 @@ export const handlePaymentRedirect = async (params: {
     );
   }
 
-  // Get transaction to retrieve stored frontend URLs
-  const transaction = await PaymentTransaction.findById(transactionId).select(
-    'return_url cancel_url status',
-  );
+  // Get transaction to retrieve stored frontend URLs and payment method
+  const transaction = await PaymentTransaction.findById(transactionId)
+    .select(
+      'return_url cancel_url status payment_method gateway_transaction_id gateway_session_id',
+    )
+    .populate('payment_method')
+    .lean();
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
@@ -740,6 +844,38 @@ export const handlePaymentRedirect = async (params: {
     }
   }
 
+  // If status is still null and transaction is pending, verify with gateway
+  if (finalStatus === null && transaction.status === 'pending') {
+    try {
+      const paymentMethod = transaction.payment_method as any;
+      if (paymentMethod) {
+        const gateway = PaymentGatewayFactory.create(paymentMethod);
+        const gatewayTransactionId =
+          transaction.gateway_transaction_id || transaction.gateway_session_id;
+
+        if (gatewayTransactionId) {
+          const verificationResult =
+            await gateway.verifyPayment(gatewayTransactionId);
+          if (verificationResult.success) {
+            finalStatus = 'success';
+          } else {
+            finalStatus = 'failed';
+          }
+        } else {
+          // No gateway transaction ID, default to failed
+          finalStatus = 'failed';
+        }
+      } else {
+        // No payment method, default to failed
+        finalStatus = 'failed';
+      }
+    } catch (error) {
+      // If verification fails, default to failed
+      console.error('[Redirect] Gateway verification failed:', error);
+      finalStatus = 'failed';
+    }
+  }
+
   // Update transaction status if needed
   let statusUpdated = false;
   if (finalStatus === 'success' && transaction.status !== 'success') {
@@ -749,19 +885,39 @@ export const handlePaymentRedirect = async (params: {
       await updatePaymentTransactionStatus(transactionId, 'success');
       statusUpdated = true;
     } catch (error: unknown) {
-      // If update fails (e.g., already processed by webhook), just update status for display
-      // This can happen if webhook processed the payment before redirect
+      // If update fails, check if it's because transaction was already processed
       const appError = error as AppError;
       if (appError.status === httpStatus.NOT_FOUND) {
         // Transaction not found, re-throw
         throw error;
       }
-      // For other errors (e.g., already processed), update status for display
-      await PaymentTransaction.findByIdAndUpdate(transactionId, {
-        status: 'success',
-        paid_at: new Date(),
-      });
-      statusUpdated = true;
+
+      // Check if transaction is already success (processed by webhook)
+      const existingTransaction = await PaymentTransaction.findById(
+        transactionId,
+      )
+        .select('status')
+        .lean();
+
+      if (existingTransaction?.status === 'success') {
+        // Already processed, just mark as updated
+        statusUpdated = true;
+      } else {
+        // For other errors, try to update status for display
+        // But also log the error for investigation
+        console.error('[Redirect] Failed to update payment status:', {
+          transactionId,
+          error: appError.message,
+          status: appError.status,
+        });
+
+        // Try to update status at least
+        await PaymentTransaction.findByIdAndUpdate(transactionId, {
+          status: 'success',
+          paid_at: new Date(),
+        });
+        statusUpdated = true;
+      }
     }
   } else if (finalStatus === 'failed' && transaction.status === 'pending') {
     await PaymentTransaction.findByIdAndUpdate(transactionId, {

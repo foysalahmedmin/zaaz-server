@@ -23,6 +23,18 @@ router.get(
   ),
   PaymentTransactionControllers.getPaymentTransactions,
 );
+
+// GET/POST - Redirect handler (no auth, called by payment gateways)
+// MUST be placed before parameterized routes (/:id) to avoid route conflicts
+// Supports both GET (SSLCommerz) and POST (Stripe) redirects
+router.get('/redirect', PaymentTransactionControllers.handleRedirect);
+router.post(
+  '/redirect',
+  express.urlencoded({ extended: true }),
+  express.json(),
+  PaymentTransactionControllers.handleRedirect,
+);
+
 router.get(
   '/:id/status',
   auth('user', 'admin'),
@@ -48,17 +60,6 @@ router.post(
   PaymentTransactionControllers.initiatePayment,
 );
 
-// GET/POST - Redirect handler (no auth, called by payment gateways)
-// Must be placed before other routes to avoid conflicts
-// Supports both GET (SSLCommerz) and POST (Stripe) redirects
-router.get('/redirect', PaymentTransactionControllers.handleRedirect);
-router.post(
-  '/redirect',
-  express.urlencoded({ extended: true }),
-  express.json(),
-  PaymentTransactionControllers.handleRedirect,
-);
-
 // POST - Verify payment
 router.post(
   '/:id/verify',
@@ -74,44 +75,80 @@ router.post(
 router.post(
   '/webhook/:payment_method_id',
   express.raw({
-    type: ['application/json', 'application/x-www-form-urlencoded'],
+    type: [
+      'application/json',
+      'application/x-www-form-urlencoded',
+      'text/plain',
+    ],
+    verify: (req: express.Request, _res: express.Response, buf: Buffer) => {
+      // Store raw body buffer BEFORE any parsing (Stripe needs this for signature verification)
+      (req as any).rawBody = buf;
+    },
   }),
   (
     req: express.Request,
     _res: express.Response,
     next: express.NextFunction,
   ) => {
+    // req.body is now a Buffer from express.raw()
     // Store raw body for signature verification (Stripe needs this)
-    (req as any).rawBody = req.body;
+    if (!(req as any).rawBody) {
+      (req as any).rawBody = req.body;
+    }
 
-    // Try to parse as JSON first, then as URL-encoded
+    // Parse body based on content type
     try {
-      const bodyString = req.body.toString();
+      // Check if body is already a Buffer
+      const bodyBuffer = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(String(req.body));
+      const bodyString = bodyBuffer.toString('utf8');
       const contentType = req.headers['content-type'] || '';
 
       if (contentType.includes('application/json')) {
-        (req as any).body = JSON.parse(bodyString);
+        // Parse as JSON
+        try {
+          (req as any).body = JSON.parse(bodyString);
+        } catch (parseError) {
+          // If JSON parsing fails, keep as raw buffer
+          console.warn(
+            '[Webhook Route] JSON parse failed, keeping raw body:',
+            parseError,
+          );
+          (req as any).body = bodyBuffer;
+        }
       } else if (
         contentType.includes('application/x-www-form-urlencoded') ||
         contentType.includes('text/plain')
       ) {
-        // Parse as URL-encoded form data
-        const params = new URLSearchParams(bodyString);
-        (req as any).body = Object.fromEntries(params);
+        // Parse as URL-encoded form data (SSLCommerz)
+        try {
+          const params = new URLSearchParams(bodyString);
+          (req as any).body = Object.fromEntries(params);
+        } catch (parseError) {
+          // If parsing fails, keep as raw buffer
+          console.warn(
+            '[Webhook Route] Form data parse failed, keeping raw body:',
+            parseError,
+          );
+          (req as any).body = bodyBuffer;
+        }
       } else {
-        // Try to parse as form data even if content-type is not set (SSLCommerz sometimes doesn't set it)
+        // Unknown content type, try to parse as form data (SSLCommerz sometimes doesn't set content-type)
         try {
           const params = new URLSearchParams(bodyString);
           (req as any).body = Object.fromEntries(params);
         } catch {
-          // Keep as raw buffer
-          (req as any).body = req.body;
+          // If all parsing fails, keep as raw buffer
+          (req as any).body = bodyBuffer;
         }
       }
     } catch (error) {
-      console.error('[Webhook Route] Parsing error:', error);
-      // If parsing fails, keep raw body
-      (req as any).body = req.body;
+      console.error('[Webhook Route] Body processing error:', error);
+      // If processing fails, keep raw body as buffer
+      (req as any).body = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(String(req.body));
     }
     next();
   },

@@ -75,6 +75,7 @@ export const getTokenTransactions = async (
     ]),
     { ...rest, ...filter },
   )
+    .filter()
     .sort()
     .paginate()
     .fields()

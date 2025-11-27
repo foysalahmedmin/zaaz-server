@@ -124,11 +124,13 @@ export const getUserWallets = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TUserWallet[]; meta: any }> => {
   const AppQuery = (await import('../../builder/AppQuery')).default;
-  const query = UserWallet.find().populate('package').populate('user');
+  // Note: user is NOT populated because user database is separate
+  // user field contains ObjectId directly
+  const query = UserWallet.find().populate('package');
   const appQuery = new AppQuery<TUserWallet>(query, query_params);
 
   appQuery
-    .search(['user'])
+    .search(['user']) // Search by user ObjectId string
     .filter()
     .sort()
     .paginate()
