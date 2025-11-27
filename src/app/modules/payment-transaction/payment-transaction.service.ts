@@ -370,9 +370,11 @@ export const getPaymentTransactionStatus = async (
   gateway_status?: string;
   amount: number;
   currency: string;
+  return_url?: string;
+  cancel_url?: string;
 }> => {
   const transaction = await PaymentTransaction.findById(id)
-    .select('status gateway_status amount currency user')
+    .select('status gateway_status amount currency user return_url cancel_url')
     .lean();
 
   if (!transaction) {
@@ -398,6 +400,8 @@ export const getPaymentTransactionStatus = async (
     gateway_status: transaction.gateway_status,
     amount: transaction.amount,
     currency: transaction.currency,
+    return_url: transaction.return_url,
+    cancel_url: transaction.cancel_url,
   };
 };
 
@@ -857,20 +861,33 @@ export const handlePaymentRedirect = async (params: {
     );
   }
 
-  // Get transaction to retrieve stored frontend URLs and payment method
+  // Get transaction to retrieve stored frontend URLs
   const transaction = await PaymentTransaction.findById(transactionId)
-    .select(
-      'return_url cancel_url status payment_method gateway_transaction_id gateway_session_id',
-    )
-    .populate('payment_method')
+    .select('return_url cancel_url status')
     .lean();
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
 
-  // SSLCommerz success indicators: val_id (validation ID) or status=VALID
-  const hasValId = params.val_id;
+  // Log redirect parameters for debugging
+  console.log(
+    '[Redirect] Processing redirect (webhook will handle status update):',
+    {
+      transactionId,
+      currentStatus: transaction.status,
+      hasValId: !!params.val_id,
+      statusParam:
+        typeof params.status === 'string' ? params.status : params.status?.[0],
+      hasError: !!params.error,
+    },
+  );
+
+  // Determine redirect URL based on params (for user experience only)
+  // Webhook will handle actual status update and wallet processing
+  let redirectUrl = transaction.return_url || '/';
+
+  // Check if params suggest failure/cancel
   const statusParam =
     typeof params.status === 'string' ? params.status : params.status?.[0];
   const hasError =
@@ -880,233 +897,39 @@ export const handlePaymentRedirect = async (params: {
       : params.error?.[0] || ''
     ).trim() !== '';
 
-  // Log redirect parameters for debugging (especially for SSLCommerz)
-  console.log('[Redirect] Processing redirect with params:', {
-    transactionId,
-    hasValId: !!hasValId,
-    statusParam,
-    hasError,
-    val_id: params.val_id,
-    tran_id: params.tran_id,
-    allParams: Object.keys(params),
-  });
-
-  // Determine final status
-  let finalStatus: 'success' | 'failed' | 'cancel' | null = null;
-  if (hasValId || statusParam === 'VALID' || statusParam === 'success') {
-    finalStatus = 'success';
-    console.log(
-      '[Redirect] Status determined as success from val_id or status param',
-    );
-  } else if (
+  // Use cancel_url if params suggest failure/cancel
+  if (
     hasError ||
     statusParam === 'FAILED' ||
     statusParam === 'failed' ||
     statusParam === 'cancel'
   ) {
-    finalStatus = statusParam === 'cancel' ? 'cancel' : 'failed';
-    console.log(
-      '[Redirect] Status determined as failed/cancel from error or status param',
-    );
-  } else if (statusParam) {
-    // Map other status values
-    if (statusParam.toLowerCase().includes('success')) {
-      finalStatus = 'success';
-      console.log(
-        '[Redirect] Status determined as success from status param (contains success)',
-      );
-    } else if (statusParam.toLowerCase().includes('cancel')) {
-      finalStatus = 'cancel';
-      console.log('[Redirect] Status determined as cancel from status param');
-    } else {
-      finalStatus = 'failed';
-      console.log('[Redirect] Status determined as failed from status param');
-    }
+    redirectUrl = transaction.cancel_url || transaction.return_url || '/';
+    console.log('[Redirect] Redirecting to cancel URL based on params');
   } else {
     console.log(
-      '[Redirect] Status not determined from params, will verify with gateway',
+      '[Redirect] Redirecting to success URL (webhook will confirm payment)',
     );
   }
 
-  // If status is still null and transaction is pending, verify with gateway
-  if (finalStatus === null && transaction.status === 'pending') {
-    console.log('[Redirect] Status is null, verifying with gateway...', {
-      transactionId,
-      gatewayTransactionId: transaction.gateway_transaction_id,
-      gatewaySessionId: transaction.gateway_session_id,
-      paymentMethodName: (transaction.payment_method as any)?.name,
-    });
-    try {
-      const paymentMethod = transaction.payment_method as any;
-      if (paymentMethod) {
-        const gateway = PaymentGatewayFactory.create(paymentMethod);
-        const gatewayTransactionId =
-          transaction.gateway_transaction_id || transaction.gateway_session_id;
-
-        if (gatewayTransactionId) {
-          console.log('[Redirect] Calling gateway verifyPayment...', {
-            gatewayTransactionId,
-            paymentMethod: paymentMethod.name,
-          });
-          const verificationResult =
-            await gateway.verifyPayment(gatewayTransactionId);
-          console.log('[Redirect] Gateway verification result:', {
-            success: verificationResult.success,
-            status: verificationResult.status,
-          });
-          if (verificationResult.success) {
-            finalStatus = 'success';
-            console.log(
-              '[Redirect] Status set to success after gateway verification',
-            );
-          } else {
-            finalStatus = 'failed';
-            console.log(
-              '[Redirect] Status set to failed after gateway verification',
-            );
-          }
-        } else {
-          // No gateway transaction ID, default to failed
-          console.warn(
-            '[Redirect] No gateway transaction ID found, defaulting to failed',
-          );
-          finalStatus = 'failed';
-        }
-      } else {
-        // No payment method, default to failed
-        console.warn(
-          '[Redirect] No payment method found, defaulting to failed',
-        );
-        finalStatus = 'failed';
-      }
-    } catch (error) {
-      // If verification fails, default to failed
-      console.error('[Redirect] Gateway verification failed:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      finalStatus = 'failed';
-    }
-  } else if (finalStatus === null) {
-    console.log(
-      '[Redirect] Status is null but transaction is not pending, skipping verification',
-      {
-        transactionId,
-        currentStatus: transaction.status,
-      },
-    );
-  }
-
-  // Update transaction status if needed
-  let statusUpdated = false;
-  console.log('[Redirect] Final status determined:', {
-    finalStatus,
-    currentTransactionStatus: transaction.status,
-    willUpdate: finalStatus === 'success' && transaction.status !== 'success',
-  });
-
-  if (finalStatus === 'success' && transaction.status !== 'success') {
-    // Only update if not already success (prevent double processing)
-    // Use updatePaymentTransactionStatus to also update wallet and create token transaction
-    console.log(
-      '[Redirect] Calling updatePaymentTransactionStatus for success...',
-      {
-        transactionId,
-      },
-    );
-    try {
-      await updatePaymentTransactionStatus(transactionId, 'success');
-      statusUpdated = true;
-      console.log(
-        '[Redirect] Successfully updated payment transaction status and wallet',
-      );
-    } catch (error: unknown) {
-      // If update fails, check if it's because transaction was already processed
-      const appError = error as AppError;
-      if (appError.status === httpStatus.NOT_FOUND) {
-        // Transaction not found, re-throw
-        throw error;
-      }
-
-      // Check if transaction is already success (processed by webhook)
-      const existingTransaction = await PaymentTransaction.findById(
-        transactionId,
-      )
-        .select('status')
-        .lean();
-
-      if (existingTransaction?.status === 'success') {
-        // Already processed, just mark as updated
-        statusUpdated = true;
-      } else {
-        // For other errors, try to update status for display
-        // But also log the error for investigation
-        console.error('[Redirect] Failed to update payment status:', {
-          transactionId,
-          error: appError.message,
-          status: appError.status,
-        });
-
-        // Try to update status at least
-        await PaymentTransaction.findByIdAndUpdate(transactionId, {
-          status: 'success',
-          paid_at: new Date(),
-        });
-        statusUpdated = true;
-      }
-    }
-  } else if (finalStatus === 'failed' && transaction.status === 'pending') {
-    console.log('[Redirect] Updating transaction status to failed...', {
-      transactionId,
-    });
-    await PaymentTransaction.findByIdAndUpdate(transactionId, {
-      status: 'failed',
-      failed_at: new Date(),
-      failure_reason: 'Payment failed or cancelled by user',
-    });
-    statusUpdated = true;
-    console.log('[Redirect] Transaction status updated to failed');
-  } else if (finalStatus === null) {
-    console.warn('[Redirect] Final status is null, cannot update transaction', {
-      transactionId,
-      currentStatus: transaction.status,
-      params: Object.keys(params),
-    });
-  }
-
-  // Determine redirect URL based on status
-  let redirectUrl = transaction.return_url || '/';
-
-  // Use cancel_url if status is cancel or failed, otherwise use return_url
-  if (finalStatus === 'cancel' || finalStatus === 'failed') {
-    redirectUrl = transaction.cancel_url || transaction.return_url || '/';
-  }
-
-  // Use transaction document _id (not gateway transaction ID) for verifyPayment API
-  // This is the MongoDB ObjectId that verifyPayment expects
+  // Use transaction document _id for frontend polling
   const transactionDocumentId = transactionId;
 
-  // Append transaction_id (document _id) and status to redirect URL if not already present
+  // Append transaction_id to redirect URL for frontend polling (NO status param)
   try {
     const url = new URL(redirectUrl);
     if (!url.searchParams.has('transaction_id')) {
       url.searchParams.set('transaction_id', transactionDocumentId);
-    }
-    if (!url.searchParams.has('status') && finalStatus) {
-      url.searchParams.set('status', finalStatus);
     }
     redirectUrl = url.toString();
   } catch {
     // If redirectUrl is not a valid URL, append query params manually
     const separator = redirectUrl.includes('?') ? '&' : '?';
     redirectUrl = `${redirectUrl}${separator}transaction_id=${transactionDocumentId}`;
-    if (finalStatus) {
-      redirectUrl += `&status=${finalStatus}`;
-    }
   }
 
   // Update return_url and cancel_url in transaction document with proper transaction_id
-  // This ensures the URLs always have the correct transaction_id for verifyPayment
+  // This ensures the URLs always have the correct transaction_id for frontend polling
   // Only update if URLs don't already have transaction_id to avoid unnecessary writes
   const updateData: any = {};
 
@@ -1153,7 +976,12 @@ export const handlePaymentRedirect = async (params: {
     );
   }
 
-  return { redirectUrl, statusUpdated };
+  // NO STATUS UPDATE - Webhook will handle all processing
+  console.log(
+    '[Redirect] Redirecting user to frontend (status update will be handled by webhook)',
+  );
+
+  return { redirectUrl, statusUpdated: false };
 };
 
 const prepareWebhookUpdateData = (
