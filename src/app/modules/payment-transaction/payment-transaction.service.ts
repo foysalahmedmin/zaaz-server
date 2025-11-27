@@ -370,11 +370,16 @@ export const getPaymentTransactionStatus = async (
   gateway_status?: string;
   amount: number;
   currency: string;
+  payment_method_id?: string;
+  payment_method_name?: string;
   return_url?: string;
   cancel_url?: string;
 }> => {
   const transaction = await PaymentTransaction.findById(id)
-    .select('status gateway_status amount currency user return_url cancel_url')
+    .select(
+      'status gateway_status amount currency user payment_method return_url cancel_url',
+    )
+    .populate('payment_method', 'name')
     .lean();
 
   if (!transaction) {
@@ -395,11 +400,45 @@ export const getPaymentTransactionStatus = async (
     }
   }
 
+  // Handle payment_method (can be ObjectId or populated object)
+  let paymentMethodId: string | undefined;
+  let paymentMethodName: string | undefined;
+
+  if (transaction.payment_method) {
+    if (
+      typeof transaction.payment_method === 'object' &&
+      '_id' in transaction.payment_method &&
+      'name' in transaction.payment_method
+    ) {
+      // Populated payment method
+      const populatedMethod = transaction.payment_method as {
+        _id: mongoose.Types.ObjectId;
+        name: string;
+      };
+      paymentMethodId = populatedMethod._id.toString();
+      paymentMethodName = populatedMethod.name;
+    } else if (transaction.payment_method instanceof mongoose.Types.ObjectId) {
+      // Just ObjectId
+      paymentMethodId = transaction.payment_method.toString();
+    } else if (
+      typeof transaction.payment_method === 'object' &&
+      '_id' in transaction.payment_method
+    ) {
+      // ObjectId-like object
+      const methodId = (
+        transaction.payment_method as { _id: mongoose.Types.ObjectId }
+      )._id;
+      paymentMethodId = methodId.toString();
+    }
+  }
+
   return {
     status: transaction.status,
     gateway_status: transaction.gateway_status,
     amount: transaction.amount,
     currency: transaction.currency,
+    payment_method_id: paymentMethodId,
+    payment_method_name: paymentMethodName,
     return_url: transaction.return_url,
     cancel_url: transaction.cancel_url,
   };
@@ -861,9 +900,9 @@ export const handlePaymentRedirect = async (params: {
     );
   }
 
-  // Get transaction to retrieve stored frontend URLs
+  // Get transaction to retrieve stored frontend URLs and payment_method_id
   const transaction = await PaymentTransaction.findById(transactionId)
-    .select('return_url cancel_url status')
+    .select('return_url cancel_url status payment_method')
     .lean();
 
   if (!transaction) {
@@ -914,53 +953,80 @@ export const handlePaymentRedirect = async (params: {
 
   // Use transaction document _id for frontend polling
   const transactionDocumentId = transactionId;
+  const paymentMethodId =
+    transaction.payment_method &&
+    typeof transaction.payment_method === 'object' &&
+    '_id' in transaction.payment_method
+      ? (transaction.payment_method._id as mongoose.Types.ObjectId).toString()
+      : transaction.payment_method
+        ? (transaction.payment_method as mongoose.Types.ObjectId).toString()
+        : undefined;
 
-  // Append transaction_id to redirect URL for frontend polling (NO status param)
+  // Append transaction_id and payment_method_id to redirect URL for frontend polling
   try {
     const url = new URL(redirectUrl);
     if (!url.searchParams.has('transaction_id')) {
       url.searchParams.set('transaction_id', transactionDocumentId);
     }
+    if (paymentMethodId && !url.searchParams.has('payment_method_id')) {
+      url.searchParams.set('payment_method_id', paymentMethodId);
+    }
     redirectUrl = url.toString();
   } catch {
     // If redirectUrl is not a valid URL, append query params manually
     const separator = redirectUrl.includes('?') ? '&' : '?';
-    redirectUrl = `${redirectUrl}${separator}transaction_id=${transactionDocumentId}`;
+    const params = [`transaction_id=${transactionDocumentId}`];
+    if (paymentMethodId) {
+      params.push(`payment_method_id=${paymentMethodId}`);
+    }
+    redirectUrl = `${redirectUrl}${separator}${params.join('&')}`;
   }
 
-  // Update return_url and cancel_url in transaction document with proper transaction_id
-  // This ensures the URLs always have the correct transaction_id for frontend polling
-  // Only update if URLs don't already have transaction_id to avoid unnecessary writes
+  // Update return_url and cancel_url in transaction document with proper transaction_id and payment_method_id
+  // This ensures the URLs always have the correct params for frontend polling
+  // Only update if URLs don't already have these params to avoid unnecessary writes
   const updateData: any = {};
 
-  const updateUrlWithTransactionId = (url: string): string | null => {
+  const updateUrlWithParams = (url: string): string | null => {
     if (!url) return null;
     try {
       const urlObj = new URL(url);
+      let updated = false;
       if (!urlObj.searchParams.has('transaction_id')) {
         urlObj.searchParams.set('transaction_id', transactionDocumentId);
-        return urlObj.toString();
+        updated = true;
       }
-      return null; // Already has transaction_id
+      if (paymentMethodId && !urlObj.searchParams.has('payment_method_id')) {
+        urlObj.searchParams.set('payment_method_id', paymentMethodId);
+        updated = true;
+      }
+      return updated ? urlObj.toString() : null;
     } catch {
       // If URL is not valid, append query params manually
+      const params: string[] = [];
       if (!url.includes('transaction_id=')) {
-        const separator = url.includes('?') ? '&' : '?';
-        return `${url}${separator}transaction_id=${transactionDocumentId}`;
+        params.push(`transaction_id=${transactionDocumentId}`);
       }
-      return null; // Already has transaction_id
+      if (paymentMethodId && !url.includes('payment_method_id=')) {
+        params.push(`payment_method_id=${paymentMethodId}`);
+      }
+      if (params.length > 0) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}${params.join('&')}`;
+      }
+      return null; // Already has all params
     }
   };
 
   if (transaction.return_url) {
-    const updatedReturnUrl = updateUrlWithTransactionId(transaction.return_url);
+    const updatedReturnUrl = updateUrlWithParams(transaction.return_url);
     if (updatedReturnUrl) {
       updateData.return_url = updatedReturnUrl;
     }
   }
 
   if (transaction.cancel_url) {
-    const updatedCancelUrl = updateUrlWithTransactionId(transaction.cancel_url);
+    const updatedCancelUrl = updateUrlWithParams(transaction.cancel_url);
     if (updatedCancelUrl) {
       updateData.cancel_url = updatedCancelUrl;
     }

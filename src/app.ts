@@ -16,7 +16,14 @@ const app: Application = express();
 
 app.set('trust proxy', true);
 
-app.use(express.json({ limit: '1mb' }));
+// Global JSON body parser - but skip webhook routes (they need raw body for signature verification)
+app.use((req, res, next) => {
+  // Skip body parsing for webhook routes - they need raw body for Stripe signature verification
+  if (req.path.includes('/webhook/')) {
+    return next();
+  }
+  express.json({ limit: '1mb' })(req, res, next);
+});
 
 app.use(cookieParser());
 

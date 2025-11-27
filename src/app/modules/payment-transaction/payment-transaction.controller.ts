@@ -195,17 +195,37 @@ export const handleWebhook = catchAsync(async (req, res) => {
 
   // Get raw body buffer (for Stripe signature verification)
   // This should be captured by express.raw() verify option
+  // CRITICAL: For Stripe, we MUST use the raw Buffer, not the parsed body
   const rawBody = (req as any).rawBody;
 
   // Get parsed body (for SSLCommerz form data or general use)
   // For Stripe, we need to pass raw body buffer for signature verification
   // For SSLCommerz, we use parsed form data
   const contentType = req.headers['content-type'] || '';
-  const isStripe = contentType.includes('application/json') && signature.includes('t=');
-  
-  // For Stripe: use raw body buffer for signature verification
+  const isStripe =
+    contentType.includes('application/json') && signature.includes('t=');
+
+  // For Stripe: MUST use raw body buffer for signature verification
   // For SSLCommerz: use parsed body (form data)
-  const payload = isStripe && rawBody ? rawBody : ((req as any).body || rawBody);
+  // Ensure rawBody is a Buffer for Stripe
+  let payload: any;
+  if (isStripe) {
+    // Stripe requires raw Buffer for signature verification
+    if (Buffer.isBuffer(rawBody)) {
+      payload = rawBody;
+    } else if (rawBody) {
+      // Fallback: try to reconstruct Buffer (not ideal, but better than nothing)
+      payload = Buffer.from(
+        typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody),
+      );
+    } else {
+      // No rawBody available, use parsed body (signature verification will likely fail)
+      payload = (req as any).body;
+    }
+  } else {
+    // SSLCommerz: use parsed form data
+    payload = (req as any).body || rawBody;
+  }
 
   try {
     await PaymentTransactionServices.handlePaymentWebhook(
