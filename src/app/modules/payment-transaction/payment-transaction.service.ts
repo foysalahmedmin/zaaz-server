@@ -711,7 +711,12 @@ export const handlePaymentRedirect = async (params: {
   const hasValId = params.val_id;
   const statusParam =
     typeof params.status === 'string' ? params.status : params.status?.[0];
-  const hasError = params.error;
+  const hasError =
+    params.error &&
+    (typeof params.error === 'string'
+      ? params.error
+      : params.error?.[0] || ''
+    ).trim() !== '';
 
   // Determine final status
   let finalStatus: 'success' | 'failed' | 'cancel' | null = null;
@@ -800,37 +805,50 @@ export const handlePaymentRedirect = async (params: {
 
   // Update return_url and cancel_url in transaction document with proper transaction_id
   // This ensures the URLs always have the correct transaction_id for verifyPayment
+  // Only update if URLs don't already have transaction_id to avoid unnecessary writes
   const updateData: any = {};
-  if (transaction.return_url) {
+
+  const updateUrlWithTransactionId = (url: string): string | null => {
+    if (!url) return null;
     try {
-      const returnUrlObj = new URL(transaction.return_url);
-      if (!returnUrlObj.searchParams.has('transaction_id')) {
-        returnUrlObj.searchParams.set('transaction_id', transactionDocumentId);
-        updateData.return_url = returnUrlObj.toString();
+      const urlObj = new URL(url);
+      if (!urlObj.searchParams.has('transaction_id')) {
+        urlObj.searchParams.set('transaction_id', transactionDocumentId);
+        return urlObj.toString();
       }
+      return null; // Already has transaction_id
     } catch {
-      // If return_url is not a valid URL, append query params manually
-      const separator = transaction.return_url.includes('?') ? '&' : '?';
-      updateData.return_url = `${transaction.return_url}${separator}transaction_id=${transactionDocumentId}`;
+      // If URL is not valid, append query params manually
+      if (!url.includes('transaction_id=')) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}transaction_id=${transactionDocumentId}`;
+      }
+      return null; // Already has transaction_id
     }
-  }
-  if (transaction.cancel_url) {
-    try {
-      const cancelUrlObj = new URL(transaction.cancel_url);
-      if (!cancelUrlObj.searchParams.has('transaction_id')) {
-        cancelUrlObj.searchParams.set('transaction_id', transactionDocumentId);
-        updateData.cancel_url = cancelUrlObj.toString();
-      }
-    } catch {
-      // If cancel_url is not a valid URL, append query params manually
-      const separator = transaction.cancel_url.includes('?') ? '&' : '?';
-      updateData.cancel_url = `${transaction.cancel_url}${separator}transaction_id=${transactionDocumentId}`;
+  };
+
+  if (transaction.return_url) {
+    const updatedReturnUrl = updateUrlWithTransactionId(transaction.return_url);
+    if (updatedReturnUrl) {
+      updateData.return_url = updatedReturnUrl;
     }
   }
 
-  // Update transaction document with updated URLs
+  if (transaction.cancel_url) {
+    const updatedCancelUrl = updateUrlWithTransactionId(transaction.cancel_url);
+    if (updatedCancelUrl) {
+      updateData.cancel_url = updatedCancelUrl;
+    }
+  }
+
+  // Update transaction document with updated URLs (only if needed)
+  // Use atomic update to ensure consistency
   if (Object.keys(updateData).length > 0) {
-    await PaymentTransaction.findByIdAndUpdate(transactionId, updateData);
+    await PaymentTransaction.findByIdAndUpdate(
+      transactionId,
+      { $set: updateData },
+      { new: true },
+    );
   }
 
   return { redirectUrl, statusUpdated };
