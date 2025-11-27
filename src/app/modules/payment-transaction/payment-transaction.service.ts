@@ -64,8 +64,12 @@ export const updatePaymentTransactionStatus = async (
       },
     ).lean();
 
+    let transactionData:
+      | (TPaymentTransaction & { _id: mongoose.Types.ObjectId })
+      | null = null;
+
     if (!updateResult) {
-      // Transaction already processed, fetch and return
+      // Transaction already processed, fetch and check if wallet update is needed
       const existing = await PaymentTransaction.findById(id)
         .session(session || null)
         .lean();
@@ -75,11 +79,47 @@ export const updatePaymentTransactionStatus = async (
           'Payment transaction not found',
         );
       }
-      return existing;
+      transactionData = existing;
+
+      // Check if wallet update is needed (if transaction is already success but wallet might not be updated)
+      // This can happen if webhook updated status but wallet update failed or was skipped
+      console.log(
+        '[Payment Success] Transaction already success, checking if wallet update needed...',
+        {
+          transactionId: id,
+          userWallet: transactionData.user_wallet,
+        },
+      );
+
+      // Check if token transaction exists for this payment transaction
+      const existingTokenTransaction = await TokenTransaction.findOne({
+        payment_transaction: id,
+        type: 'increase',
+        increase_source: 'payment',
+      })
+        .session(session || null)
+        .lean();
+
+      if (existingTokenTransaction) {
+        // Token transaction exists, wallet should be updated, just return
+        console.log(
+          '[Payment Success] Token transaction already exists, wallet should be updated, skipping',
+        );
+        return transactionData;
+      }
+
+      // Token transaction doesn't exist, wallet update is needed
+      console.log(
+        '[Payment Success] Token transaction not found, wallet update needed even though transaction is already success',
+      );
+      // Continue with wallet update logic below using transactionData
+    } else {
+      // updateResult is the transaction data we'll use
+      transactionData = updateResult;
     }
 
     // Get package-plan document using transaction.price (package-plan _id)
-    const packagePlan = await PackagePlan.findById(updateResult.price)
+    const packagePlan = await PackagePlan.findById(transactionData.price)
       .populate('plan')
       .session(session || null)
       .lean();
@@ -93,8 +133,8 @@ export const updatePaymentTransactionStatus = async (
     // Prepare wallet update data
     const updateWalletData: any = {
       $inc: { token: packagePlan.token },
-      package: updateResult.package, // Update to newly purchased package
-      plan: updateResult.plan, // Update to purchased plan
+      package: transactionData.package, // Update to newly purchased package
+      plan: transactionData.plan, // Update to purchased plan
     };
 
     // Calculate and set expires_at using plan's duration
@@ -106,15 +146,23 @@ export const updatePaymentTransactionStatus = async (
 
     // Update wallet with package tokens, package reference, plan, and expiration
     try {
+      console.log('[Payment Success] Updating wallet...', {
+        walletId: transactionData.user_wallet,
+        transactionId: id,
+        tokenToAdd: packagePlan.token,
+        packageId: transactionData.package,
+        planId: transactionData.plan,
+      });
+
       const walletUpdateResult = await UserWallet.findByIdAndUpdate(
-        updateResult.user_wallet,
+        transactionData.user_wallet,
         updateWalletData,
         { session, new: true },
       );
 
       if (!walletUpdateResult) {
         console.error('[Payment Success] Wallet not found for update:', {
-          walletId: updateResult.user_wallet,
+          walletId: transactionData.user_wallet,
           transactionId: id,
         });
         throw new AppError(
@@ -124,17 +172,19 @@ export const updatePaymentTransactionStatus = async (
       }
 
       console.log('[Payment Success] Wallet updated successfully:', {
-        walletId: updateResult.user_wallet,
+        walletId: transactionData.user_wallet,
         transactionId: id,
         tokenAdded: packagePlan.token,
-        packageId: updateResult.package,
-        planId: updateResult.plan,
+        packageId: transactionData.package,
+        planId: transactionData.plan,
+        newTokenBalance: walletUpdateResult.token,
       });
     } catch (error) {
       console.error('[Payment Success] Failed to update wallet:', {
-        walletId: updateResult.user_wallet,
+        walletId: transactionData.user_wallet,
         transactionId: id,
         error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;
     }
@@ -152,16 +202,23 @@ export const updatePaymentTransactionStatus = async (
     if (!existingTokenTransaction) {
       // Create token transaction record only if it doesn't exist
       try {
+        console.log('[Payment Success] Creating token transaction...', {
+          transactionId: id,
+          tokenAmount: packagePlan.token,
+          userId: transactionData.user,
+          userWallet: transactionData.user_wallet,
+        });
+
         await TokenTransaction.create(
           [
             {
-              user: updateResult.user, // ObjectId directly, not populated
-              user_wallet: updateResult.user_wallet,
+              user: transactionData.user, // ObjectId directly, not populated
+              user_wallet: transactionData.user_wallet,
               type: 'increase',
               token: packagePlan.token,
               increase_source: 'payment',
               payment_transaction: id,
-              plan: updateResult.plan,
+              plan: transactionData.plan,
             },
           ],
           { session },
@@ -169,12 +226,13 @@ export const updatePaymentTransactionStatus = async (
         console.log('[Payment Success] Token transaction created:', {
           transactionId: id,
           tokenAmount: packagePlan.token,
-          userId: updateResult.user,
+          userId: transactionData.user,
         });
       } catch (error) {
         console.error('[Payment Success] Failed to create token transaction:', {
           transactionId: id,
           error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
         });
         throw error;
       }
@@ -187,7 +245,7 @@ export const updatePaymentTransactionStatus = async (
       );
     }
 
-    return updateResult;
+    return transactionData;
   }
 
   // For non-success status updates, use regular update
@@ -822,10 +880,24 @@ export const handlePaymentRedirect = async (params: {
       : params.error?.[0] || ''
     ).trim() !== '';
 
+  // Log redirect parameters for debugging (especially for SSLCommerz)
+  console.log('[Redirect] Processing redirect with params:', {
+    transactionId,
+    hasValId: !!hasValId,
+    statusParam,
+    hasError,
+    val_id: params.val_id,
+    tran_id: params.tran_id,
+    allParams: Object.keys(params),
+  });
+
   // Determine final status
   let finalStatus: 'success' | 'failed' | 'cancel' | null = null;
   if (hasValId || statusParam === 'VALID' || statusParam === 'success') {
     finalStatus = 'success';
+    console.log(
+      '[Redirect] Status determined as success from val_id or status param',
+    );
   } else if (
     hasError ||
     statusParam === 'FAILED' ||
@@ -833,19 +905,37 @@ export const handlePaymentRedirect = async (params: {
     statusParam === 'cancel'
   ) {
     finalStatus = statusParam === 'cancel' ? 'cancel' : 'failed';
+    console.log(
+      '[Redirect] Status determined as failed/cancel from error or status param',
+    );
   } else if (statusParam) {
     // Map other status values
     if (statusParam.toLowerCase().includes('success')) {
       finalStatus = 'success';
+      console.log(
+        '[Redirect] Status determined as success from status param (contains success)',
+      );
     } else if (statusParam.toLowerCase().includes('cancel')) {
       finalStatus = 'cancel';
+      console.log('[Redirect] Status determined as cancel from status param');
     } else {
       finalStatus = 'failed';
+      console.log('[Redirect] Status determined as failed from status param');
     }
+  } else {
+    console.log(
+      '[Redirect] Status not determined from params, will verify with gateway',
+    );
   }
 
   // If status is still null and transaction is pending, verify with gateway
   if (finalStatus === null && transaction.status === 'pending') {
+    console.log('[Redirect] Status is null, verifying with gateway...', {
+      transactionId,
+      gatewayTransactionId: transaction.gateway_transaction_id,
+      gatewaySessionId: transaction.gateway_session_id,
+      paymentMethodName: (transaction.payment_method as any)?.name,
+    });
     try {
       const paymentMethod = transaction.payment_method as any;
       if (paymentMethod) {
@@ -854,36 +944,82 @@ export const handlePaymentRedirect = async (params: {
           transaction.gateway_transaction_id || transaction.gateway_session_id;
 
         if (gatewayTransactionId) {
+          console.log('[Redirect] Calling gateway verifyPayment...', {
+            gatewayTransactionId,
+            paymentMethod: paymentMethod.name,
+          });
           const verificationResult =
             await gateway.verifyPayment(gatewayTransactionId);
+          console.log('[Redirect] Gateway verification result:', {
+            success: verificationResult.success,
+            status: verificationResult.status,
+          });
           if (verificationResult.success) {
             finalStatus = 'success';
+            console.log(
+              '[Redirect] Status set to success after gateway verification',
+            );
           } else {
             finalStatus = 'failed';
+            console.log(
+              '[Redirect] Status set to failed after gateway verification',
+            );
           }
         } else {
           // No gateway transaction ID, default to failed
+          console.warn(
+            '[Redirect] No gateway transaction ID found, defaulting to failed',
+          );
           finalStatus = 'failed';
         }
       } else {
         // No payment method, default to failed
+        console.warn(
+          '[Redirect] No payment method found, defaulting to failed',
+        );
         finalStatus = 'failed';
       }
     } catch (error) {
       // If verification fails, default to failed
-      console.error('[Redirect] Gateway verification failed:', error);
+      console.error('[Redirect] Gateway verification failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       finalStatus = 'failed';
     }
+  } else if (finalStatus === null) {
+    console.log(
+      '[Redirect] Status is null but transaction is not pending, skipping verification',
+      {
+        transactionId,
+        currentStatus: transaction.status,
+      },
+    );
   }
 
   // Update transaction status if needed
   let statusUpdated = false;
+  console.log('[Redirect] Final status determined:', {
+    finalStatus,
+    currentTransactionStatus: transaction.status,
+    willUpdate: finalStatus === 'success' && transaction.status !== 'success',
+  });
+
   if (finalStatus === 'success' && transaction.status !== 'success') {
     // Only update if not already success (prevent double processing)
     // Use updatePaymentTransactionStatus to also update wallet and create token transaction
+    console.log(
+      '[Redirect] Calling updatePaymentTransactionStatus for success...',
+      {
+        transactionId,
+      },
+    );
     try {
       await updatePaymentTransactionStatus(transactionId, 'success');
       statusUpdated = true;
+      console.log(
+        '[Redirect] Successfully updated payment transaction status and wallet',
+      );
     } catch (error: unknown) {
       // If update fails, check if it's because transaction was already processed
       const appError = error as AppError;
@@ -920,12 +1056,22 @@ export const handlePaymentRedirect = async (params: {
       }
     }
   } else if (finalStatus === 'failed' && transaction.status === 'pending') {
+    console.log('[Redirect] Updating transaction status to failed...', {
+      transactionId,
+    });
     await PaymentTransaction.findByIdAndUpdate(transactionId, {
       status: 'failed',
       failed_at: new Date(),
       failure_reason: 'Payment failed or cancelled by user',
     });
     statusUpdated = true;
+    console.log('[Redirect] Transaction status updated to failed');
+  } else if (finalStatus === null) {
+    console.warn('[Redirect] Final status is null, cannot update transaction', {
+      transactionId,
+      currentStatus: transaction.status,
+      params: Object.keys(params),
+    });
   }
 
   // Determine redirect URL based on status
@@ -1121,11 +1267,25 @@ export const handlePaymentWebhook = async (
     return;
   }
 
+  console.log('[Webhook] Processing webhook result...', {
+    transactionId: transaction._id.toString(),
+    gatewayTransactionId: webhookResult.transactionId,
+    webhookResultSuccess: webhookResult.success,
+    webhookResultStatus: webhookResult.status,
+    currentTransactionStatus: transaction.status,
+  });
+
   const { updateData, shouldTriggerSuccess } = prepareWebhookUpdateData(
     transaction,
     webhookResult,
     payload,
   );
+
+  console.log('[Webhook] Prepared update data:', {
+    shouldTriggerSuccess,
+    updateDataKeys: Object.keys(updateData),
+    updateDataStatus: updateData.status,
+  });
 
   // Use atomic update to prevent double processing
   // Only update if status is not already success
@@ -1142,8 +1302,22 @@ export const handlePaymentWebhook = async (
   );
 
   if (!updateResult) {
+    console.log('[Webhook] Transaction already processed or update failed', {
+      transactionId: transaction._id.toString(),
+      gatewayTransactionId: webhookResult.transactionId,
+    });
     return;
   }
+
+  console.log(
+    '[Webhook] Transaction updated, checking if wallet update needed...',
+    {
+      transactionId: transaction._id.toString(),
+      shouldTriggerSuccess,
+      updateResultStatus: updateResult.status,
+      webhookResultStatus: webhookResult.status,
+    },
+  );
 
   // Only trigger success if update was successful and status changed to success
   if (
@@ -1151,10 +1325,37 @@ export const handlePaymentWebhook = async (
     updateResult &&
     updateResult.status === 'success'
   ) {
-    await updatePaymentTransactionStatus(
-      transaction._id.toString(),
-      'success',
-      session,
+    console.log(
+      '[Webhook] Triggering wallet update for successful payment...',
+      {
+        transactionId: transaction._id.toString(),
+        gatewayTransactionId: webhookResult.transactionId,
+        paymentMethod: paymentMethod.name,
+      },
     );
+    try {
+      await updatePaymentTransactionStatus(
+        transaction._id.toString(),
+        'success',
+        session,
+      );
+      console.log(
+        '[Webhook] Successfully updated wallet and created token transaction',
+      );
+    } catch (error) {
+      console.error('[Webhook] Failed to update wallet:', {
+        transactionId: transaction._id.toString(),
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
+  } else {
+    console.log('[Webhook] Skipping wallet update:', {
+      shouldTriggerSuccess,
+      updateResultStatus: updateResult?.status,
+      webhookResultStatus: webhookResult.status,
+      transactionId: transaction._id.toString(),
+    });
   }
 };
