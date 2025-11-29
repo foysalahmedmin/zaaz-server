@@ -17,7 +17,9 @@ export type TTokenProcessStartResponse = {
 export type TTokenProcessEndPayload = {
   user_id: string;
   feature_endpoint_id: string;
-  cost: number; // token cost after processing;
+  input_token: number;
+  output_token: number;
+  model?: string; // optional model name;
 };
 
 export type TTokenProcessEndResponse = {

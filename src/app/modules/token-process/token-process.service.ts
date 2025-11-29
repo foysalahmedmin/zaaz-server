@@ -10,6 +10,9 @@ import {
   TTokenProcessStartPayload,
 } from './token-process.type';
 
+// gemini token ratio is 1:4 [input token: output token];
+const TOKEN_RATIO = '1:4';
+
 export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
   const { user_id, feature_endpoint_id } = payload;
 
@@ -157,7 +160,28 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
 };
 
 export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {
-  const { user_id, feature_endpoint_id, cost: process_cost } = payload;
+  const { user_id, feature_endpoint_id, input_token, output_token } = payload;
+
+  // Parse token ratio (1:4 means 1 input token = 4 output tokens)
+  const [inputRatio, outputRatio] = TOKEN_RATIO.split(':').map(Number);
+  const ratioValue = outputRatio / inputRatio; // 4 / 1 = 4
+
+  // Calculate base cost from output tokens using ratio
+  // Since ratio is 1:4 (input:output), to produce output_token, we need output_token/4 input tokens
+  // We use output_token to calculate the equivalent input tokens needed based on the ratio
+  // Cost = output_token / ratio (this gives equivalent input tokens needed)
+  const baseCost = Math.ceil(output_token / ratioValue);
+
+  // Validate ratio consistency (optional check for data integrity)
+  // Expected input based on output: output_token / ratioValue
+  // Actual input_token should match or be close to this value
+  const expectedInput = output_token / ratioValue;
+  if (Math.abs(input_token - expectedInput) > 1) {
+    // Log warning if input_token doesn't match expected ratio (for debugging)
+    console.warn(
+      `Token ratio mismatch: input_token=${input_token}, expected=${expectedInput.toFixed(2)}, output_token=${output_token}`,
+    );
+  }
 
   // Use aggregation to calculate total percentage directly in database (faster)
   const totalPercentageResult = await TokenProfit.aggregate([
@@ -180,9 +204,9 @@ export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {
       ? totalPercentageResult[0].totalPercentage || 0
       : 0;
 
-  // Calculate final cost: token_cost + (token_cost * totalPercentage / 100)
+  // Calculate final cost: base_cost + (base_cost * totalPercentage / 100)
   const finalTokenCost = Math.ceil(
-    process_cost + (process_cost * totalPercentage) / 100,
+    baseCost + (baseCost * totalPercentage) / 100,
   );
 
   // Create token transaction and update wallet in a transaction

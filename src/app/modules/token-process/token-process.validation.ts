@@ -21,10 +21,15 @@ export const tokenProcessEndValidationSchema = z.object({
   body: z.object({
     user_id: idSchema,
     feature_endpoint_id: idSchema,
-    cost: z
-      .number({ invalid_type_error: 'Token cost must be a number' })
-      .int('Token cost must be an integer')
-      .nonnegative('Token cost must be 0 or greater'),
+    input_token: z
+      .number({ invalid_type_error: 'Input token must be a number' })
+      .int('Input token must be an integer')
+      .nonnegative('Input token must be 0 or greater'),
+    output_token: z
+      .number({ invalid_type_error: 'Output token must be a number' })
+      .int('Output token must be an integer')
+      .nonnegative('Output token must be 0 or greater'),
+    model: z.string().optional(),
     duration: z
       .number({ invalid_type_error: 'Duration must be a number' })
       .int('Duration must be an integer')

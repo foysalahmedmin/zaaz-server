@@ -6,5 +6,7 @@ export type TTokenProcessStartPayload = {
 export type TTokenProcessEndPayload = {
   user_id: string;
   feature_endpoint_id: string;
-  cost: number;
+  input_token: number;
+  output_token: number;
+  model?: string;
 };

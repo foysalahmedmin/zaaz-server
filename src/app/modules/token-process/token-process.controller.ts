@@ -24,9 +24,11 @@ export const tokenProcessStart = catchAsync(async (req, res) => {
 
 export const tokenProcessEnd = catchAsync(async (req, res) => {
   const payload: TTokenProcessEndPayload = {
-    cost: req.body.cost,
     user_id: req.body.user_id,
     feature_endpoint_id: req.body.feature_endpoint_id,
+    input_token: req.body.input_token,
+    output_token: req.body.output_token,
+    model: req.body.model,
   };
 
   const result = await TokenProcessServices.tokenProcessEnd(payload);
