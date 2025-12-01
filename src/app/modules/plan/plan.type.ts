@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Types } from 'mongoose';
+import { Document, Model, Types } from 'mongoose';
 
 export type TPlan = {
   name: string;

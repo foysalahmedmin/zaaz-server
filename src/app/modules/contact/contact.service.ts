@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import config from '../../config';
 import AppError from '../../builder/AppError';
+import config from '../../config';
 import { sendEmail } from '../../utils/sendEmail';
 import { Contact } from './contact.model';
 import { TContact, TCreateContact } from './contact.type';
@@ -46,7 +46,7 @@ export const getContacts = async (
   data: TContact[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const AppQuery = (await import('../../builder/AppQuery')).default;
+  const AppQuery = (await import('../../builder/AppFindQuery')).default;
   const contactQuery = new AppQuery<TContact>(Contact.find(), query)
     .search(['name', 'email', 'subject', 'message'])
     .filter()

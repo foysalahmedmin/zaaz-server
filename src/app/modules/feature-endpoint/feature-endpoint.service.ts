@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { FeatureEndpoint } from './feature-endpoint.model';
 import { TFeatureEndpoint } from './feature-endpoint.type';
 
@@ -54,7 +54,7 @@ export const getPublicFeatureEndpoints = async (
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQuery<TFeatureEndpoint>(
+  const featureEndpointQuery = new AppFindQuery<TFeatureEndpoint>(
     FeatureEndpoint.find().populate([{ path: 'feature' }]),
     { ...rest, ...filter },
   )
@@ -88,7 +88,7 @@ export const getFeatureEndpoints = async (
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQuery<TFeatureEndpoint>(
+  const featureEndpointQuery = new AppFindQuery<TFeatureEndpoint>(
     FeatureEndpoint.find().populate([{ path: 'feature' }]),
     { ...rest, ...filter },
   )
@@ -262,9 +262,7 @@ export const restoreFeatureEndpoints = async (
   const restoredFeatureEndpoints = await FeatureEndpoint.find({
     _id: { $in: ids },
   }).lean();
-  const restoredIds = restoredFeatureEndpoints.map((fe) =>
-    fe._id.toString(),
-  );
+  const restoredIds = restoredFeatureEndpoints.map((fe) => fe._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   return {
@@ -272,4 +270,3 @@ export const restoreFeatureEndpoints = async (
     not_found_ids: notFoundIds,
   };
 };
-

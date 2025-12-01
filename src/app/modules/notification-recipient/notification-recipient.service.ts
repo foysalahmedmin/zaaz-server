@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { NotificationRecipient } from './notification-recipient.model';
 import { TNotificationRecipient } from './notification-recipient.type';
@@ -51,7 +51,7 @@ export const getSelfNotificationRecipients = async (
   data: TNotificationRecipient[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppQuery<TNotificationRecipient>(
+  const notificationQuery = new AppFindQuery<TNotificationRecipient>(
     NotificationRecipient.find({ author: user._id }).populate([
       { path: 'recipient', select: '_id name email image' },
       { path: 'notification', select: '_id title type sender' },
@@ -78,7 +78,7 @@ export const getNotificationRecipients = async (
   data: TNotificationRecipient[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppQuery<TNotificationRecipient>(
+  const notificationQuery = new AppFindQuery<TNotificationRecipient>(
     NotificationRecipient.find().populate([
       { path: 'recipient', select: '_id name email image' },
       { path: 'notification', select: '_id title type sender' },

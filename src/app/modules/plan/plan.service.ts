@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { Plan } from './plan.model';
 import { TPlan } from './plan.type';
 
@@ -27,7 +27,7 @@ export const getPlans = async (
 
   const filter: Record<string, unknown> = {};
 
-  const planQuery = new AppQuery<TPlan>(Plan.find(), { ...rest, ...filter })
+  const planQuery = new AppFindQuery<TPlan>(Plan.find(), { ...rest, ...filter })
     .search(['name', 'description'])
     .filter()
     .sort()
@@ -98,7 +98,9 @@ export const deletePlan = async (id: string): Promise<void> => {
 };
 
 export const deletePlanPermanent = async (id: string): Promise<void> => {
-  const plan = await Plan.findById(id).setOptions({ bypassDeleted: true }).lean();
+  const plan = await Plan.findById(id)
+    .setOptions({ bypassDeleted: true })
+    .lean();
 
   if (!plan) {
     throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
@@ -186,4 +188,3 @@ export const restorePlans = async (
     not_found_ids: notFoundIds,
   };
 };
-

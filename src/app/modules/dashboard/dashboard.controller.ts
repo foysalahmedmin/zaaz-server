@@ -3,7 +3,7 @@ import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import * as DashboardServices from './dashboard.service';
 
-export const getDashboardStatistics = catchAsync(async (req, res) => {
+export const getDashboardStatistics = catchAsync(async (_req, res) => {
   const result = await DashboardServices.getDashboardStatistics();
   sendResponse(res, {
     status: httpStatus.OK,
@@ -24,7 +24,7 @@ export const getDashboardRevenue = catchAsync(async (req, res) => {
   });
 });
 
-export const getDashboardTransactions = catchAsync(async (req, res) => {
+export const getDashboardTransactions = catchAsync(async (_req, res) => {
   const result = await DashboardServices.getDashboardTransactions();
   sendResponse(res, {
     status: httpStatus.OK,
@@ -34,7 +34,7 @@ export const getDashboardTransactions = catchAsync(async (req, res) => {
   });
 });
 
-export const getDashboardPaymentMethods = catchAsync(async (req, res) => {
+export const getDashboardPaymentMethods = catchAsync(async (_req, res) => {
   const result = await DashboardServices.getDashboardPaymentMethods();
   sendResponse(res, {
     status: httpStatus.OK,
@@ -66,7 +66,7 @@ export const getDashboardUserGrowth = catchAsync(async (req, res) => {
   });
 });
 
-export const getDashboardPackages = catchAsync(async (req, res) => {
+export const getDashboardPackages = catchAsync(async (_req, res) => {
   const result = await DashboardServices.getDashboardPackages();
   sendResponse(res, {
     status: httpStatus.OK,
@@ -76,7 +76,7 @@ export const getDashboardPackages = catchAsync(async (req, res) => {
   });
 });
 
-export const getDashboardFeatures = catchAsync(async (req, res) => {
+export const getDashboardFeatures = catchAsync(async (_req, res) => {
   const result = await DashboardServices.getDashboardFeatures();
   sendResponse(res, {
     status: httpStatus.OK,

@@ -13,7 +13,7 @@ interface QueryParams {
 // Internal type to extend the result type with Document properties
 type DocumentType<T> = T & Document;
 
-class AppQuery<T = any> {
+class AppFindQuery<T = any> {
   public query: Query<DocumentType<T>[], DocumentType<T>>;
   public query_params: QueryParams;
   public query_filter: FilterQuery<DocumentType<T>>;
@@ -223,4 +223,4 @@ class AppQuery<T = any> {
   }
 }
 
-export default AppQuery;
+export default AppFindQuery;

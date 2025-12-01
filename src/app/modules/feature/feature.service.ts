@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { Feature } from './feature.model';
 import { TFeature } from './feature.type';
 
@@ -50,7 +50,7 @@ export const getPublicFeatures = async (
     filter.type = type;
   }
 
-  const featureQuery = new AppQuery<TFeature>(
+  const featureQuery = new AppFindQuery<TFeature>(
     Feature.find().populate([{ path: 'children' }]),
     { ...rest, ...filter },
   )
@@ -86,7 +86,7 @@ export const getFeatures = async (
     filter.type = type;
   }
 
-  const featureQuery = new AppQuery<TFeature>(
+  const featureQuery = new AppFindQuery<TFeature>(
     Feature.find().populate([{ path: 'children' }]),
     { ...rest, ...filter },
   )
@@ -245,9 +245,7 @@ export const restoreFeatures = async (
   );
 
   const restoredFeatures = await Feature.find({ _id: { $in: ids } }).lean();
-  const restoredIds = restoredFeatures.map((feature) =>
-    feature._id.toString(),
-  );
+  const restoredIds = restoredFeatures.map((feature) => feature._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   return {
@@ -255,4 +253,3 @@ export const restoreFeatures = async (
     not_found_ids: notFoundIds,
   };
 };
-

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { Notification } from './notification.model';
 import { TNotification } from './notification.type';
 
@@ -25,7 +25,7 @@ export const getNotifications = async (
   data: TNotification[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppQuery<TNotification>(
+  const notificationQuery = new AppFindQuery<TNotification>(
     Notification.find(),
     query,
   )

@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { TokenTransaction } from './token-transaction.model';
 import { TTokenTransaction } from './token-transaction.type';
@@ -67,7 +67,7 @@ export const getTokenTransactions = async (
     filter.type = type;
   }
 
-  const tokenTransactionQuery = new AppQuery<TTokenTransaction>(
+  const tokenTransactionQuery = new AppFindQuery<TTokenTransaction>(
     TokenTransaction.find().populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'decrease_source', select: '_id name endpoint token' },

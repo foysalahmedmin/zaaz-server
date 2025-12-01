@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
 import { PackagePlan } from '../package-plan/package-plan.model';
@@ -305,7 +305,7 @@ export const getPaymentTransactions = async (
     filter.payment_method = payment_method;
   }
 
-  const paymentTransactionQuery = new AppQuery<TPaymentTransaction>(
+  const paymentTransactionQuery = new AppFindQuery<TPaymentTransaction>(
     PaymentTransaction.find().populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'payment_method', select: '_id name currency' },

@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
 import AppError from '../../builder/AppError';
-import AppQueryV2 from '../../builder/AppQueryV2';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
   createPackagePlans,
@@ -340,7 +340,7 @@ export const getPublicPackages = async (
   // Use AppQueryV2 for aggregation-based querying
   // Exclude _id from query params since we're handling it in baseFilter
   const { _id: _, ...restQuery } = query;
-  const packageQuery = new AppQueryV2<TPackage>(Package, {
+  const packageQuery = new AppAggregationQuery<TPackage>(Package, {
     ...restQuery,
     ...baseFilter,
   })
@@ -427,7 +427,7 @@ export const getPackages = async (
   ];
 
   // Use AppQueryV2 for aggregation-based querying
-  const packageQuery = new AppQueryV2<TPackage>(Package, {
+  const packageQuery = new AppAggregationQuery<TPackage>(Package, {
     ...rest,
     ...filter,
   })

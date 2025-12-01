@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { TokenProfitHistory } from '../token-profit-history/token-profit-history.model';
 import { TokenProfit } from './token-profit.model';
 import { TTokenProfit } from './token-profit.type';
@@ -45,10 +45,10 @@ export const getPublicTokenProfits = async (
     is_active: true,
   };
 
-  const tokenProfitQuery = new AppQuery<TTokenProfit>(
-    TokenProfit.find(),
-    { ...query, ...filter },
-  )
+  const tokenProfitQuery = new AppFindQuery<TTokenProfit>(TokenProfit.find(), {
+    ...query,
+    ...filter,
+  })
     .search(['name'])
     .filter()
     .sort()
@@ -67,7 +67,7 @@ export const getTokenProfits = async (
   data: TTokenProfit[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const tokenProfitQuery = new AppQuery<TTokenProfit>(
+  const tokenProfitQuery = new AppFindQuery<TTokenProfit>(
     TokenProfit.find(),
     query,
   )
@@ -116,14 +116,10 @@ export const updateTokenProfit = async (
     { session },
   );
 
-  const result = await TokenProfit.findByIdAndUpdate(
-    id,
-    payload,
-    {
-      new: true,
-      runValidators: true,
-    },
-  ).session(session || null);
+  const result = await TokenProfit.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  }).session(session || null);
 
   return result!;
 };
@@ -181,7 +177,10 @@ export const deleteTokenProfits = async (
   const foundIds = tokenProfits.map((tp) => tp._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await TokenProfit.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  await TokenProfit.updateMany(
+    { _id: { $in: foundIds } },
+    { is_deleted: true },
+  );
 
   return {
     count: foundIds.length,
@@ -255,4 +254,3 @@ export const restoreTokenProfits = async (
     not_found_ids: notFoundIds,
   };
 };
-

@@ -8,7 +8,10 @@ interface TokenProcessOptions {
   user_id: string | ((...args: any[]) => string);
 }
 
-export const withTokenProcess = <T extends any[], R extends { cost?: number }>(
+export const withTokenProcess = <
+  T extends any[],
+  R extends { input_token?: number; output_token?: number },
+>(
   options: TokenProcessOptions,
   serviceFn: (...args: T) => Promise<R>,
 ) => {
@@ -33,16 +36,19 @@ export const withTokenProcess = <T extends any[], R extends { cost?: number }>(
     // Execute service
     const result = await serviceFn(...args);
 
-    // Get cost from result
-    const tokenCost = result.cost || 0;
+    // Get input_token and output_token from result
+    const inputToken = result.input_token || 0;
+    const outputToken = result.output_token || 0;
 
-    // End token process if cost > 0
-    if (tokenCost > 0) {
+    // End token process if tokens > 0
+    if (inputToken > 0 || outputToken > 0) {
       try {
         await tokenProcessEnd({
           user_id: userId,
           feature_endpoint_id,
-          cost: tokenCost,
+          input_token: inputToken,
+          output_token: outputToken,
+          model: (result as any).model,
         });
       } catch (error) {
         console.error('[Token Process] End error:', error);

@@ -1,4 +1,4 @@
-import { Document, Model, PipelineStage } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 
 interface QueryParams {
   search?: string;
@@ -10,10 +10,7 @@ interface QueryParams {
   [key: string]: unknown;
 }
 
-// Internal type to extend the result type with Document properties
-type DocumentType<T> = T & Document;
-
-class AppQueryV2<T = any> {
+class AppAggregationQuery<T = any> {
   private pipeline: PipelineStage[];
   private query_params: QueryParams;
   private model: Model<any>;
@@ -334,4 +331,4 @@ class AppQueryV2<T = any> {
   }
 }
 
-export default AppQueryV2;
+export default AppAggregationQuery;

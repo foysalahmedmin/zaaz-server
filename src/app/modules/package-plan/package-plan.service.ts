@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppQuery from '../../builder/AppQuery';
+import AppFindQuery from '../../builder/AppFindQuery';
 import { Package } from '../package/package.model';
 import { Plan } from '../plan/plan.model';
 import { PackagePlan } from './package-plan.model';
@@ -127,7 +127,7 @@ export const getPackagePlans = async (
     filter.plan = planId;
   }
 
-  const packagePlanQuery = new AppQuery<TPackagePlan>(
+  const packagePlanQuery = new AppFindQuery<TPackagePlan>(
     PackagePlan.find().populate('plan').populate('package'),
     { ...rest, ...filter },
   )
