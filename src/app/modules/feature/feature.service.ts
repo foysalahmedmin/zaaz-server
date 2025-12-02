@@ -92,7 +92,14 @@ export const getFeatures = async (
   )
     .search(['name', 'description', 'path'])
     .filter()
-    .sort()
+    .sort([
+      'name',
+      'type',
+      'sequence',
+      'is_active',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());
@@ -105,6 +112,10 @@ export const getFeatures = async (
     {
       key: 'inactive',
       filter: { is_active: false },
+    },
+    {
+      key: 'with_parent',
+      filter: { parent: { $exists: true, $ne: null } },
     },
   ]);
 

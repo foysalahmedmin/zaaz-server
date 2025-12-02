@@ -132,12 +132,33 @@ export const getUserWallets = async (
   appQuery
     .search(['user']) // Search by user ObjectId string
     .filter()
-    .sort()
+    .sort([
+      'token',
+      'expires_at',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());
 
-  const result = await appQuery.execute();
+  const result = await appQuery.execute([
+    {
+      key: 'active',
+      filter: {
+        $or: [
+          { expires_at: { $exists: false } },
+          { expires_at: { $gte: new Date() } },
+        ],
+      },
+    },
+    {
+      key: 'expired',
+      filter: {
+        expires_at: { $lt: new Date() },
+      },
+    },
+  ]);
 
   return result;
 };

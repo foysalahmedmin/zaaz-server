@@ -45,12 +45,32 @@ export const getUsers = async (
   const userQuery = new AppFindQuery<TUser>(User.find(), query)
     .search(['name', 'email', 'image'])
     .filter()
-    .sort()
+    .sort([
+      'name',
+      'email',
+      'role',
+      'status',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());
 
-  const result = await userQuery.execute();
+  const result = await userQuery.execute([
+    {
+      key: 'in-progress',
+      filter: { status: 'in-progress' },
+    },
+    {
+      key: 'blocked',
+      filter: { status: 'blocked' },
+    },
+    {
+      key: 'admin',
+      filter: { role: 'admin' },
+    },
+  ]);
 
   return result;
 };

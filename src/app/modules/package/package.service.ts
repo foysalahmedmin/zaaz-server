@@ -434,7 +434,15 @@ export const getPackages = async (
     .search(['name', 'description'])
     .filter()
     .addPipeline(lookupStages) // Add lookup stages after filter
-    .sort()
+    .sort([
+      'name',
+      'type',
+      'sequence',
+      'is_active',
+      'is_initial',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields();
 
@@ -446,6 +454,10 @@ export const getPackages = async (
     {
       key: 'inactive',
       filter: { is_active: false },
+    },
+    {
+      key: 'initial',
+      filter: { is_initial: true },
     },
   ]);
 

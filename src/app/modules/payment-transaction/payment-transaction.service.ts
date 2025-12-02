@@ -316,12 +316,38 @@ export const getPaymentTransactions = async (
     { ...rest, ...filter },
   )
     .filter()
-    .sort()
+    .sort([
+      'status',
+      'amount',
+      'currency',
+      'gateway_transaction_id',
+      'gateway_session_id',
+      'paid_at',
+      'failed_at',
+      'refunded_at',
+      'customer_email',
+      'customer_name',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());
 
-  const result = await paymentTransactionQuery.execute();
+  const result = await paymentTransactionQuery.execute([
+    {
+      key: 'success',
+      filter: { status: 'success' },
+    },
+    {
+      key: 'pending',
+      filter: { status: 'pending' },
+    },
+    {
+      key: 'failed',
+      filter: { status: 'failed' },
+    },
+  ]);
 
   return result;
 };

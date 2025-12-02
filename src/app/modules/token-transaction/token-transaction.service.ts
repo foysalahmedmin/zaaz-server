@@ -76,12 +76,34 @@ export const getTokenTransactions = async (
     { ...rest, ...filter },
   )
     .filter()
-    .sort()
+    .sort([
+      'type',
+      'token',
+      'created_at',
+      'updated_at',
+    ] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());
 
-  const result = await tokenTransactionQuery.execute();
+  const result = await tokenTransactionQuery.execute([
+    {
+      key: 'increase',
+      filter: { type: 'increase' },
+    },
+    {
+      key: 'decrease',
+      filter: { type: 'decrease' },
+    },
+    {
+      key: 'from_payment',
+      filter: { type: 'increase', increase_source: 'payment' },
+    },
+    {
+      key: 'from_bonus',
+      filter: { type: 'increase', increase_source: 'bonus' },
+    },
+  ]);
 
   return result;
 };
