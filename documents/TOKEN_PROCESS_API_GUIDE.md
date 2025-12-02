@@ -1,6 +1,6 @@
 # Token Process API Guide
 
-একটি সহজ গাইড যা Token Process API ব্যবহার করার জন্য প্রয়োজনীয় সব তথ্য দেয়।
+Token Process API usage guide.
 
 ---
 
