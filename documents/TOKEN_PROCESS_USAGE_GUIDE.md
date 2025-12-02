@@ -52,18 +52,19 @@ sequenceDiagram
     StartAPI->>Package: Verify feature in package
     StartAPI->>Wallet: Check token balance >= minimum
     
-    alt Token sufficient & feature available
+        alt Token sufficient & feature available
         StartAPI-->>Client: {status: 'access-able', token: balance}
         Client->>Service: Execute service logic
-        Service-->>Client: {result, cost}
+        Service-->>Client: {result, input_token, output_token, model?}
         
-        alt Cost > 0
-            Client->>EndAPI: POST /api/token-process/end<br/>{user_id, feature_endpoint_id, cost}
+        alt Tokens > 0
+            Client->>EndAPI: POST /api/token-process/end<br/>{user_id, feature_endpoint_id, input_token, output_token, model?}
             EndAPI->>Profit: Calculate profit percentage
+            EndAPI->>EndAPI: Calculate final cost from output_token using ratio (1:4)
             EndAPI->>Transaction: Create token transaction
             EndAPI->>Wallet: Update token balance (deduct final_cost)
             EndAPI-->>Client: {token: new_balance, cost: final_cost}
-        else Cost = 0
+        else Tokens = 0
             Note over Client: No token deduction needed
         end
     else Token insufficient or feature unavailable
@@ -85,8 +86,8 @@ flowchart TD
     F -->|Sufficient Tokens| H[Status: access-able]
     H --> I[Execute Service Logic]
     I --> J{Service Result}
-    J -->|Has Cost| K[Calculate Final Cost<br/>with Profit Percentage]
-    J -->|No Cost| L[Skip Token Deduction]
+    J -->|Has Tokens| K[Calculate Final Cost<br/>from output_token using ratio (1:4)<br/>Apply Profit Percentage]
+    J -->|No Tokens| L[Skip Token Deduction]
     K --> M[Create Token Transaction]
     M --> N[Update Wallet Balance]
     N --> O[Return Updated Balance]
@@ -167,7 +168,9 @@ const startTokenProcess = async (user_id: string, feature_endpoint_id: string) =
 const endTokenProcess = async (
   user_id: string,
   feature_endpoint_id: string,
-  cost: number
+  input_token: number,
+  output_token: number,
+  model?: string
 ) => {
   try {
     const response = await axios.post(
@@ -175,7 +178,9 @@ const endTokenProcess = async (
       {
         user_id,
         feature_endpoint_id,
-        cost,
+        input_token,
+        output_token,
+        ...(model && { model }),
       },
       {
         headers: {
@@ -205,9 +210,15 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
   // 2. Execute your service logic
   const serviceResult = await yourServiceFunction(user_id);
 
-  // 3. End token process (if cost > 0)
-  if (serviceResult.cost > 0) {
-    await endTokenProcess(user_id, feature_endpoint_id, serviceResult.cost);
+  // 3. End token process (if tokens > 0)
+  if (serviceResult.input_token > 0 || serviceResult.output_token > 0) {
+    await endTokenProcess(
+      user_id,
+      feature_endpoint_id,
+      serviceResult.input_token || 0,
+      serviceResult.output_token || 0,
+      serviceResult.model
+    );
   }
 
   return serviceResult;
