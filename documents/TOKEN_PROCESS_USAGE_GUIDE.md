@@ -51,12 +51,12 @@ sequenceDiagram
     StartAPI->>Wallet: Check wallet exists & active
     StartAPI->>Package: Verify feature in package
     StartAPI->>Wallet: Check token balance >= minimum
-    
+
         alt Token sufficient & feature available
         StartAPI-->>Client: {status: 'access-able', token: balance}
         Client->>Service: Execute service logic
         Service-->>Client: {result, input_token, output_token, model?}
-        
+
         alt Tokens > 0
             Client->>EndAPI: POST /api/token-process/end<br/>{user_id, feature_endpoint_id, input_token, output_token, model?}
             EndAPI->>Profit: Calculate profit percentage
@@ -138,11 +138,15 @@ Use this method when you need full control over the API calls or are not using N
 ```typescript
 import axios from 'axios';
 
-const TOKEN_SERVER_URL = process.env.TOKEN_SERVER_URL || 'http://localhost:5000';
+const TOKEN_SERVER_URL =
+  process.env.TOKEN_SERVER_URL || 'http://localhost:5000';
 const SERVER_API_KEY = process.env.SERVER_API_KEY || '';
 
 // Start Token Process
-const startTokenProcess = async (user_id: string, feature_endpoint_id: string) => {
+const startTokenProcess = async (
+  user_id: string,
+  feature_endpoint_id: string,
+) => {
   try {
     const response = await axios.post(
       `${TOKEN_SERVER_URL}/api/token-process/start`,
@@ -155,7 +159,7 @@ const startTokenProcess = async (user_id: string, feature_endpoint_id: string) =
           'x-server-api-key': SERVER_API_KEY,
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
 
     return response.data;
@@ -170,7 +174,7 @@ const endTokenProcess = async (
   feature_endpoint_id: string,
   input_token: number,
   output_token: number,
-  model?: string
+  model?: string,
 ) => {
   try {
     const response = await axios.post(
@@ -187,7 +191,7 @@ const endTokenProcess = async (
           'x-server-api-key': SERVER_API_KEY,
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
 
     return response.data;
@@ -203,7 +207,7 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
 
   if (startResult.data.status !== 'access-able') {
     throw new Error(
-      `Insufficient tokens. Available: ${startResult.data.token}`
+      `Insufficient tokens. Available: ${startResult.data.token}`,
     );
   }
 
@@ -217,7 +221,7 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
       feature_endpoint_id,
       serviceResult.input_token || 0,
       serviceResult.output_token || 0,
-      serviceResult.model
+      serviceResult.model,
     );
   }
 
@@ -234,11 +238,13 @@ Use the provided service functions from `src/app/token-process/token-process.ser
 #### Setup
 
 1. Copy the `token-process` folder from Payment System Server to your service server:
+
    ```
    payment-system-server/src/app/token-process/
    ```
 
 2. Install required dependencies:
+
    ```bash
    npm install axios
    # or
@@ -265,20 +271,22 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
 
   if (startResult.data.status !== 'access-able') {
     throw new Error(
-      `Insufficient tokens. Available: ${startResult.data.token}`
+      `Insufficient tokens. Available: ${startResult.data.token}`,
     );
   }
 
   // 2. Execute your service logic
   const serviceResult = await yourServiceFunction(user_id);
 
-  // 3. End token process (if cost > 0)
-  if (serviceResult.cost > 0) {
+  // 3. End token process (if tokens > 0)
+  if (serviceResult.input_token > 0 || serviceResult.output_token > 0) {
     try {
       await tokenProcessEnd({
         user_id,
         feature_endpoint_id,
-        cost: serviceResult.cost,
+        input_token: serviceResult.input_token || 0,
+        output_token: serviceResult.output_token || 0,
+        model: serviceResult.model,
       });
     } catch (error) {
       console.error('[Token Process] End error:', error);
@@ -303,7 +311,9 @@ tokenProcessStart(payload: {
 tokenProcessEnd(payload: {
   user_id: string;
   feature_endpoint_id: string;
-  cost: number;
+  input_token: number;
+  output_token: number;
+  model?: string;
 }): Promise<TTokenProcessEndResponse>
 ```
 
@@ -316,6 +326,7 @@ Use this method for the cleanest and most automated approach. The wrapper handle
 #### Setup
 
 1. Copy the `withTokenProcess.ts` utility from Payment System Server:
+
    ```
    payment-system-server/src/app/utils/withTokenProcess.ts
    ```
@@ -336,7 +347,7 @@ const wrappedService = withTokenProcess(
     feature_endpoint_id: 'your-feature-endpoint-id',
     user_id: 'static-user-id', // Use when user_id is known
   },
-  yourServiceFunction
+  yourServiceFunction,
 );
 
 // Option 2: Dynamic user_id (extract from function arguments)
@@ -345,7 +356,7 @@ const wrappedService = withTokenProcess(
     feature_endpoint_id: 'your-feature-endpoint-id',
     user_id: (args) => args[0].user_id, // Extract from first argument
   },
-  yourServiceFunction
+  yourServiceFunction,
 );
 
 // Usage
@@ -357,20 +368,25 @@ const result = await wrappedService({ user_id: 'user-id', ...otherData });
 Your service function must:
 
 1. Return a Promise
-2. Return an object with an optional `cost` property:
+2. Return an object with optional `input_token` and `output_token` properties:
 
 ```typescript
 interface ServiceResult {
-  cost?: number; // Token cost (required if tokens should be deducted)
+  input_token?: number; // Input tokens used
+  output_token?: number; // Output tokens generated
+  model?: string; // Optional: Model name
   // ... other properties
 }
 
 const yourServiceFunction = async (...args: any[]): Promise<ServiceResult> => {
   // Your service logic
-  const cost = calculateTokenCost(); // Calculate token cost
+  const inputToken = calculateInputTokens(); // Calculate input tokens
+  const outputToken = calculateOutputTokens(); // Calculate output tokens
 
   return {
-    cost, // Include cost if tokens should be deducted
+    input_token: inputToken,
+    output_token: outputToken,
+    model: 'gemini-pro', // Optional
     // ... other return values
   };
 };
@@ -386,14 +402,16 @@ const generateContent = async (data: {
   user_id: string;
   prompt: string;
   length: number;
-}): Promise<{ content: string; cost: number }> => {
+}): Promise<{ content: string; input_token: number; output_token: number }> => {
   // Your service logic here
   const content = await aiService.generate(data.prompt, data.length);
-  const cost = calculateCost(data.length); // e.g., 10 tokens per 100 words
+  const inputToken = calculateInputTokens(data.prompt);
+  const outputToken = calculateOutputTokens(content);
 
   return {
     content,
-    cost,
+    input_token: inputToken,
+    output_token: outputToken,
   };
 };
 
@@ -403,7 +421,7 @@ const wrappedGenerateContent = withTokenProcess(
     feature_endpoint_id: 'feature-endpoint-id-for-content-generation',
     user_id: (args) => args[0].user_id, // Extract user_id from first argument
   },
-  generateContent
+  generateContent,
 );
 
 // Use the wrapped service
@@ -426,33 +444,37 @@ console.log(result.content); // Generated content
 **Endpoint**: `POST /api/token-process/start`
 
 **Headers**:
+
 ```
 x-server-api-key: <SERVER_API_KEY>
 Content-Type: application/json
 ```
 
 **Request Body**:
+
 ```typescript
 {
-  user_id: string;           // User ID
+  user_id: string; // User ID
   feature_endpoint_id: string; // Feature endpoint ID
 }
 ```
 
 **Response**:
+
 ```typescript
 {
   success: boolean;
   message: string;
   data: {
     user_id: string;
-    token: number;           // Current user token balance
+    token: number; // Current user token balance
     status: 'access-able' | 'not-access-able';
-  };
+  }
 }
 ```
 
 **Status Values**:
+
 - `access-able`: User has sufficient tokens and feature access
 - `not-access-able`: User lacks tokens or feature access
 
@@ -463,35 +485,44 @@ Content-Type: application/json
 **Endpoint**: `POST /api/token-process/end`
 
 **Headers**:
+
 ```
 x-server-api-key: <SERVER_API_KEY>
 Content-Type: application/json
 ```
 
 **Request Body**:
+
 ```typescript
 {
   user_id: string;           // User ID
   feature_endpoint_id: string; // Feature endpoint ID
-  cost: number;              // Token cost (after processing)
+  input_token: number;       // Input tokens used
+  output_token: number;     // Output tokens generated
+  model?: string;            // Optional: Model name
 }
 ```
 
 **Response**:
+
 ```typescript
 {
   success: boolean;
   message: string;
   data: {
     user_id: string;
-    token: number;           // Updated user token balance
-    cost: number;            // Final cost (after profit percentage)
+    token: number; // Updated user token balance
+    cost: number; // Final cost (after profit percentage)
     status: 'return-able' | 'not-return-able';
-  };
+  }
 }
 ```
 
-**Note**: The `cost` in the response includes the profit percentage automatically calculated by the server.
+**Note**:
+
+- The `cost` in the response is automatically calculated from `output_token` using token ratio (1:4)
+- Profit percentage is automatically added to the final cost
+- Server calculates: `baseCost = output_token / 4`, then `finalCost = baseCost + (baseCost * profitPercentage / 100)`
 
 ---
 
@@ -573,7 +604,7 @@ try {
   if (startResult.data.status !== 'access-able') {
     // Handle insufficient tokens
     throw new Error(
-      `Insufficient tokens. Available: ${startResult.data.token}`
+      `Insufficient tokens. Available: ${startResult.data.token}`,
     );
   }
 
@@ -581,12 +612,14 @@ try {
   const result = await yourServiceFunction();
 
   // End process (with error handling)
-  if (result.cost > 0) {
+  if (result.input_token > 0 || result.output_token > 0) {
     try {
       await tokenProcessEnd({
         user_id,
         feature_endpoint_id,
-        cost: result.cost,
+        input_token: result.input_token || 0,
+        output_token: result.output_token || 0,
+        model: result.model,
       });
     } catch (error) {
       // Log error but don't block service result
@@ -627,9 +660,15 @@ if (startResult.data.status !== 'access-able') {
 ### 2. Handle End Process Errors Gracefully
 
 ```typescript
-if (result.cost > 0) {
+if (result.input_token > 0 || result.output_token > 0) {
   try {
-    await tokenProcessEnd({ user_id, feature_endpoint_id, cost: result.cost });
+    await tokenProcessEnd({
+      user_id,
+      feature_endpoint_id,
+      input_token: result.input_token || 0,
+      output_token: result.output_token || 0,
+      model: result.model,
+    });
   } catch (error) {
     // Log but don't block - user already received service
     console.error('Token deduction failed:', error);
@@ -646,18 +685,23 @@ The wrapper handles all the complexity automatically:
 // Instead of manual start/end calls
 const wrappedService = withTokenProcess(
   { feature_endpoint_id, user_id: (args) => args[0].user_id },
-  yourServiceFunction
+  yourServiceFunction,
 );
 ```
 
-### 4. Calculate Cost Accurately
+### 4. Calculate Tokens Accurately
 
-Ensure your service function calculates token cost correctly:
+Ensure your service function calculates input and output tokens correctly:
 
 ```typescript
-const calculateCost = (inputLength: number, outputLength: number): number => {
+const calculateInputTokens = (inputText: string): number => {
   // Example: 1 token per 10 characters
-  return Math.ceil((inputLength + outputLength) / 10);
+  return Math.ceil(inputText.length / 10);
+};
+
+const calculateOutputTokens = (outputText: string): number => {
+  // Example: 1 token per 10 characters
+  return Math.ceil(outputText.length / 10);
 };
 ```
 
@@ -689,7 +733,7 @@ async function processImage(user_id: string, image_url: string) {
   const start = await axios.post(
     `${TOKEN_SERVER_URL}/api/token-process/start`,
     { user_id, feature_endpoint_id },
-    { headers: { 'x-server-api-key': SERVER_API_KEY } }
+    { headers: { 'x-server-api-key': SERVER_API_KEY } },
   );
 
   if (start.data.data.status !== 'access-able') {
@@ -698,13 +742,19 @@ async function processImage(user_id: string, image_url: string) {
 
   // Process
   const processedImage = await imageProcessingService.process(image_url);
-  const cost = 50; // Tokens used
+  const inputToken = 10; // Input tokens
+  const outputToken = 40; // Output tokens
 
   // End
   await axios.post(
     `${TOKEN_SERVER_URL}/api/token-process/end`,
-    { user_id, feature_endpoint_id, cost },
-    { headers: { 'x-server-api-key': SERVER_API_KEY } }
+    {
+      user_id,
+      feature_endpoint_id,
+      input_token: inputToken,
+      output_token: outputToken,
+    },
+    { headers: { 'x-server-api-key': SERVER_API_KEY } },
   );
 
   return processedImage;
@@ -736,14 +786,17 @@ async function generateText(user_id: string, prompt: string) {
 
   // Generate
   const generatedText = await aiService.generate(prompt);
-  const cost = calculateCost(prompt.length, generatedText.length);
+  const inputToken = calculateInputTokens(prompt);
+  const outputToken = calculateOutputTokens(generatedText);
 
   // End
-  if (cost > 0) {
+  if (inputToken > 0 || outputToken > 0) {
     await tokenProcessEnd({
       user_id,
       feature_endpoint_id,
-      cost,
+      input_token: inputToken,
+      output_token: outputToken,
+      model: 'gemini-pro',
     });
   }
 
@@ -763,14 +816,19 @@ const translateText = async (data: {
   user_id: string;
   text: string;
   target_language: string;
-}): Promise<{ translated: string; cost: number }> => {
+}): Promise<{
+  translated: string;
+  input_token: number;
+  output_token: number;
+}> => {
   const translated = await translationService.translate(
     data.text,
-    data.target_language
+    data.target_language,
   );
-  const cost = Math.ceil(data.text.length / 100) * 5; // 5 tokens per 100 chars
+  const inputToken = Math.ceil(data.text.length / 10); // Input tokens
+  const outputToken = Math.ceil(translated.length / 10); // Output tokens
 
-  return { translated, cost };
+  return { translated, input_token: inputToken, output_token: outputToken };
 };
 
 // Wrap service
@@ -779,7 +837,7 @@ const wrappedTranslate = withTokenProcess(
     feature_endpoint_id: 'translation-endpoint-id',
     user_id: (args) => args[0].user_id,
   },
-  translateText
+  translateText,
 );
 
 // Use wrapped service
@@ -801,9 +859,9 @@ const getPublicData = async (data: {
   user_id: string;
   query: string;
 }): Promise<{ data: any }> => {
-  // No cost - free feature
+  // No tokens - free feature
   const data = await publicDataService.fetch(data.query);
-  return { data }; // No cost property
+  return { data }; // No input_token or output_token property
 };
 
 const wrappedGetPublicData = withTokenProcess(
@@ -811,10 +869,10 @@ const wrappedGetPublicData = withTokenProcess(
     feature_endpoint_id: 'public-data-endpoint-id',
     user_id: (args) => args[0].user_id,
   },
-  getPublicData
+  getPublicData,
 );
 
-// Tokens won't be deducted (cost is 0 or undefined)
+// Tokens won't be deducted (input_token and output_token are 0 or undefined)
 const result = await wrappedGetPublicData({
   user_id: 'user-123',
   query: 'search-term',
@@ -846,5 +904,30 @@ For issues or questions:
 
 **Last Updated**: 2025-01-22
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 
+---
+
+## 📚 Quick Reference
+
+### Token Calculation
+
+- **Token Ratio**: `1:4` (1 input token = 4 output tokens)
+- **Cost Calculation**: Server calculates `baseCost = output_token / 4`
+- **Final Cost**: `finalCost = baseCost + (baseCost * profitPercentage / 100)`
+
+### Service Function Return Type
+
+```typescript
+{
+  input_token?: number;   // Required if tokens should be deducted
+  output_token?: number;   // Required if tokens should be deducted
+  model?: string;          // Optional: Model name
+  // ... other properties
+}
+```
+
+### When to Call End API
+
+- Call End API if `input_token > 0` OR `output_token > 0`
+- Skip End API if both are `0` or `undefined` (free feature)
