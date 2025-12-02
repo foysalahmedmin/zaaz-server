@@ -75,7 +75,7 @@ Content-Type: application/json
   data: {
     user_id: string;
     token: number;              // Current token balance
-    status: 'access-able' | 'not-access-able';
+    status: 'accessible' | 'not-accessible';
     message?: string;
   };
 }
@@ -98,7 +98,7 @@ const response = await axios.post(
   },
 );
 
-if (response.data.data.status !== 'access-able') {
+if (response.data.data.status !== 'accessible') {
   throw new Error('Insufficient tokens');
 }
 ```
@@ -138,7 +138,7 @@ Content-Type: application/json
     user_id: string;
     token: number;              // Updated token balance
     cost: number;               // Final cost (after profit calculation)
-    status: 'return-able' | 'not-return-able';
+    status: 'returnable' | 'not-returnable';
     message?: string;
   };
 }
@@ -196,7 +196,7 @@ async function processService(user_id: string, feature_endpoint_id: string) {
     },
   );
 
-  if (startResponse.data.data.status !== 'access-able') {
+  if (startResponse.data.data.status !== 'accessible') {
     throw new Error('Insufficient tokens');
   }
 
@@ -244,7 +244,7 @@ async function generateContent(user_id: string, feature_endpoint_id: string) {
     feature_endpoint_id,
   });
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     throw new Error(`Insufficient tokens: ${startResult.data.token}`);
   }
 
@@ -341,7 +341,7 @@ const result = await wrappedGenerate({
 {
   success: true,
   data: {
-    status: 'not-access-able',
+    status: 'not-accessible',
     token: 50  // Current balance
   }
 }
@@ -358,7 +358,7 @@ const result = await wrappedGenerate({
 {
   success: true,
   data: {
-    status: 'not-access-able',
+    status: 'not-accessible',
     message: 'Feature endpoint is not available in your package'
   }
 }
@@ -378,7 +378,7 @@ try {
     feature_endpoint_id,
   });
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     throw new Error(
       `Access denied: ${startResult.data.message || 'Insufficient tokens'}`,
     );
@@ -423,7 +423,7 @@ try {
    - Use for tracking which model was used (e.g., 'gemini-pro', 'gpt-4')
 
 3. **Always Check Status**:
-   - Always check `status === 'access-able'` before executing service
+   - Always check `status === 'accessible'` before executing service
 
 4. **End API is Optional**:
    - Only call End API if `input_token > 0` or `output_token > 0`

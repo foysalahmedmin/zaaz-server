@@ -27,7 +27,7 @@ export const withTokenProcess = <
       feature_endpoint_id,
     });
 
-    if (startResult.data.status !== 'access-able') {
+    if (startResult.data.status !== 'accessible') {
       throw new Error(
         `Insufficient tokens. Available: ${startResult.data.token}`,
       );

@@ -9,7 +9,7 @@ export type TTokenProcessStartResponse = {
   data: {
     user_id: string; // user ID;
     token: number; // user current token amount;
-    status: 'access-able' | 'not-access-able';
+    status: 'accessible' | 'not-accessible';
     message?: string;
   };
 };
@@ -29,7 +29,7 @@ export type TTokenProcessEndResponse = {
     user_id: string;
     token: number; // user current token amount;
     cost: number; // token cost after deducted by token profit percentage;
-    status: 'return-able' | 'not-return-able';
+    status: 'returnable' | 'not-returnable';
     message?: string;
   };
 };

@@ -53,7 +53,7 @@ sequenceDiagram
     StartAPI->>Wallet: Check token balance >= minimum
 
         alt Token sufficient & feature available
-        StartAPI-->>Client: {status: 'access-able', token: balance}
+        StartAPI-->>Client: {status: 'accessible', token: balance}
         Client->>Service: Execute service logic
         Service-->>Client: {result, input_token, output_token, model?}
 
@@ -68,7 +68,7 @@ sequenceDiagram
             Note over Client: No token deduction needed
         end
     else Token insufficient or feature unavailable
-        StartAPI-->>Client: {status: 'not-access-able', token: balance}
+        StartAPI-->>Client: {status: 'not-accessible', token: balance}
         Note over Client: Service execution blocked
     end
 ```
@@ -83,7 +83,7 @@ flowchart TD
     D -->|Feature Not Available| E[Error: Feature Not in Package]
     D -->|Feature Available| F{Check Token Balance}
     F -->|Insufficient Tokens| G[Error: Insufficient Tokens]
-    F -->|Sufficient Tokens| H[Status: access-able]
+    F -->|Sufficient Tokens| H[Status: accessible]
     H --> I[Execute Service Logic]
     I --> J{Service Result}
     J -->|Has Tokens| K[Calculate Final Cost<br/>from output_token using ratio (1:4)<br/>Apply Profit Percentage]
@@ -205,7 +205,7 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
   // 1. Start token process
   const startResult = await startTokenProcess(user_id, feature_endpoint_id);
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     throw new Error(
       `Insufficient tokens. Available: ${startResult.data.token}`,
     );
@@ -269,7 +269,7 @@ const processService = async (user_id: string, feature_endpoint_id: string) => {
     feature_endpoint_id,
   });
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     throw new Error(
       `Insufficient tokens. Available: ${startResult.data.token}`,
     );
@@ -468,15 +468,15 @@ Content-Type: application/json
   data: {
     user_id: string;
     token: number; // Current user token balance
-    status: 'access-able' | 'not-access-able';
+    status: 'accessible' | 'not-accessible';
   }
 }
 ```
 
 **Status Values**:
 
-- `access-able`: User has sufficient tokens and feature access
-- `not-access-able`: User lacks tokens or feature access
+- `accessible`: User has sufficient tokens and feature access
+- `not-accessible`: User lacks tokens or feature access
 
 ---
 
@@ -513,7 +513,7 @@ Content-Type: application/json
     user_id: string;
     token: number; // Updated user token balance
     cost: number; // Final cost (after profit percentage)
-    status: 'return-able' | 'not-return-able';
+    status: 'returnable' | 'not-returnable';
   }
 }
 ```
@@ -582,7 +582,7 @@ Content-Type: application/json
 {
   success: true,
   data: {
-    status: 'not-access-able',
+    status: 'not-accessible',
     token: 50  // Current token balance
   }
 }
@@ -601,7 +601,7 @@ try {
     feature_endpoint_id,
   });
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     // Handle insufficient tokens
     throw new Error(
       `Insufficient tokens. Available: ${startResult.data.token}`,
@@ -651,7 +651,7 @@ try {
 ```typescript
 const startResult = await tokenProcessStart({ user_id, feature_endpoint_id });
 
-if (startResult.data.status !== 'access-able') {
+if (startResult.data.status !== 'accessible') {
   // Don't proceed with service execution
   throw new Error('Access denied');
 }
@@ -736,7 +736,7 @@ async function processImage(user_id: string, image_url: string) {
     { headers: { 'x-server-api-key': SERVER_API_KEY } },
   );
 
-  if (start.data.data.status !== 'access-able') {
+  if (start.data.data.status !== 'accessible') {
     throw new Error('Insufficient tokens');
   }
 
@@ -780,7 +780,7 @@ async function generateText(user_id: string, prompt: string) {
     feature_endpoint_id,
   });
 
-  if (startResult.data.status !== 'access-able') {
+  if (startResult.data.status !== 'accessible') {
     throw new Error(`Insufficient tokens: ${startResult.data.token}`);
   }
 

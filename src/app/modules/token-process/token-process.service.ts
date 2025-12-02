@@ -64,7 +64,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
       return {
         user_id,
         token: 0,
-        status: 'not-access-able',
+        status: 'not-accessible',
         message: 'Feature endpoint not found',
       };
     }
@@ -74,7 +74,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
       return {
         user_id,
         token: 0,
-        status: 'not-access-able',
+        status: 'not-accessible',
         message: 'Feature endpoint is not active',
       };
     }
@@ -103,7 +103,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
         return {
           user_id,
           token: 0,
-          status: 'not-access-able',
+          status: 'not-accessible',
           message: `Failed to create wallet: ${walletError.message || 'Unknown error'}`,
         };
       }
@@ -130,7 +130,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
         return {
           user_id,
           token: userToken,
-          status: 'not-access-able',
+          status: 'not-accessible',
           message: 'Feature endpoint is not available in your package',
         };
       }
@@ -143,7 +143,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
     return {
       user_id,
       token: userToken,
-      status: hasAccess ? 'access-able' : 'not-access-able',
+      status: hasAccess ? 'accessible' : 'not-accessible',
       message: hasAccess
         ? undefined
         : `Insufficient tokens. Required: ${minimumToken}, Available: ${userToken}`,
@@ -153,7 +153,7 @@ export const tokenProcessStart = async (payload: TTokenProcessStartPayload) => {
     return {
       user_id,
       token: 0,
-      status: 'not-access-able',
+      status: 'not-accessible',
       message: `Token process start failed: ${error.message || 'Unknown error'}`,
     };
   }
@@ -249,7 +249,7 @@ export const tokenProcessEnd = async (payload: TTokenProcessEndPayload) => {
       user_id: user_id,
       token: updatedToken,
       cost: finalTokenCost,
-      status: 'return-able',
+      status: 'returnable',
     };
   } catch (error: any) {
     await session.abortTransaction();
