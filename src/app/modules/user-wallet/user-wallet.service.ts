@@ -1,9 +1,9 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { UserWallet } from './user-wallet.model';
 import { TUserWallet } from './user-wallet.type';
-import AppQueryFind from '../../builder/AppQueryFind';
 
 export const createUserWallet = async (
   data: TUserWallet,
@@ -125,14 +125,10 @@ export const getUserWallets = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TUserWallet[]; meta: any }> => {
   const appQuery = new AppQueryFind(UserWallet, query_params)
-    .populate('package').search(['user'])
+    .populate('package')
+    .search(['user'])
     .filter()
-    .sort([
-      'token',
-      'expires_at',
-      'created_at',
-      'updated_at',
-    ] as any)
+    .sort(['token', 'expires_at', 'created_at', 'updated_at'] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import { FeatureEndpoint } from '../feature-endpoint/feature-endpoint.model';
 import { TokenProfit } from '../token-profit/token-profit.model';
 import { TokenTransaction } from '../token-transaction/token-transaction.model';

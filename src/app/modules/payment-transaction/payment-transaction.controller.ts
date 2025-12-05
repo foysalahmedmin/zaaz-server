@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as PaymentTransactionServices from './payment-transaction.service';
 
 export const createPaymentTransaction = catchAsync(async (req, res) => {

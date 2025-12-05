@@ -16,10 +16,9 @@ class AppQueryAggregation<T = any> {
   private query_params: QueryParams;
 
   private baseMatchFilter: Record<string, any> = {};
-  
+
   private page = 1;
   private limit = 0;
-  
 
   constructor(model: Model<any>, query_params: Record<string, unknown>) {
     this.model = model;
@@ -197,10 +196,7 @@ class AppQueryAggregation<T = any> {
       config?: {
         select?: string | Record<string, 0 | 1>;
         match?: Record<string, any>;
-        populate?:
-          | string
-          | PopulateOptions
-          | Array<string | PopulateOptions>;
+        populate?: string | PopulateOptions | Array<string | PopulateOptions>;
         model?: string | Model<any>;
         options?: Record<string, any>;
       },
@@ -210,7 +206,7 @@ class AppQueryAggregation<T = any> {
       const localField = path;
       const foreignField = '_id';
       const asField = path;
-      
+
       // Get collection name from model or use path (mongoose pluralizes model names)
       // If model is provided, use it; otherwise try to infer from path
       let collectionName: string | undefined;
@@ -223,7 +219,7 @@ class AppQueryAggregation<T = any> {
           collectionName = config.model.collection.name;
         }
       }
-      
+
       if (!collectionName) {
         // Try to get collection name from the model's schema
         const schema = this.model.schema;
@@ -263,7 +259,9 @@ class AppQueryAggregation<T = any> {
           // Simple nested populate
           const nestedPath = config.populate;
           const nestedLocalField = nestedPath;
-          let nestedCollectionName = nestedPath.endsWith('s') ? nestedPath : nestedPath + 's';
+          let nestedCollectionName = nestedPath.endsWith('s')
+            ? nestedPath
+            : nestedPath + 's';
           lookupPipeline.push({
             $lookup: {
               from: nestedCollectionName,
@@ -278,7 +276,9 @@ class AppQueryAggregation<T = any> {
             if (typeof nestedPop === 'string') {
               const nestedPath: string = nestedPop;
               const nestedLocalField = nestedPath;
-              const nestedCollectionName = nestedPath.endsWith('s') ? nestedPath : nestedPath + 's';
+              const nestedCollectionName = nestedPath.endsWith('s')
+                ? nestedPath
+                : nestedPath + 's';
               lookupPipeline.push({
                 $lookup: {
                   from: nestedCollectionName,
@@ -292,7 +292,9 @@ class AppQueryAggregation<T = any> {
               const nestedPopObj = nestedPop as PopulateOptions;
               const nestedPath: string = nestedPopObj.path || '';
               const nestedLocalField = nestedPath;
-              const nestedCollectionName = nestedPath.endsWith('s') ? nestedPath : nestedPath + 's';
+              const nestedCollectionName = nestedPath.endsWith('s')
+                ? nestedPath
+                : nestedPath + 's';
               const nestedLookupPipeline: any[] = [];
               if (nestedPopObj.match) {
                 nestedLookupPipeline.push({ $match: nestedPopObj.match });
@@ -316,7 +318,9 @@ class AppQueryAggregation<T = any> {
           const nestedPopObj = config.populate as PopulateOptions;
           const nestedPath: string = nestedPopObj.path || '';
           const nestedLocalField = nestedPath;
-          const nestedCollectionName = nestedPath.endsWith('s') ? nestedPath : nestedPath + 's';
+          const nestedCollectionName = nestedPath.endsWith('s')
+            ? nestedPath
+            : nestedPath + 's';
           const nestedLookupPipeline: any[] = [];
           if (nestedPopObj.match) {
             nestedLookupPipeline.push({ $match: nestedPopObj.match });

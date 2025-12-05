@@ -151,19 +151,19 @@ module-name/
 src/
 ├── app/
 │   ├── builder/              # Core utility classes
-│   │   ├── AppError.ts       # Custom error class
-│   │   ├── AppQuery.ts       # Standard query builder
-│   │   └── AppQueryV2.ts     # Aggregation-based query builder
+│   │   ├── app-error.ts       # Custom error class
+│   │   ├── app-query-find.ts       # Standard query builder
+│   │   └── app-query-aggregation.ts     # Aggregation-based query builder
 │   ├── config/               # Configuration management
 │   ├── errors/               # Error handlers
-│   │   ├── handleCastError.ts
-│   │   ├── handleDuplicateError.ts
-│   │   ├── handleValidationError.ts
-│   │   └── handleZodError.ts
+│   │   ├── handle-cast-error.ts
+│   │   ├── handle-duplicate-error.ts
+│   │   ├── handle-validation-error.ts
+│   │   └── handle-zod-error.ts
 │   ├── interface/            # TypeScript declarations
 │   ├── middlewares/          # Express middlewares
 │   │   ├── auth.middleware.ts
-│   │   ├── server-auth.middleware.ts  # Server-to-server authentication
+│   │   ├── server-auth.middleware.ts
 │   │   ├── error.middleware.ts
 │   │   ├── validation.middleware.ts
 │   │   └── ...
@@ -196,7 +196,7 @@ src/
 │   ├── socket/               # Socket.io setup
 │   ├── types/                # Shared types
 │   ├── utils/                # Utility functions
-│   │   └── withTokenProcess.ts  # Token process wrapper utility
+│   │   └── with-token-process.ts  # Token process wrapper utility
 │   └── token-process/        # Example token-process client (for other servers)
 ├── app.ts                    # Express app configuration
 └── index.ts                  # Application entry point
@@ -506,7 +506,7 @@ erDiagram
 | Contact                 | `/api/contact`                 | Contact form submissions              |
 | Features                | `/api/features`                | System features management            |
 | Feature Endpoints       | `/api/feature-endpoints`       | API endpoint definitions              |
-| Plans                   | `/api/plans`                   | Plan management (reusable templates) |
+| Plans                   | `/api/plans`                   | Plan management (reusable templates)  |
 | Packages                | `/api/packages`                | Token package management              |
 | Package Plans           | `/api/package-plans`           | Package-plan linking                  |
 | Package History         | `/api/package-histories`       | Package change history                |
@@ -515,7 +515,7 @@ erDiagram
 | Token Profits           | `/api/token-profits`           | Profit percentage settings            |
 | Token Profit History    | `/api/token-profit-histories`  | Profit setting history                |
 | Token Transactions      | `/api/token-transactions`      | Token movement history                |
-| Token Process           | `/api/token-process`           | Server-to-server token processing    |
+| Token Process           | `/api/token-process`           | Server-to-server token processing     |
 | User Wallets            | `/api/user-wallets`            | User wallet management                |
 | Notifications           | `/api/notifications`           | Notification management               |
 | Notification Recipients | `/api/notification-recipients` | Notification delivery and read status |
@@ -826,6 +826,7 @@ POST /api/payment-transactions/webhook/:payment_method_id
 The system implements **server-side redirect handling** for enhanced security and reliability:
 
 **Flow**:
+
 1. Frontend provides `return_url` and `cancel_url` during payment initiation
 2. Server stores these URLs in the payment transaction document
 3. Server constructs its own redirect URLs: `/api/payment-transactions/redirect?transaction_id={id}&status=success/cancel`
@@ -834,11 +835,13 @@ The system implements **server-side redirect handling** for enhanced security an
 6. Server processes payment status, updates transaction atomically, then redirects to stored frontend URL
 
 **Redirect Endpoint**:
+
 ```
 GET/POST /api/payment-transactions/redirect?transaction_id={id}&status={status}
 ```
 
 **Features**:
+
 - Supports both GET (SSLCommerz) and POST (Stripe) redirects
 - Extracts transaction ID from various gateway parameters (`transaction_id`, `tran_id`, `val_id`)
 - Determines payment status from gateway parameters
@@ -847,6 +850,7 @@ GET/POST /api/payment-transactions/redirect?transaction_id={id}&status={status}
 - Updates stored URLs in transaction document for consistency
 
 **Benefits**:
+
 - Centralized payment status processing
 - Secure handling of payment callbacks
 - Consistent transaction ID format (always MongoDB `_id`)
@@ -887,6 +891,7 @@ The dashboard module provides comprehensive analytics for administrators:
 ### Data Aggregation
 
 All dashboard data is generated using MongoDB aggregation pipelines for optimal performance:
+
 - Efficient data joining across collections
 - Real-time calculations
 - Period-based filtering (7d, 30d, 90d, 1y)
@@ -913,6 +918,7 @@ The token process module provides server-to-server token processing for external
 ### API Endpoints
 
 **Start Token Process** (`POST /api/token-process/start`):
+
 - Creates wallet if user doesn't have one (with 0 tokens)
 - Validates user wallet exists and is not expired
 - Checks if feature endpoint is included in user's package (only if wallet has a package)
@@ -921,6 +927,7 @@ The token process module provides server-to-server token processing for external
 - Returns API-friendly responses (doesn't throw errors, returns status objects)
 
 **End Token Process** (`POST /api/token-process/end`):
+
 - Calculates final cost with profit percentage (sum of all active profit percentages)
 - Uses MongoDB transaction for atomic wallet update and token transaction creation
 - Creates token transaction record (decrease type)
@@ -943,7 +950,7 @@ const startResult = await axios.post(
     headers: {
       'x-server-api-key': 'your-server-api-key',
     },
-  }
+  },
 );
 
 // Execute your service logic
@@ -961,7 +968,7 @@ await axios.post(
     headers: {
       'x-server-api-key': 'your-server-api-key',
     },
-  }
+  },
 );
 ```
 
@@ -977,7 +984,7 @@ const wrappedService = withTokenProcess(
     feature_endpoint_id: 'feature_endpoint_id',
     user_id: (args) => args[0].user_id, // Extract from arguments
   },
-  yourServiceFunction
+  yourServiceFunction,
 );
 
 // Usage
@@ -1027,6 +1034,7 @@ Follow the existing module pattern:
 See `documents/EXECUTION_GUIDE.md` for detailed module generation instructions.
 
 For comprehensive project analysis and payment process documentation, see:
+
 - `PAYMENT_PROCESS_ANALYSIS.md` - Complete payment flow analysis with duplicate prevention and security measures
 - `FULL_PROJECT_ANALYSIS.md` - Full project analysis with all modules, edge cases, and production readiness checklist
 

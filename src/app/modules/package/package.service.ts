@@ -1,6 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
+import AppQueryAggregation from '../../builder/app-query-aggregation';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
   createPackagePlans,
@@ -11,7 +12,6 @@ import { TPackagePlan } from '../package-plan/package-plan.type';
 import { Plan } from '../plan/plan.model';
 import { Package } from './package.model';
 import { TPackage } from './package.type';
-import AppQueryAggregation from '../../builder/AppQueryAggregation';
 
 export const createPackage = async (
   data: TPackage & {

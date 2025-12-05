@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { FeatureEndpoint } from './feature-endpoint.model';
 import { TFeatureEndpoint } from './feature-endpoint.type';
 
@@ -54,10 +54,10 @@ export const getPublicFeatureEndpoints = async (
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQueryFind(
-    FeatureEndpoint,
-    { ...rest, ...filter },
-  )
+  const featureEndpointQuery = new AppQueryFind(FeatureEndpoint, {
+    ...rest,
+    ...filter,
+  })
     .populate([{ path: 'feature' }])
     .search(['name', 'endpoint', 'description'])
     .filter()
@@ -89,10 +89,10 @@ export const getFeatureEndpoints = async (
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQueryFind(
-    FeatureEndpoint,
-    { ...rest, ...filter },
-  )
+  const featureEndpointQuery = new AppQueryFind(FeatureEndpoint, {
+    ...rest,
+    ...filter,
+  })
     .populate([{ path: 'feature' }])
     .search(['name', 'endpoint', 'description'])
     .filter()

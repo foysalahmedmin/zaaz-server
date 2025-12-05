@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as PackageServices from './package.service';
 
 export const createPackage = catchAsync(async (req, res) => {
@@ -173,4 +173,3 @@ export const giveInitialPackage = catchAsync(async (req, res) => {
     data: result,
   });
 });
-

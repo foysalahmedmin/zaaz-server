@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as FeatureEndpointServices from './feature-endpoint.service';
 
 export const createFeatureEndpoint = catchAsync(async (req, res) => {
@@ -98,18 +98,16 @@ export const deleteFeatureEndpoint = catchAsync(async (req, res) => {
   });
 });
 
-export const deleteFeatureEndpointPermanent = catchAsync(
-  async (req, res) => {
-    const { id } = req.params;
-    await FeatureEndpointServices.deleteFeatureEndpointPermanent(id);
-    sendResponse(res, {
-      status: httpStatus.OK,
-      success: true,
-      message: 'Feature endpoint permanently deleted successfully',
-      data: null,
-    });
-  },
-);
+export const deleteFeatureEndpointPermanent = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  await FeatureEndpointServices.deleteFeatureEndpointPermanent(id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Feature endpoint permanently deleted successfully',
+    data: null,
+  });
+});
 
 export const deleteFeatureEndpoints = catchAsync(async (req, res) => {
   const { ids } = req.body;
@@ -161,4 +159,3 @@ export const restoreFeatureEndpoints = catchAsync(async (req, res) => {
     },
   });
 });
-

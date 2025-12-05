@@ -1,8 +1,8 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
-import { deleteFiles } from '../../utils/deleteFiles';
+import { deleteFiles } from '../../utils/delete-files';
 import { User } from './user.model';
 import { TUser } from './user.type';
 

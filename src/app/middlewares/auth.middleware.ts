@@ -3,11 +3,11 @@ import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
 import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import AppError from '../builder/AppError';
+import AppError from '../builder/app-error';
 import config from '../config';
 import { cacheClient } from '../redis';
 import { TJwtPayload, TRole } from '../types/jsonwebtoken.type';
-import catchAsync from '../utils/catchAsync';
+import catchAsync from '../utils/catch-async';
 
 const DEFAULT_ROLE = 'user';
 

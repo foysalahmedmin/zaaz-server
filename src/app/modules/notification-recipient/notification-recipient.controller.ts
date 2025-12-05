@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import { emitToUser } from '../../socket';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as NotificationRecipientServices from './notification-recipient.service';
 
 export const createNotificationRecipient = catchAsync(async (req, res) => {
@@ -78,7 +78,7 @@ export const updateSelfNotificationRecipient = catchAsync(async (req, res) => {
       id,
       req.body,
     );
-  
+
   // Emit socket event for real-time update
   if (result && req.user?._id) {
     emitToUser(req.user._id.toString(), 'notification-recipient-updated', {
@@ -114,13 +114,17 @@ export const updateNotificationRecipient = catchAsync(async (req, res) => {
 export const readAllNotificationRecipients = catchAsync(async (req, res) => {
   const result =
     await NotificationRecipientServices.readAllNotificationRecipients(req.user);
-  
+
   // Emit socket event for bulk update
   if (result.count > 0 && req.user?._id) {
-    emitToUser(req.user._id.toString(), 'notification-recipients-bulk-updated', {
-      count: result.count,
-      action: 'read-all',
-    });
+    emitToUser(
+      req.user._id.toString(),
+      'notification-recipients-bulk-updated',
+      {
+        count: result.count,
+        action: 'read-all',
+      },
+    );
   }
 
   sendResponse(res, {
@@ -168,7 +172,7 @@ export const deleteSelfNotificationRecipient = catchAsync(async (req, res) => {
     req.user,
     id,
   );
-  
+
   // Emit socket event for deletion
   if (req.user?._id) {
     emitToUser(req.user._id.toString(), 'notification-recipient-deleted', {

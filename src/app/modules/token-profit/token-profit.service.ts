@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { TokenProfitHistory } from '../token-profit-history/token-profit-history.model';
 import { TokenProfit } from './token-profit.model';
 import { TTokenProfit } from './token-profit.type';
@@ -67,10 +67,7 @@ export const getTokenProfits = async (
   data: TTokenProfit[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const tokenProfitQuery = new AppQueryFind(
-    TokenProfit,
-    query,
-  )
+  const tokenProfitQuery = new AppQueryFind(TokenProfit, query)
     .search(['name'])
     .filter()
     .sort()

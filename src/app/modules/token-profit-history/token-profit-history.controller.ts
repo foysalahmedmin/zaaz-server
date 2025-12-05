@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as TokenProfitHistoryServices from './token-profit-history.service';
 
 export const getTokenProfitHistories = catchAsync(async (req, res) => {

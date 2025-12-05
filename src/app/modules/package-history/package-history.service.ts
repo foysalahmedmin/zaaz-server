@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { PackageHistory } from './package-history.model';
 import { TPackageHistory } from './package-history.type';
 
@@ -11,14 +11,11 @@ export const getPackageHistories = async (
   data: TPackageHistory[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const packageHistoryQuery = new AppQueryFind(
-    PackageHistory,
-    { ...query, package: packageId },
-  )
-    .populate([
-      { path: 'package' },
-      { path: 'features' },
-    ])
+  const packageHistoryQuery = new AppQueryFind(PackageHistory, {
+    ...query,
+    package: packageId,
+  })
+    .populate([{ path: 'package' }, { path: 'features' }])
     .sort()
     .paginate()
     .fields()

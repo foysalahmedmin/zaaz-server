@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { TokenTransaction } from './token-transaction.model';
 import { TTokenTransaction } from './token-transaction.type';
@@ -67,22 +67,17 @@ export const getTokenTransactions = async (
     filter.type = type;
   }
 
-  const tokenTransactionQuery = new AppQueryFind(
-    TokenTransaction,
-    { ...rest, ...filter },
-  )
+  const tokenTransactionQuery = new AppQueryFind(TokenTransaction, {
+    ...rest,
+    ...filter,
+  })
     .populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'decrease_source', select: '_id name endpoint token' },
       { path: 'payment_transaction', select: '_id status amount currency' },
     ])
     .filter()
-    .sort([
-      'type',
-      'token',
-      'created_at',
-      'updated_at',
-    ] as any)
+    .sort(['type', 'token', 'created_at', 'updated_at'] as any)
     .paginate()
     .fields()
     .tap((q) => q.lean());

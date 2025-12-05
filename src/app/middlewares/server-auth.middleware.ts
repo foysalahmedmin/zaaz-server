@@ -1,15 +1,16 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import AppError from '../builder/AppError';
+import AppError from '../builder/app-error';
 import config from '../config';
-import catchAsync from '../utils/catchAsync';
+import catchAsync from '../utils/catch-async';
 
 const serverAuth = () => {
   return catchAsync(
     async (req: Request, _res: Response, next: NextFunction) => {
       // Get server API key from header
       const serverApiKey = req.headers['x-server-api-key'] as string;
-      const expectedApiKey = process.env.SERVER_API_KEY || config.server_api_key;
+      const expectedApiKey =
+        process.env.SERVER_API_KEY || config.server_api_key;
 
       if (!expectedApiKey) {
         throw new AppError(
@@ -35,4 +36,3 @@ const serverAuth = () => {
 };
 
 export default serverAuth;
-

@@ -1,10 +1,10 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
 import config from '../../config';
-import { sendEmail } from '../../utils/sendEmail';
+import { sendEmail } from '../../utils/send-email';
 import { Contact } from './contact.model';
 import { TContact, TCreateContact } from './contact.type';
-import AppQueryFind from '../../builder/AppQueryFind';
 
 export const createContact = async (
   payload: TCreateContact,

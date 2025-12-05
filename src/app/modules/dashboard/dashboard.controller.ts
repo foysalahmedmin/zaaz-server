@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catchAsync';
-import sendResponse from '../../utils/sendResponse';
+import catchAsync from '../../utils/catch-async';
+import sendResponse from '../../utils/send-response';
 import * as DashboardServices from './dashboard.service';
 
 export const getDashboardStatistics = catchAsync(async (_req, res) => {
@@ -85,4 +85,3 @@ export const getDashboardFeatures = catchAsync(async (_req, res) => {
     data: result,
   });
 });
-

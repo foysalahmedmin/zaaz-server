@@ -1,9 +1,9 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
-import AppQueryFind from '../../builder/AppQueryFind';
+import AppError from '../../builder/app-error';
+import AppQueryFind from '../../builder/app-query-find';
+import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { NotificationRecipient } from './notification-recipient.model';
 import { TNotificationRecipient } from './notification-recipient.type';
-import { TJwtPayload } from '../../types/jsonwebtoken.type';
 
 export const createNotificationRecipient = async (
   data: TNotificationRecipient,
@@ -22,7 +22,10 @@ export const getSelfNotificationRecipient = async (
   })
     .populate([
       { path: 'recipient', select: '_id name email image' },
-      { path: 'notification', select: '_id title message type sender priority channels' },
+      {
+        path: 'notification',
+        select: '_id title message type sender priority channels',
+      },
     ])
     .lean();
 
@@ -56,11 +59,14 @@ export const getSelfNotificationRecipients = async (
   data: TNotificationRecipient[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppQueryFind(NotificationRecipient, { recipient: user._id, ...query })
+  const notificationQuery = new AppQueryFind(NotificationRecipient, {
+    recipient: user._id,
+    ...query,
+  })
     .populate([
       { path: 'recipient', select: '_id name email image' },
-      { 
-        path: 'notification', 
+      {
+        path: 'notification',
         select: '_id title message type sender priority channels created_at',
         populate: { path: 'sender', select: '_id name email image' },
       },
@@ -140,8 +146,8 @@ export const updateSelfNotificationRecipient = async (
   )
     .populate([
       { path: 'recipient', select: '_id name email image' },
-      { 
-        path: 'notification', 
+      {
+        path: 'notification',
         select: '_id title message type sender priority channels created_at',
         populate: { path: 'sender', select: '_id name email image' },
       },
@@ -343,8 +349,8 @@ export const restoreSelfNotificationRecipient = async (
   )
     .populate([
       { path: 'recipient', select: '_id name email image' },
-      { 
-        path: 'notification', 
+      {
+        path: 'notification',
         select: '_id title message type sender priority channels created_at',
         populate: { path: 'sender', select: '_id name email image' },
       },
