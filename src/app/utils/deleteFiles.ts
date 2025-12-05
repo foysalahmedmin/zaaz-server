@@ -13,8 +13,8 @@ export const deleteFiles = async (
     if (!filePath) continue;
 
     const fullPath = folder
-      ? path.resolve('uploads', folder, filePath)
-      : path.resolve('uploads', filePath);
+      ? path.resolve(folder, filePath)
+      : path.resolve(filePath);
 
     try {
       await fs.unlink(fullPath);

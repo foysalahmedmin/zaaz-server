@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { Notification } from './notification.model';
 import { TNotification } from './notification.type';
 
@@ -25,10 +25,7 @@ export const getNotifications = async (
   data: TNotification[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppFindQuery<TNotification>(
-    Notification.find(),
-    query,
-  )
+  const notificationQuery = new AppQueryFind(Notification, query)
     .search(['title', 'message', 'type', 'priority'])
     .filter()
     .sort()

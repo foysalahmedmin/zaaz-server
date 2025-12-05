@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { TokenProfitHistory } from './token-profit-history.model';
 import { TTokenProfitHistory } from './token-profit-history.type';
 
@@ -11,12 +11,13 @@ export const getTokenProfitHistories = async (
   data: TTokenProfitHistory[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const tokenProfitHistoryQuery = new AppFindQuery<TTokenProfitHistory>(
-    TokenProfitHistory.find({ token_profit: tokenProfitId }).populate([
-      { path: 'token_profit' },
-    ]),
-    query,
+  const tokenProfitHistoryQuery = new AppQueryFind(
+    TokenProfitHistory,
+    { ...query, token_profit: tokenProfitId },
   )
+    .populate([
+      { path: 'token_profit' },
+    ])
     .sort()
     .paginate()
     .fields()

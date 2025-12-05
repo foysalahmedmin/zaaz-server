@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
 import { PackagePlan } from '../package-plan/package-plan.model';
@@ -305,16 +305,17 @@ export const getPaymentTransactions = async (
     filter.payment_method = payment_method;
   }
 
-  const paymentTransactionQuery = new AppFindQuery<TPaymentTransaction>(
-    PaymentTransaction.find().populate([
+  const paymentTransactionQuery = new AppQueryFind(
+    PaymentTransaction,
+    { ...rest, ...filter },
+  )
+    .populate([
       { path: 'user_wallet', select: '_id token' },
       { path: 'payment_method', select: '_id name currency' },
       { path: 'package', select: '_id name' },
       { path: 'plan', select: '_id name duration' },
       { path: 'price', select: '_id price token' }, // package-plan
-    ]),
-    { ...rest, ...filter },
-  )
+    ])
     .filter()
     .sort([
       'status',

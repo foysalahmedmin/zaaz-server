@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { deleteFiles } from '../../utils/deleteFiles';
 import { User } from './user.model';
@@ -20,10 +20,10 @@ export const getWritersUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppFindQuery<TUser>(
-    User.find({ role: { $in: ['admin', 'author'] } }),
-    query,
-  )
+  const userQuery = new AppQueryFind(User, {
+    ...query,
+    role: { $in: ['admin', 'author'] },
+  })
     .search(['name', 'email'])
     .filter()
     .sort()
@@ -42,7 +42,7 @@ export const getUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppFindQuery<TUser>(User.find(), query)
+  const userQuery = new AppQueryFind(User, query)
     .search(['name', 'email', 'image'])
     .filter()
     .sort([
@@ -92,7 +92,7 @@ export const updateSelf = async (
   }
 
   if (payload?.image !== data.image && data.image) {
-    deleteFiles(data.image, 'user/images');
+    deleteFiles(data.image, 'uploads/users/images');
     payload.image = payload.image || '';
   }
 

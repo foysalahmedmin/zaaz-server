@@ -4,6 +4,7 @@ import config from '../../config';
 import { sendEmail } from '../../utils/sendEmail';
 import { Contact } from './contact.model';
 import { TContact, TCreateContact } from './contact.type';
+import AppQueryFind from '../../builder/AppQueryFind';
 
 export const createContact = async (
   payload: TCreateContact,
@@ -46,8 +47,7 @@ export const getContacts = async (
   data: TContact[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const AppQuery = (await import('../../builder/AppFindQuery')).default;
-  const contactQuery = new AppQuery<TContact>(Contact.find(), query)
+  const contactQuery = new AppQueryFind(Contact, query)
     .search(['name', 'email', 'subject', 'message'])
     .filter()
     .sort()

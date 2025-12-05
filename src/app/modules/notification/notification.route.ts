@@ -82,6 +82,6 @@ router.post(
   NotificationControllers.restoreNotification,
 );
 
-const NotificationRoutes = router;
+const notificationRoutes = router;
 
-export default NotificationRoutes;
+export default notificationRoutes;

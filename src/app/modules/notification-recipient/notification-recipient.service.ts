@@ -1,9 +1,9 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
-import { TJwtPayload } from '../../types/jsonwebtoken.type';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { NotificationRecipient } from './notification-recipient.model';
 import { TNotificationRecipient } from './notification-recipient.type';
+import { TJwtPayload } from '../../types/jsonwebtoken.type';
 
 export const createNotificationRecipient = async (
   data: TNotificationRecipient,
@@ -18,8 +18,13 @@ export const getSelfNotificationRecipient = async (
 ): Promise<TNotificationRecipient> => {
   const result = await NotificationRecipient.findOne({
     _id: id,
-    author: user._id,
-  }).lean();
+    recipient: user._id,
+  })
+    .populate([
+      { path: 'recipient', select: '_id name email image' },
+      { path: 'notification', select: '_id title message type sender priority channels' },
+    ])
+    .lean();
 
   if (!result) {
     throw new AppError(
@@ -51,13 +56,15 @@ export const getSelfNotificationRecipients = async (
   data: TNotificationRecipient[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppFindQuery<TNotificationRecipient>(
-    NotificationRecipient.find({ author: user._id }).populate([
+  const notificationQuery = new AppQueryFind(NotificationRecipient, { recipient: user._id, ...query })
+    .populate([
       { path: 'recipient', select: '_id name email image' },
-      { path: 'notification', select: '_id title type sender' },
-    ]),
-    query,
-  )
+      { 
+        path: 'notification', 
+        select: '_id title message type sender priority channels created_at',
+        populate: { path: 'sender', select: '_id name email image' },
+      },
+    ])
     .filter()
     .sort()
     .paginate()
@@ -67,7 +74,7 @@ export const getSelfNotificationRecipients = async (
   return await notificationQuery.execute([
     {
       key: 'unread',
-      filter: { is_read: false },
+      filter: { is_read: false, recipient: user._id },
     },
   ]);
 };
@@ -78,13 +85,11 @@ export const getNotificationRecipients = async (
   data: TNotificationRecipient[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppFindQuery<TNotificationRecipient>(
-    NotificationRecipient.find().populate([
+  const notificationQuery = new AppQueryFind(NotificationRecipient, query)
+    .populate([
       { path: 'recipient', select: '_id name email image' },
       { path: 'notification', select: '_id title type sender' },
-    ]),
-    query,
-  )
+    ])
     .filter()
     .sort()
     .paginate()
@@ -106,7 +111,7 @@ export const updateSelfNotificationRecipient = async (
 ): Promise<TNotificationRecipient> => {
   const data = await NotificationRecipient.findOne({
     _id: id,
-    author: user._id,
+    recipient: user._id,
   }).lean();
 
   if (!data) {
@@ -116,10 +121,32 @@ export const updateSelfNotificationRecipient = async (
     );
   }
 
-  const result = await NotificationRecipient.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  }).lean();
+  // Set read_at if marking as read
+  const updatePayload = {
+    ...payload,
+    ...(payload.is_read === true && !payload.read_at
+      ? { read_at: new Date() }
+      : {}),
+    ...(payload.is_read === false ? { read_at: null } : {}),
+  };
+
+  const result = await NotificationRecipient.findByIdAndUpdate(
+    id,
+    updatePayload,
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .populate([
+      { path: 'recipient', select: '_id name email image' },
+      { 
+        path: 'notification', 
+        select: '_id title message type sender priority channels created_at',
+        populate: { path: 'sender', select: '_id name email image' },
+      },
+    ])
+    .lean();
 
   return result!;
 };
@@ -149,7 +176,7 @@ export const readAllNotificationRecipients = async (
   user: TJwtPayload,
 ): Promise<{ count: number }> => {
   const result = await NotificationRecipient.updateMany(
-    { author: user._id },
+    { recipient: user._id, is_read: false },
     { is_read: true, read_at: new Date() },
   );
 
@@ -163,15 +190,24 @@ export const updateSelfNotificationRecipients = async (
 ): Promise<{ count: number; not_found_ids: string[] }> => {
   const recipients = await NotificationRecipient.find({
     _id: { $in: ids },
-    author: user._id,
+    recipient: user._id,
   }).lean();
 
   const foundIds = recipients.map((r) => r._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
+  // Set read_at if marking as read
+  const updatePayload = {
+    ...payload,
+    ...(payload.is_read === true && !payload.read_at
+      ? { read_at: new Date() }
+      : {}),
+    ...(payload.is_read === false ? { read_at: null } : {}),
+  };
+
   const result = await NotificationRecipient.updateMany(
-    { _id: { $in: foundIds }, author: user._id },
-    { ...payload },
+    { _id: { $in: foundIds }, recipient: user._id },
+    updatePayload,
   );
 
   return { count: result.modifiedCount, not_found_ids: notFoundIds };
@@ -202,7 +238,7 @@ export const deleteSelfNotificationRecipient = async (
 ): Promise<void> => {
   const data = await NotificationRecipient.findOne({
     _id: id,
-    author: user._id,
+    recipient: user._id,
   });
   if (!data)
     throw new AppError(
@@ -247,14 +283,14 @@ export const deleteSelfNotificationRecipients = async (
 ): Promise<{ count: number; not_found_ids: string[] }> => {
   const data = await NotificationRecipient.find({
     _id: { $in: ids },
-    author: user._id,
+    recipient: user._id,
   }).lean();
 
   const foundIds = data.map((d) => d._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   await NotificationRecipient.updateMany(
-    { _id: { $in: foundIds }, author: user._id },
+    { _id: { $in: foundIds }, recipient: user._id },
     { is_deleted: true },
   );
 
@@ -301,10 +337,19 @@ export const restoreSelfNotificationRecipient = async (
   id: string,
 ): Promise<TNotificationRecipient> => {
   const data = await NotificationRecipient.findOneAndUpdate(
-    { _id: id, is_deleted: true, author: user._id },
+    { _id: id, is_deleted: true, recipient: user._id },
     { is_deleted: false },
     { new: true },
-  ).lean();
+  )
+    .populate([
+      { path: 'recipient', select: '_id name email image' },
+      { 
+        path: 'notification', 
+        select: '_id title message type sender priority channels created_at',
+        populate: { path: 'sender', select: '_id name email image' },
+      },
+    ])
+    .lean();
 
   if (!data) {
     throw new AppError(
@@ -340,13 +385,13 @@ export const restoreSelfNotificationRecipients = async (
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
   const result = await NotificationRecipient.updateMany(
-    { _id: { $in: ids }, is_deleted: true, author: user._id },
+    { _id: { $in: ids }, is_deleted: true, recipient: user._id },
     { is_deleted: false },
   );
 
   const restored = await NotificationRecipient.find({
     _id: { $in: ids },
-    author: user._id,
+    recipient: user._id,
   }).lean();
 
   const restoredIds = restored.map((r) => r._id.toString());

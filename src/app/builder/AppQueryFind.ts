@@ -1,4 +1,4 @@
-import { Document, FilterQuery, Model, Query } from 'mongoose';
+import { Document, FilterQuery, Model, Query, PopulateOptions } from 'mongoose';
 
 interface QueryParams {
   search?: string;
@@ -10,21 +10,23 @@ interface QueryParams {
   [key: string]: unknown;
 }
 
-// Internal type to extend the result type with Document properties
 type DocumentType<T> = T & Document;
 
-class AppFindQuery<T = any> {
+class AppQueryFind<T = any> {
+  private model: Model<DocumentType<T>>;
   public query: Query<DocumentType<T>[], DocumentType<T>>;
   public query_params: QueryParams;
   public query_filter: FilterQuery<DocumentType<T>>;
+  
   private page = 1;
   private limit = 0;
 
   constructor(
-    query: Query<DocumentType<T>[], DocumentType<T>>,
+    model: Model<DocumentType<T>>,
     query_params: Record<string, unknown>,
   ) {
-    this.query = query;
+    this.model = model;
+    this.query = model.find();
     this.query_params = query_params;
     this.query_filter = {};
   }
@@ -145,6 +147,17 @@ class AppFindQuery<T = any> {
     return this;
   }
 
+  populate(
+    populateConfig:
+      | string
+      | PopulateOptions
+      | Array<string | PopulateOptions>,
+  ): this {
+    // Mongoose populate accepts string, PopulateOptions, or array of both
+    this.query = this.query.populate(populateConfig as any);
+    return this;
+  }
+
   tap(
     callback: (
       query: Query<DocumentType<T>[], DocumentType<T>>,
@@ -169,7 +182,7 @@ class AppFindQuery<T = any> {
     };
   }> {
     const [total, stats] = await Promise.all([
-      (this.query.model as Model<DocumentType<T>>).countDocuments({
+      this.model.countDocuments({
         ...this.query_filter,
         ...(!this.query_filter?.is_deleted && {
           is_deleted: { $ne: true },
@@ -178,9 +191,7 @@ class AppFindQuery<T = any> {
       statisticsQueries
         ? Promise.all(
             statisticsQueries.map(async (stat) => {
-              const count = await (
-                this.query.model as Model<DocumentType<T>>
-              ).countDocuments({
+              const count = await this.model.countDocuments({
                 ...this.query_filter,
                 ...stat.filter,
                 ...(!this.query_filter?.is_deleted && {
@@ -223,4 +234,4 @@ class AppFindQuery<T = any> {
   }
 }
 
-export default AppFindQuery;
+export default AppQueryFind;

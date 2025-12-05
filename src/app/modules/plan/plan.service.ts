@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { Plan } from './plan.model';
 import { TPlan } from './plan.type';
 
@@ -27,7 +27,7 @@ export const getPlans = async (
 
   const filter: Record<string, unknown> = {};
 
-  const planQuery = new AppFindQuery<TPlan>(Plan.find(), { ...rest, ...filter })
+  const planQuery = new AppQueryFind(Plan, { ...rest, ...filter })
     .search(['name', 'description'])
     .filter()
     .sort()

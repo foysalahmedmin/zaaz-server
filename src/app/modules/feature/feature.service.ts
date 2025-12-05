@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import { Feature } from './feature.model';
 import { TFeature } from './feature.type';
 
@@ -50,10 +50,11 @@ export const getPublicFeatures = async (
     filter.type = type;
   }
 
-  const featureQuery = new AppFindQuery<TFeature>(
-    Feature.find().populate([{ path: 'children' }]),
+  const featureQuery = new AppQueryFind(
+    Feature,
     { ...rest, ...filter },
   )
+    .populate([{ path: 'children' }])
     .search(['name', 'description', 'path'])
     .filter()
     .sort()
@@ -86,10 +87,11 @@ export const getFeatures = async (
     filter.type = type;
   }
 
-  const featureQuery = new AppFindQuery<TFeature>(
-    Feature.find().populate([{ path: 'children' }]),
+  const featureQuery = new AppQueryFind(
+    Feature,
     { ...rest, ...filter },
   )
+    .populate([{ path: 'children' }])
     .search(['name', 'description', 'path'])
     .filter()
     .sort([

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/AppError';
-import AppFindQuery from '../../builder/AppFindQuery';
+import AppQueryFind from '../../builder/AppQueryFind';
 import config from '../../config';
 import { PaymentMethod } from './payment-method.model';
 import { TPaymentMethod } from './payment-method.type';
@@ -66,8 +66,8 @@ export const getPublicPaymentMethods = async (
     filter.currency = currency;
   }
 
-  const paymentMethodQuery = new AppFindQuery<TPaymentMethod>(
-    PaymentMethod.find(),
+  const paymentMethodQuery = new AppQueryFind(
+    PaymentMethod,
     { ...rest, ...filter },
   )
     .search(['name', 'value', 'description'])
@@ -96,8 +96,8 @@ export const getPaymentMethods = async (
     filter.currency = currency;
   }
 
-  const paymentMethodQuery = new AppFindQuery<TPaymentMethod>(
-    PaymentMethod.find(),
+  const paymentMethodQuery = new AppQueryFind(
+    PaymentMethod,
     { ...rest, ...filter },
   )
     .search(['name', 'value', 'description'])
