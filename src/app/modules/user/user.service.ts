@@ -92,7 +92,7 @@ export const updateSelf = async (
   }
 
   if (payload?.image !== data.image && data.image) {
-    deleteFiles(data.image, 'uploads/users/images');
+    deleteFiles(data.image, 'uploads/users');
     payload.image = payload.image || '';
   }
 
