@@ -36,6 +36,19 @@ router.post(
 );
 
 router.post(
+  '/give-initial-package/self',
+  auth('admin', 'user'),
+  UserWalletControllers.giveSelfInitialPackage,
+);
+
+router.post(
+  '/give-initial-package',
+  serverAuth(),
+  validation(UserWalletValidations.giveInitialPackageValidationSchema),
+  UserWalletControllers.giveInitialPackage,
+);
+
+router.post(
   '/give-initial-token',
   serverAuth(),
   validation(UserWalletValidations.giveInitialTokenValidationSchema),

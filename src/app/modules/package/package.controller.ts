@@ -163,13 +163,3 @@ export const updatePackageIsInitial = catchAsync(async (req, res) => {
   });
 });
 
-export const giveInitialPackage = catchAsync(async (req, res) => {
-  const { user_id } = req.body;
-  const result = await PackageServices.giveInitialPackage(user_id);
-  sendResponse(res, {
-    status: httpStatus.OK,
-    success: true,
-    message: 'Initial package given successfully',
-    data: result,
-  });
-});

@@ -627,11 +627,11 @@ These endpoints are available for client-side access without authentication:
 
 ### Package-Specific Endpoints
 
-- `POST /api/packages/give-initial-package` - Give initial package to user as bonus (server-to-server authentication required)
 - `PATCH /api/packages/:id/is-initial` - Update package is_initial status (admin only, ensures only one is initial)
 
 ### User Wallet-Specific Endpoints
 
+- `POST /api/user-wallets/give-initial-package` - Give initial package to user as bonus (server-to-server authentication required)
 - `POST /api/user-wallets/give-initial-token` - Give initial token to user (server-to-server authentication required, supports optional duration parameter)
 
 ---

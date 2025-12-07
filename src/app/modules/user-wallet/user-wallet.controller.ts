@@ -140,15 +140,35 @@ export const restoreUserWallets = catchAsync(async (req, res) => {
   });
 });
 
+export const giveSelfInitialPackage = catchAsync(async (req, res) => {
+  const userId = req.user._id;
+  const result = await UserWalletServices.giveInitialPackage(userId);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Initial package given successfully',
+    data: result,
+  });
+});
+
+export const giveInitialPackage = catchAsync(async (req, res) => {
+  const { user_id } = req.body;
+  const result = await UserWalletServices.giveInitialPackage(user_id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Initial package given successfully',
+    data: result,
+  });
+});
+
 export const giveInitialToken = catchAsync(async (req, res) => {
   const { user_id, token, duration } = req.body;
-
   const result = await UserWalletServices.giveInitialToken(
     user_id,
     token,
     duration,
   );
-
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -159,9 +179,7 @@ export const giveInitialToken = catchAsync(async (req, res) => {
 
 export const giveBonusToken = catchAsync(async (req, res) => {
   const { user_id, token } = req.body;
-
   const result = await UserWalletServices.giveBonusToken(user_id, token);
-
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,

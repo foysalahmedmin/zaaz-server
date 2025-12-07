@@ -80,3 +80,9 @@ export const giveBonusTokenValidationSchema = z.object({
       .positive('Token must be greater than 0'),
   }),
 });
+
+export const giveInitialPackageValidationSchema = z.object({
+  body: z.object({
+    user_id: idSchema,
+  }),
+});

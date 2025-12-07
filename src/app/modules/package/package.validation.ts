@@ -103,12 +103,6 @@ export const updatePackageIsInitialValidationSchema = z.object({
   }),
 });
 
-export const giveInitialPackageValidationSchema = z.object({
-  body: z.object({
-    user_id: idSchema,
-  }),
-});
-
 export const updatePackagesValidationSchema = z.object({
   body: z.object({
     ids: z
