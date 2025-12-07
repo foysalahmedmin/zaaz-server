@@ -9,6 +9,12 @@ const methodEnum = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export const createFeatureEndpointValidationSchema = z.object({
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(1, 'Value is required')
+      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
+      .toLowerCase(),
     feature: idSchema,
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     description: z
@@ -36,6 +42,13 @@ export const updateFeatureEndpointValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(1, 'Value is required')
+      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
+      .toLowerCase()
+      .optional(),
     feature: idSchema.optional(),
     name: z
       .string()
@@ -87,5 +100,11 @@ export const featureEndpointsOperationValidationSchema = z.object({
     ids: z
       .array(idSchema)
       .nonempty('At least one feature endpoint ID is required'),
+  }),
+});
+
+export const getFeatureEndpointByValueValidationSchema = z.object({
+  params: z.object({
+    value: z.string().trim().min(1, 'Value is required').toLowerCase(),
   }),
 });

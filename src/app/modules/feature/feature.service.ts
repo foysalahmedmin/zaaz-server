@@ -5,13 +5,47 @@ import { Feature } from './feature.model';
 import { TFeature } from './feature.type';
 
 export const createFeature = async (data: TFeature): Promise<TFeature> => {
-  const result = await Feature.create(data);
+  // Ensure value is lowercase
+  const featureData = {
+    ...data,
+    value: data.value.toLowerCase().trim(),
+  };
+
+  // Check for duplicate value (non-deleted only)
+  const existingFeature = await Feature.findOne({
+    value: featureData.value,
+    is_deleted: { $ne: true },
+  })
+    .setOptions({ bypassDeleted: true })
+    .lean();
+
+  if (existingFeature) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      'Feature with this value already exists',
+    );
+  }
+
+  const result = await Feature.create(featureData);
   return result.toObject();
 };
 
 export const getPublicFeature = async (id: string): Promise<TFeature> => {
   const result = await Feature.findOne({
     _id: id,
+    is_active: true,
+  }).populate('children');
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Feature not found');
+  }
+  return result;
+};
+
+export const getPublicFeatureByValue = async (
+  value: string,
+): Promise<TFeature> => {
+  const result = await Feature.findOne({
+    value: value.toLowerCase().trim(),
     is_active: true,
   }).populate('children');
   if (!result) {
@@ -127,7 +161,29 @@ export const updateFeature = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Feature not found');
   }
 
-  const result = await Feature.findByIdAndUpdate(id, payload, {
+  // If value is being updated, ensure it's lowercase and check for duplicates
+  const updatePayload: Partial<TFeature> = { ...payload };
+  if (payload.value !== undefined) {
+    updatePayload.value = payload.value.toLowerCase().trim();
+
+    // Check for duplicate value (excluding current record and non-deleted only)
+    const existingFeature = await Feature.findOne({
+      value: updatePayload.value,
+      _id: { $ne: id },
+      is_deleted: { $ne: true },
+    })
+      .setOptions({ bypassDeleted: true })
+      .lean();
+
+    if (existingFeature) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        'Feature with this value already exists',
+      );
+    }
+  }
+
+  const result = await Feature.findByIdAndUpdate(id, updatePayload, {
     new: true,
     runValidators: true,
   });

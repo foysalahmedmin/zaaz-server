@@ -9,6 +9,12 @@ const featureTypeEnum = z.enum(['writing', 'generation', 'other']);
 
 export const createFeatureValidationSchema = z.object({
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(1, 'Value is required')
+      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
+      .toLowerCase(),
     parent: idSchema.optional(),
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     description: z
@@ -37,6 +43,13 @@ export const updateFeatureValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(1, 'Value is required')
+      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
+      .toLowerCase()
+      .optional(),
     parent: idSchema.optional(),
     name: z
       .string()
@@ -85,5 +98,11 @@ export const featureOperationValidationSchema = z.object({
 export const featuresOperationValidationSchema = z.object({
   body: z.object({
     ids: z.array(idSchema).nonempty('At least one feature ID is required'),
+  }),
+});
+
+export const getFeatureByValueValidationSchema = z.object({
+  params: z.object({
+    value: z.string().trim().min(1, 'Value is required').toLowerCase(),
   }),
 });

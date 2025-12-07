@@ -7,6 +7,13 @@ import {
 
 const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
   {
+    value: {
+      type: String,
+      required: [true, 'Value is required'],
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     feature: {
       type: Schema.Types.ObjectId,
       ref: 'Feature',
@@ -60,6 +67,16 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
     },
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
+  },
+);
+
+// Unique index for value (only for non-deleted records)
+featureEndpointSchema.index(
+  { value: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_deleted: { $ne: true } },
+    name: 'value_unique',
   },
 );
 

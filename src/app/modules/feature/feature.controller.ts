@@ -24,6 +24,17 @@ export const getPublicFeature = catchAsync(async (req, res) => {
   });
 });
 
+export const getPublicFeatureByValue = catchAsync(async (req, res) => {
+  const { value } = req.params;
+  const result = await FeatureServices.getPublicFeatureByValue(value);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Feature retrieved successfully',
+    data: result,
+  });
+});
+
 export const getFeature = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await FeatureServices.getFeature(id);

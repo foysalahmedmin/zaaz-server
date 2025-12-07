@@ -3,6 +3,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 export type TFeatureType = 'writing' | 'generation' | 'other';
 
 export type TFeature = {
+  value: string;
   parent?: mongoose.Types.ObjectId | null;
   name: string;
   description?: string;

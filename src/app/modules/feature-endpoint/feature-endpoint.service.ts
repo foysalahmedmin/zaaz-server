@@ -7,7 +7,28 @@ import { TFeatureEndpoint } from './feature-endpoint.type';
 export const createFeatureEndpoint = async (
   data: TFeatureEndpoint,
 ): Promise<TFeatureEndpoint> => {
-  const result = await FeatureEndpoint.create(data);
+  // Ensure value is lowercase
+  const featureEndpointData = {
+    ...data,
+    value: data.value.toLowerCase().trim(),
+  };
+
+  // Check for duplicate value (non-deleted only)
+  const existingFeatureEndpoint = await FeatureEndpoint.findOne({
+    value: featureEndpointData.value,
+    is_deleted: { $ne: true },
+  })
+    .setOptions({ bypassDeleted: true })
+    .lean();
+
+  if (existingFeatureEndpoint) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      'Feature endpoint with this value already exists',
+    );
+  }
+
+  const result = await FeatureEndpoint.create(featureEndpointData);
   return result.toObject();
 };
 
@@ -16,6 +37,19 @@ export const getPublicFeatureEndpoint = async (
 ): Promise<TFeatureEndpoint> => {
   const result = await FeatureEndpoint.findOne({
     _id: id,
+    is_active: true,
+  }).populate('feature');
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
+  }
+  return result;
+};
+
+export const getPublicFeatureEndpointByValue = async (
+  value: string,
+): Promise<TFeatureEndpoint> => {
+  const result = await FeatureEndpoint.findOne({
+    value: value.toLowerCase().trim(),
     is_active: true,
   }).populate('feature');
   if (!result) {
@@ -124,7 +158,29 @@ export const updateFeatureEndpoint = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
 
-  const result = await FeatureEndpoint.findByIdAndUpdate(id, payload, {
+  // If value is being updated, ensure it's lowercase and check for duplicates
+  const updatePayload: Partial<TFeatureEndpoint> = { ...payload };
+  if (payload.value !== undefined) {
+    updatePayload.value = payload.value.toLowerCase().trim();
+
+    // Check for duplicate value (excluding current record and non-deleted only)
+    const existingFeatureEndpoint = await FeatureEndpoint.findOne({
+      value: updatePayload.value,
+      _id: { $ne: id },
+      is_deleted: { $ne: true },
+    })
+      .setOptions({ bypassDeleted: true })
+      .lean();
+
+    if (existingFeatureEndpoint) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        'Feature endpoint with this value already exists',
+      );
+    }
+  }
+
+  const result = await FeatureEndpoint.findByIdAndUpdate(id, updatePayload, {
     new: true,
     runValidators: true,
   });

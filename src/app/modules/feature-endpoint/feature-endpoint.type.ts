@@ -8,6 +8,7 @@ export type TFeatureEndpointMethod =
   | 'DELETE';
 
 export type TFeatureEndpoint = {
+  value: string;
   feature: mongoose.Types.ObjectId;
   name: string;
   description?: string;

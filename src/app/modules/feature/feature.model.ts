@@ -3,6 +3,13 @@ import { TFeature, TFeatureDocument, TFeatureModel } from './feature.type';
 
 const featureSchema = new Schema<TFeatureDocument>(
   {
+    value: {
+      type: String,
+      required: [true, 'Value is required'],
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     parent: {
       type: Schema.Types.ObjectId,
       ref: 'Feature',
@@ -50,6 +57,16 @@ const featureSchema = new Schema<TFeatureDocument>(
     },
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
+  },
+);
+
+// Unique index for value (only for non-deleted records)
+featureSchema.index(
+  { value: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_deleted: { $ne: true } },
+    name: 'value_unique',
   },
 );
 

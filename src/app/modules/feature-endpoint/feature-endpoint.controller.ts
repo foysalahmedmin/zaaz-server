@@ -24,6 +24,20 @@ export const getPublicFeatureEndpoint = catchAsync(async (req, res) => {
   });
 });
 
+export const getPublicFeatureEndpointByValue = catchAsync(
+  async (req, res) => {
+    const { value } = req.params;
+    const result =
+      await FeatureEndpointServices.getPublicFeatureEndpointByValue(value);
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: 'Feature endpoint retrieved successfully',
+      data: result,
+    });
+  },
+);
+
 export const getFeatureEndpoint = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await FeatureEndpointServices.getFeatureEndpoint(id);
