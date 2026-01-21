@@ -1,7 +1,8 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/app-error';
-import AppQueryAggregation from '../../builder/app-query-aggregation';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
+import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
   createPackagePlans,
@@ -13,12 +14,19 @@ import { Plan } from '../plan/plan.model';
 import { Package } from './package.model';
 import { TPackage } from './package.type';
 
+const CACHE_TTL = 86400; // 24 hours (Optimized for production with proper invalidation)
+
+export const clearPackageCache = async () => {
+  await invalidateCacheByPattern('package:*');
+  await invalidateCacheByPattern('packages:public:*');
+};
+
 export const createPackage = async (
   data: TPackage & {
     plans?: Array<{
       plan: mongoose.Types.ObjectId | string;
       price: { USD: number; BDT: number };
-      token: number;
+      credits: number;
       is_initial?: boolean;
       is_active?: boolean;
     }>;
@@ -48,7 +56,7 @@ export const createPackage = async (
   type PlanInput = {
     plan: mongoose.Types.ObjectId | string;
     price: { USD: number; BDT: number };
-    token: number;
+    credits: number;
     is_initial?: boolean;
     is_active?: boolean;
   };
@@ -112,84 +120,102 @@ export const createPackage = async (
         : planData.plan,
     package: new mongoose.Types.ObjectId(packageId),
     price: planData.price,
-    token: planData.token,
+    credits: planData.credits,
     is_initial: planData.is_initial || false,
     is_active: planData.is_active !== undefined ? planData.is_active : true,
   }));
 
   await createPackagePlans(packagePlanData, session);
 
+  // Clear cache after creation
+  await clearPackageCache();
+
   return result[0].toObject();
 };
 
 export const getPublicPackage = async (id: string): Promise<any> => {
-  const pipeline: any[] = [
-    {
-      $match: {
-        _id: new mongoose.Types.ObjectId(id),
-        is_active: true,
-        is_deleted: { $ne: true },
+  return withCache(`package:${id}`, CACHE_TTL, async () => {
+    const pipeline: any[] = [
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(id),
+          is_active: true,
+          is_deleted: { $ne: true },
+        },
       },
-    },
-    {
-      $lookup: {
-        from: 'features',
-        localField: 'features',
-        foreignField: '_id',
-        as: 'features',
+      {
+        $lookup: {
+          from: 'features',
+          localField: 'features',
+          foreignField: '_id',
+          as: 'features',
+        },
       },
-    },
-    {
-      $lookup: {
-        from: 'packageplans',
-        let: { packageId: '$_id' },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ['$package', '$$packageId'] },
-              is_deleted: { $ne: true },
-              is_active: true,
+      {
+        $lookup: {
+          from: 'packageplans',
+          let: { packageId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$package', '$$packageId'] },
+                is_deleted: { $ne: true },
+                is_active: true,
+              },
             },
-          },
-          {
-            $lookup: {
-              from: 'plans',
-              localField: 'plan',
-              foreignField: '_id',
-              as: 'plan',
+            {
+              $lookup: {
+                from: 'plans',
+                localField: 'plan',
+                foreignField: '_id',
+                as: 'plan',
+              },
             },
-          },
-          {
-            $unwind: {
-              path: '$plan',
-              preserveNullAndEmptyArrays: false,
+            {
+              $unwind: {
+                path: '$plan',
+                preserveNullAndEmptyArrays: false,
+              },
             },
-          },
-          {
-            $project: {
-              plan: 1,
-              price: 1,
-              previous_price: 1,
-              token: 1,
-              is_initial: 1,
-              _id: 1,
+            {
+              $project: {
+                plan: 1,
+                price: 1,
+                previous_price: 1,
+                credits: 1,
+                is_initial: 1,
+                _id: 1,
+              },
             },
-          },
-          {
-            $sort: { is_initial: -1, created_at: 1 },
-          },
-        ],
-        as: 'plans',
+            {
+              $sort: { is_initial: -1, created_at: 1 },
+            },
+          ],
+          as: 'plans',
+        },
       },
-    },
-  ];
+    ];
 
-  const results = await Package.aggregate(pipeline);
-  if (!results || results.length === 0) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
-  }
+    const results = await Package.aggregate(pipeline);
+    if (!results || results.length === 0) {
+      throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
+    }
 
-  return results[0];
+    return results[0];
+  });
+};
+
+export const getPackageFeatures = async (packageId: string): Promise<any[]> => {
+  return await withCache(
+    `package:features:${packageId}`,
+    CACHE_TTL,
+    async () => {
+      const packageData = await Package.findById(packageId)
+        .select('features')
+        .lean();
+      return packageData?.features || [];
+    },
+  );
 };
 
 export const getPackage = async (id: string): Promise<any> => {
@@ -238,7 +264,7 @@ export const getPackage = async (id: string): Promise<any> => {
               plan: 1,
               price: 1,
               previous_price: 1,
-              token: 1,
+              credits: 1,
               is_initial: 1,
               is_active: 1,
               _id: 1,
@@ -267,96 +293,102 @@ export const getPublicPackages = async (
   data: any[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const baseFilter: Record<string, unknown> = {
-    is_active: true,
-    is_deleted: { $ne: true },
-  };
+  return withCache(
+    `packages:public:${JSON.stringify(query)}`,
+    CACHE_TTL,
+    async () => {
+      const baseFilter: Record<string, unknown> = {
+        is_active: true,
+        is_deleted: { $ne: true },
+      };
 
-  // Convert _id to ObjectId if provided
-  if (query._id) {
-    baseFilter._id = new mongoose.Types.ObjectId(query._id as string);
-  }
+      // Convert _id to ObjectId if provided
+      if (query._id) {
+        baseFilter._id = new mongoose.Types.ObjectId(query._id as string);
+      }
 
-  // If plans query parameter exists, use it for MongoDB array filtering
-  if (query.plans) {
-    baseFilter.plans = new mongoose.Types.ObjectId(query.plans as string);
-  }
+      // If plans query parameter exists, use it for MongoDB array filtering
+      if (query.plans) {
+        baseFilter.plans = new mongoose.Types.ObjectId(query.plans as string);
+      }
 
-  // Build extra pipeline stages for lookups
-  const lookupStages: any[] = [
-    {
-      $lookup: {
-        from: 'features',
-        localField: 'features',
-        foreignField: '_id',
-        as: 'features',
-      },
+      // Build extra pipeline stages for lookups
+      const lookupStages: any[] = [
+        {
+          $lookup: {
+            from: 'features',
+            localField: 'features',
+            foreignField: '_id',
+            as: 'features',
+          },
+        },
+        {
+          $lookup: {
+            from: 'packageplans',
+            let: { packageId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ['$package', '$$packageId'] },
+                  is_deleted: { $ne: true },
+                  is_active: true,
+                },
+              },
+              {
+                $lookup: {
+                  from: 'plans',
+                  localField: 'plan',
+                  foreignField: '_id',
+                  as: 'plan',
+                },
+              },
+              {
+                $unwind: {
+                  path: '$plan',
+                  preserveNullAndEmptyArrays: false,
+                },
+              },
+              {
+                $project: {
+                  plan: 1,
+                  price: 1,
+                  previous_price: 1,
+                  credits: 1,
+                  is_initial: 1,
+                  _id: 1,
+                },
+              },
+              {
+                $sort: { is_initial: -1, created_at: 1 },
+              },
+            ],
+            as: 'plans',
+          },
+        },
+      ];
+
+      // Use AppQueryV2 for aggregation-based querying
+      // Exclude _id from query params since we're handling it in baseFilter
+      const { _id: _, ...restQuery } = query;
+      const packageQuery = new AppAggregationQuery<TPackage>(Package, {
+        ...restQuery,
+        ...baseFilter,
+      })
+        .search(['name', 'description', 'value'])
+        .filter()
+        .addPipeline(lookupStages) // Add lookup stages after filter
+        .sort()
+        .paginate()
+        .fields();
+
+      const result = await packageQuery.execute();
+
+      return {
+        ...result,
+        data: result.data,
+      };
     },
-    {
-      $lookup: {
-        from: 'packageplans',
-        let: { packageId: '$_id' },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ['$package', '$$packageId'] },
-              is_deleted: { $ne: true },
-              is_active: true,
-            },
-          },
-          {
-            $lookup: {
-              from: 'plans',
-              localField: 'plan',
-              foreignField: '_id',
-              as: 'plan',
-            },
-          },
-          {
-            $unwind: {
-              path: '$plan',
-              preserveNullAndEmptyArrays: false,
-            },
-          },
-          {
-            $project: {
-              plan: 1,
-              price: 1,
-              previous_price: 1,
-              token: 1,
-              is_initial: 1,
-              _id: 1,
-            },
-          },
-          {
-            $sort: { is_initial: -1, created_at: 1 },
-          },
-        ],
-        as: 'plans',
-      },
-    },
-  ];
-
-  // Use AppQueryV2 for aggregation-based querying
-  // Exclude _id from query params since we're handling it in baseFilter
-  const { _id: _, ...restQuery } = query;
-  const packageQuery = new AppQueryAggregation(Package, {
-    ...restQuery,
-    ...baseFilter,
-  })
-    .search(['name', 'description'])
-    .filter()
-    .pipeline(lookupStages)
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await packageQuery.execute();
-
-  return {
-    ...result,
-    data: result.data,
-  };
+  );
 };
 
 export const getPackages = async (
@@ -411,7 +443,7 @@ export const getPackages = async (
               plan: 1,
               price: 1,
               previous_price: 1,
-              token: 1,
+              credits: 1,
               is_initial: 1,
               is_active: 1,
               _id: 1,
@@ -427,13 +459,13 @@ export const getPackages = async (
   ];
 
   // Use AppQueryV2 for aggregation-based querying
-  const packageQuery = new AppQueryAggregation<TPackage>(Package, {
+  const packageQuery = new AppAggregationQuery<TPackage>(Package, {
     ...rest,
     ...filter,
   })
-    .search(['name', 'description'])
+    .search(['name', 'description', 'value'])
     .filter()
-    .pipeline(lookupStages)
+    .addPipeline(lookupStages) // Add lookup stages after filter
     .sort([
       'name',
       'type',
@@ -473,7 +505,7 @@ export const updatePackage = async (
     plans?: Array<{
       plan: mongoose.Types.ObjectId | string;
       price: { USD: number; BDT: number };
-      token: number;
+      credits: number;
       is_initial?: boolean;
       is_active?: boolean;
     }>;
@@ -519,7 +551,7 @@ export const updatePackage = async (
     },
     price: pp.price,
     previous_price: pp.previous_price,
-    token: pp.token,
+    credits: pp.credits,
     is_initial: pp.is_initial,
     is_active: pp.is_active,
     created_at: pp.created_at,
@@ -531,6 +563,7 @@ export const updatePackage = async (
     [
       {
         package: id,
+        value: packageData.value,
         name: packageData.name,
         description: packageData.description,
         content: packageData.content,
@@ -552,7 +585,7 @@ export const updatePackage = async (
     type UpdatePlanInput = {
       plan: mongoose.Types.ObjectId | string;
       price: { USD: number; BDT: number };
-      token: number;
+      credits: number;
       is_initial?: boolean;
       is_active?: boolean;
     };
@@ -593,9 +626,8 @@ export const updatePackage = async (
 
     // 1. Remove (soft delete) plans
     if (removedPackagePlans.length > 0) {
-      const { deletePackagePlan } = await import(
-        '../package-plan/package-plan.service'
-      );
+      const { deletePackagePlan } =
+        await import('../package-plan/package-plan.service');
       await Promise.all(
         removedPackagePlans.map((pp) =>
           deletePackagePlan(
@@ -636,7 +668,7 @@ export const updatePackage = async (
         package: new mongoose.Types.ObjectId(id),
         previous_price: undefined,
         price: input.price,
-        token: input.token,
+        credits: input.credits,
         is_initial: input.is_initial ?? false,
         is_active: input.is_active ?? true,
       }));
@@ -645,9 +677,8 @@ export const updatePackage = async (
 
     // 3. Update existing plans
     if (existingPlanInputs.length > 0) {
-      const { updatePackagePlan } = await import(
-        '../package-plan/package-plan.service'
-      );
+      const { updatePackagePlan } =
+        await import('../package-plan/package-plan.service');
       await Promise.all(
         existingPlanInputs.map(async (input) => {
           const inputPlanId =
@@ -665,7 +696,7 @@ export const updatePackage = async (
               {
                 previous_price: existingPackagePlan.price,
                 price: input.price,
-                token: input.token,
+                credits: input.credits,
                 is_initial: input.is_initial,
                 is_active: input.is_active,
               },
@@ -686,9 +717,8 @@ export const updatePackage = async (
         (pp) => pp.is_active,
       ) as (TPackagePlan & { _id: mongoose.Types.ObjectId }) | undefined;
       if (firstActivePlan) {
-        const { updatePackagePlan } = await import(
-          '../package-plan/package-plan.service'
-        );
+        const { updatePackagePlan } =
+          await import('../package-plan/package-plan.service');
         await updatePackagePlan(
           firstActivePlan._id.toString(),
           { is_initial: true },
@@ -696,9 +726,8 @@ export const updatePackage = async (
         );
       } else {
         // If no active plans, set the first available one as initial
-        const { updatePackagePlan } = await import(
-          '../package-plan/package-plan.service'
-        );
+        const { updatePackagePlan } =
+          await import('../package-plan/package-plan.service');
         await updatePackagePlan(
           (
             allCurrentPackagePlans[0] as TPackagePlan & {
@@ -711,9 +740,8 @@ export const updatePackage = async (
       }
     } else if (initialPlans.length > 1) {
       // If more than one initial plan, unset all but the first one
-      const { updatePackagePlan } = await import(
-        '../package-plan/package-plan.service'
-      );
+      const { updatePackagePlan } =
+        await import('../package-plan/package-plan.service');
       await Promise.all(
         initialPlans
           .slice(1)
@@ -752,6 +780,9 @@ export const updatePackage = async (
       },
     ).session(session || null);
 
+    // Clear cache after update
+    await clearPackageCache();
+
     return result!;
   }
 
@@ -770,6 +801,9 @@ export const updatePackage = async (
     new: true,
     runValidators: true,
   }).session(session || null);
+
+  // Clear cache after update
+  await clearPackageCache();
 
   return result!;
 };
@@ -790,6 +824,9 @@ export const updatePackages = async (
     { ...payload },
   );
 
+  // Clear cache after update
+  await clearPackageCache();
+
   return {
     count: result.modifiedCount,
     not_found_ids: notFoundIds,
@@ -805,6 +842,9 @@ export const deletePackage = async (id: string): Promise<void> => {
   await packageData.softDelete();
   // Also soft delete associated package-plans
   await deletePackagePlansByPackage(id);
+
+  // Clear cache after deletion
+  await clearPackageCache();
 };
 
 export const deletePackagePermanent = async (id: string): Promise<void> => {
@@ -822,6 +862,9 @@ export const deletePackagePermanent = async (id: string): Promise<void> => {
   await PackagePlan.deleteMany({ package: id }).setOptions({
     bypassDeleted: true,
   });
+
+  // Clear cache after deletion
+  await clearPackageCache();
 };
 
 export const deletePackages = async (
@@ -839,6 +882,9 @@ export const deletePackages = async (
   await Promise.all(
     foundIds.map((packageId) => deletePackagePlansByPackage(packageId)),
   );
+
+  // Clear cache after deletion
+  await clearPackageCache();
 
   return {
     count: foundIds.length,
@@ -872,6 +918,9 @@ export const deletePackagesPermanent = async (
     bypassDeleted: true,
   });
 
+  // Clear cache after deletion
+  await clearPackageCache();
+
   return {
     count: foundIds.length,
     not_found_ids: notFoundIds,
@@ -893,10 +942,12 @@ export const restorePackage = async (id: string): Promise<TPackage> => {
   }
 
   // Also restore associated package-plans
-  const { restorePackagePlansByPackage } = await import(
-    '../package-plan/package-plan.service'
-  );
+  const { restorePackagePlansByPackage } =
+    await import('../package-plan/package-plan.service');
   await restorePackagePlansByPackage(id);
+
+  // Clear cache after restoration
+  await clearPackageCache();
 
   return packageData;
 };
@@ -917,12 +968,14 @@ export const restorePackages = async (
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   // Also restore associated package-plans
-  const { restorePackagePlansByPackage } = await import(
-    '../package-plan/package-plan.service'
-  );
+  const { restorePackagePlansByPackage } =
+    await import('../package-plan/package-plan.service');
   await Promise.all(
     restoredIds.map((packageId) => restorePackagePlansByPackage(packageId)),
   );
+
+  // Clear cache after restoration
+  await clearPackageCache();
 
   return {
     count: result.modifiedCount,
@@ -965,6 +1018,8 @@ export const updatePackageIsInitial = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
+  // Clear cache after update
+  await clearPackageCache();
+
   return result.toObject();
 };
-

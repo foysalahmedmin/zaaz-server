@@ -8,10 +8,11 @@ export type TPackagePrice = {
 };
 
 export type TPackage = {
+  value: string;
   name: string;
   description?: string;
   content?: string;
-  type?: 'token' | 'subscription';
+  type?: 'credits' | 'subscription';
   badge?: string;
   points?: string[];
   features: mongoose.Types.ObjectId[];

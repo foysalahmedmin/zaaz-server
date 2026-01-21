@@ -1,7 +1,6 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
-import config from '../../config';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import { PaymentMethod } from './payment-method.model';
 import { TPaymentMethod } from './payment-method.type';
 
@@ -10,21 +9,6 @@ export const createPaymentMethod = async (
 ): Promise<TPaymentMethod> => {
   // Create payment method first
   const result = await PaymentMethod.create(data);
-  const paymentMethodId = result._id.toString();
-
-  // Auto-generate webhook_url if not provided
-  if (!data.webhook_url) {
-    const webhookUrl = `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
-
-    // Update with generated webhook URL
-    const updatedResult = await PaymentMethod.findByIdAndUpdate(
-      paymentMethodId,
-      { webhook_url: webhookUrl },
-      { new: true, runValidators: true },
-    );
-
-    return updatedResult!.toObject();
-  }
 
   return result.toObject();
 };
@@ -35,7 +19,7 @@ export const getPublicPaymentMethod = async (
   const result = await PaymentMethod.findOne({
     _id: id,
     is_active: true,
-  });
+  }).select('-config');
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
@@ -66,16 +50,23 @@ export const getPublicPaymentMethods = async (
     filter.currency = currency;
   }
 
-  const paymentMethodQuery = new AppQueryFind(PaymentMethod, {
-    ...rest,
-    ...filter,
-  })
+  const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(
+    PaymentMethod,
+    { ...rest, ...filter },
+  )
     .search(['name', 'value', 'description'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields([
+      'name',
+      'value',
+      'description',
+      'currency',
+      'is_test',
+      'is_active',
+      'is_deleted',
+    ]);
 
   const result = await paymentMethodQuery.execute();
 
@@ -96,16 +87,15 @@ export const getPaymentMethods = async (
     filter.currency = currency;
   }
 
-  const paymentMethodQuery = new AppQueryFind(PaymentMethod, {
-    ...rest,
-    ...filter,
-  })
+  const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(
+    PaymentMethod,
+    { ...rest, ...filter },
+  )
     .search(['name', 'value', 'description'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await paymentMethodQuery.execute([
     {

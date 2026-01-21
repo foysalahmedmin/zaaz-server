@@ -13,6 +13,12 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
       unique: true,
       index: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     package: {
       type: Schema.Types.ObjectId,
       ref: 'Package',
@@ -24,21 +30,26 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
       default: null,
       index: true,
     },
-    token: {
+    credits: {
       type: Number,
-      required: [true, 'Token is required'],
-      min: [0, 'Token must be 0 or greater'],
+      required: [true, 'Credits is required'],
+      min: [0, 'Credits must be 0 or greater'],
     },
     expires_at: {
       type: Date,
     },
-    initial_token_given: {
+    initial_credits_given: {
       type: Boolean,
       default: false,
     },
     initial_package_given: {
       type: Boolean,
       default: false,
+    },
+    type: {
+      type: String,
+      enum: ['free', 'paid'],
+      default: 'free',
     },
     is_deleted: { type: Boolean, default: false, select: false },
   },
@@ -51,6 +62,11 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
     toObject: { virtuals: true },
   },
 );
+
+userWalletSchema.index({ created_at: -1 });
+userWalletSchema.index({ package: 1 });
+userWalletSchema.index({ expires_at: 1 });
+userWalletSchema.index({ type: 1 });
 
 // toJSON override to remove sensitive fields from output
 userWalletSchema.methods.toJSON = function () {
@@ -83,10 +99,7 @@ userWalletSchema.pre(/^find/, function (next) {
 
     if (currentQuery.$or) {
       // If query already has $or, combine using $and to preserve both conditions
-      newQuery.$and = [
-        { $or: currentQuery.$or },
-        expirationCondition,
-      ];
+      newQuery.$and = [{ $or: currentQuery.$or }, expirationCondition];
       // Remove the original $or since we've moved it to $and
       delete newQuery.$or;
     } else {

@@ -22,3 +22,7 @@ export type TForgetPassword = {
 export type TResetPassword = {
   password: string;
 };
+
+export type TGoogleSignin = {
+  id_token: string;
+};

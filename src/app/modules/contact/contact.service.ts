@@ -1,8 +1,8 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import config from '../../config';
-import { sendEmail } from '../../utils/send-email';
+import { sendEmail } from '../../utils/sendEmail';
 import { Contact } from './contact.model';
 import { TContact, TCreateContact } from './contact.type';
 
@@ -47,13 +47,12 @@ export const getContacts = async (
   data: TContact[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const contactQuery = new AppQueryFind(Contact, query)
+  const contactQuery = new AppAggregationQuery<TContact>(Contact, query)
     .search(['name', 'email', 'subject', 'message'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await contactQuery.execute();
   return result;

@@ -10,7 +10,7 @@ export type TPackagePlan = {
   package: mongoose.Types.ObjectId;
   previous_price?: TPackagePrice;
   price: TPackagePrice;
-  token: number;
+  credits: number;
   is_initial: boolean;
   is_active: boolean;
   is_deleted?: boolean;
@@ -24,4 +24,3 @@ export interface TPackagePlanDocument extends TPackagePlan, Document {
 export type TPackagePlanModel = Model<TPackagePlanDocument> & {
   isPackagePlanExist(_id: string): Promise<TPackagePlanDocument | null>;
 };
-

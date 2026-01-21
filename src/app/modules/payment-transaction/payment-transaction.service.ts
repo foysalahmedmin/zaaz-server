@@ -1,14 +1,17 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
+import { Coupon } from '../coupon/coupon.model';
+import { CouponServices } from '../coupon/coupon.service';
+import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
 import { PackagePlan } from '../package-plan/package-plan.model';
+import { PackageTransaction } from '../package-transaction/package-transaction.model';
 import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
 import { Plan } from '../plan/plan.model';
-import { TokenTransaction } from '../token-transaction/token-transaction.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { PaymentTransaction } from './payment-transaction.model';
 import { TPaymentTransaction } from './payment-transaction.type';
@@ -33,6 +36,11 @@ export const createPaymentTransaction = async (
 
   if (!wallet) {
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Set email from wallet if not provided
+  if (!data.email && wallet.email) {
+    data.email = wallet.email;
   }
 
   const result = await PaymentTransaction.create([data], { session });
@@ -91,8 +99,8 @@ export const updatePaymentTransactionStatus = async (
         },
       );
 
-      // Check if token transaction exists for this payment transaction
-      const existingTokenTransaction = await TokenTransaction.findOne({
+      // Check if credits transaction exists for this payment transaction
+      const existingCreditsTransaction = await CreditsTransaction.findOne({
         payment_transaction: id,
         type: 'increase',
         increase_source: 'payment',
@@ -100,17 +108,17 @@ export const updatePaymentTransactionStatus = async (
         .session(session || null)
         .lean();
 
-      if (existingTokenTransaction) {
-        // Token transaction exists, wallet should be updated, just return
+      if (existingCreditsTransaction) {
+        // Credits transaction exists, wallet should be updated, just return
         console.log(
-          '[Payment Success] Token transaction already exists, wallet should be updated, skipping',
+          '[Payment Success] Credits transaction already exists, wallet should be updated, skipping',
         );
         return transactionData;
       }
 
-      // Token transaction doesn't exist, wallet update is needed
+      // Credits transaction doesn't exist, wallet update is needed
       console.log(
-        '[Payment Success] Token transaction not found, wallet update needed even though transaction is already success',
+        '[Payment Success] Credits transaction not found, wallet update needed even though transaction is already success',
       );
       // Continue with wallet update logic below using transactionData
     } else {
@@ -132,9 +140,10 @@ export const updatePaymentTransactionStatus = async (
 
     // Prepare wallet update data
     const updateWalletData: any = {
-      $inc: { token: packagePlan.token },
+      $inc: { credits: packagePlan.credits },
       package: transactionData.package, // Update to newly purchased package
       plan: transactionData.plan, // Update to purchased plan
+      type: 'paid',
     };
 
     // Calculate and set expires_at using plan's duration
@@ -144,12 +153,12 @@ export const updatePaymentTransactionStatus = async (
       updateWalletData.expires_at = expiresAt;
     }
 
-    // Update wallet with package tokens, package reference, plan, and expiration
+    // Update wallet with package credits, package reference, plan, and expiration
     try {
       console.log('[Payment Success] Updating wallet...', {
         walletId: transactionData.user_wallet,
         transactionId: id,
-        tokenToAdd: packagePlan.token,
+        creditsToAdd: packagePlan.credits,
         packageId: transactionData.package,
         planId: transactionData.plan,
       });
@@ -174,10 +183,10 @@ export const updatePaymentTransactionStatus = async (
       console.log('[Payment Success] Wallet updated successfully:', {
         walletId: transactionData.user_wallet,
         transactionId: id,
-        tokenAdded: packagePlan.token,
+        creditsAdded: packagePlan.credits,
         packageId: transactionData.package,
         planId: transactionData.plan,
-        newTokenBalance: walletUpdateResult.token,
+        newCreditsBalance: walletUpdateResult.credits,
       });
     } catch (error) {
       console.error('[Payment Success] Failed to update wallet:', {
@@ -189,9 +198,9 @@ export const updatePaymentTransactionStatus = async (
       throw error;
     }
 
-    // Check if token transaction already exists for this payment transaction
-    // This prevents duplicate token transactions in case of race conditions
-    const existingTokenTransaction = await TokenTransaction.findOne({
+    // Check if credits transaction already exists for this payment transaction
+    // This prevents duplicate credits transactions in case of race conditions
+    const existingCreditsTransaction = await CreditsTransaction.findOne({
       payment_transaction: id,
       type: 'increase',
       increase_source: 'payment',
@@ -199,23 +208,24 @@ export const updatePaymentTransactionStatus = async (
       .session(session || null)
       .lean();
 
-    if (!existingTokenTransaction) {
-      // Create token transaction record only if it doesn't exist
+    if (!existingCreditsTransaction) {
+      // Create credits transaction record only if it doesn't exist
       try {
-        console.log('[Payment Success] Creating token transaction...', {
+        console.log('[Payment Success] Creating credits transaction...', {
           transactionId: id,
-          tokenAmount: packagePlan.token,
+          creditsAmount: packagePlan.credits,
           userId: transactionData.user,
           userWallet: transactionData.user_wallet,
         });
 
-        await TokenTransaction.create(
+        await CreditsTransaction.create(
           [
             {
               user: transactionData.user, // ObjectId directly, not populated
               user_wallet: transactionData.user_wallet,
+              email: transactionData.email,
               type: 'increase',
-              token: packagePlan.token,
+              credits: packagePlan.credits,
               increase_source: 'payment',
               payment_transaction: id,
               plan: transactionData.plan,
@@ -223,26 +233,119 @@ export const updatePaymentTransactionStatus = async (
           ],
           { session },
         );
-        console.log('[Payment Success] Token transaction created:', {
+        console.log('[Payment Success] Credits transaction created:', {
           transactionId: id,
-          tokenAmount: packagePlan.token,
+          creditsAmount: packagePlan.credits,
           userId: transactionData.user,
         });
       } catch (error) {
-        console.error('[Payment Success] Failed to create token transaction:', {
-          transactionId: id,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
+        console.error(
+          '[Payment Success] Failed to create credits transaction:',
+          {
+            transactionId: id,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        );
         throw error;
       }
     } else {
       console.log(
-        '[Payment Success] Token transaction already exists, skipping:',
+        '[Payment Success] Credits transaction already exists, skipping:',
         {
           transactionId: id,
         },
       );
+    }
+
+    // Check if package transaction already exists for this payment transaction
+    // This prevents duplicate package transactions in case of race conditions
+    const existingPackageTransaction = await PackageTransaction.findOne({
+      payment_transaction: id,
+      increase_source: 'payment',
+    })
+      .session(session || null)
+      .lean();
+
+    if (!existingPackageTransaction) {
+      // Create package transaction record only if it doesn't exist
+      try {
+        console.log('[Payment Success] Creating package transaction...', {
+          transactionId: id,
+          packageId: transactionData.package,
+          planId: transactionData.plan,
+          creditsAmount: packagePlan.credits,
+          userId: transactionData.user,
+          userWallet: transactionData.user_wallet,
+        });
+
+        await PackageTransaction.create(
+          [
+            {
+              user: transactionData.user,
+              user_wallet: transactionData.user_wallet,
+              email: transactionData.email,
+              package: transactionData.package,
+              plan: transactionData.plan,
+              credits: packagePlan.credits,
+              increase_source: 'payment',
+              payment_transaction: id,
+            },
+          ],
+          { session },
+        );
+        console.log('[Payment Success] Package transaction created:', {
+          transactionId: id,
+          packageId: transactionData.package,
+          planId: transactionData.plan,
+          creditsAmount: packagePlan.credits,
+        });
+      } catch (error) {
+        console.error(
+          '[Payment Success] Failed to create package transaction:',
+          {
+            transactionId: id,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        );
+        // Don't throw error, just log it - package transaction is for tracking only
+      }
+    } else {
+      console.log(
+        '[Payment Success] Package transaction already exists, skipping:',
+        {
+          transactionId: id,
+        },
+      );
+    }
+
+    // Increment coupon usage count if applicable (only once when status transitions to success)
+    if (updateResult && transactionData.coupon) {
+      try {
+        console.log('[Payment Success] Incrementing coupon usage count...', {
+          couponId: transactionData.coupon,
+          transactionId: id,
+        });
+
+        await Coupon.findByIdAndUpdate(
+          transactionData.coupon,
+          { $inc: { usage_count: 1 } },
+          { session },
+        );
+
+        console.log('[Payment Success] Coupon usage count incremented');
+      } catch (error) {
+        console.error(
+          '[Payment Success] Failed to increment coupon usage count:',
+          {
+            couponId: transactionData.coupon,
+            transactionId: id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        // Don't throw error, just log it - coupon tracking is secondary to payment
+      }
     }
 
     return transactionData;
@@ -285,16 +388,19 @@ export const getPaymentTransactions = async (
   data: TPaymentTransaction[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const { user, user_wallet, status, payment_method, ...rest } = query;
+  const { user, email, user_wallet, status, payment_method, ...rest } = query;
 
   const filter: Record<string, unknown> = {};
 
   if (user) {
-    filter.user = user;
+    filter.user = new mongoose.Types.ObjectId(user as string);
   }
 
   if (user_wallet) {
-    filter.user_wallet = user_wallet;
+    filter.user_wallet = new mongoose.Types.ObjectId(user_wallet as string);
+  }
+  if (email) {
+    filter.email = email;
   }
 
   if (status) {
@@ -302,20 +408,25 @@ export const getPaymentTransactions = async (
   }
 
   if (payment_method) {
-    filter.payment_method = payment_method;
+    filter.payment_method = new mongoose.Types.ObjectId(
+      payment_method as string,
+    );
   }
 
-  const paymentTransactionQuery = new AppQueryFind(PaymentTransaction, {
-    ...rest,
-    ...filter,
-  })
+  const paymentTransactionQuery = new AppAggregationQuery<TPaymentTransaction>(
+    PaymentTransaction,
+    { ...rest, ...filter },
+  );
+
+  paymentTransactionQuery
     .populate([
-      { path: 'user_wallet', select: '_id token' },
-      { path: 'payment_method', select: '_id name currency' },
-      { path: 'package', select: '_id name' },
-      { path: 'plan', select: '_id name duration' },
-      { path: 'price', select: '_id price token' }, // package-plan
+      { path: 'user_wallet', select: '_id credits', justOne: true },
+      { path: 'payment_method', select: '_id name currency', justOne: true },
+      { path: 'package', select: '_id name', justOne: true },
+      { path: 'plan', select: '_id name duration', justOne: true },
+      { path: 'price', select: '_id price credits', justOne: true }, // package-plan
     ])
+    .search(['email', 'customer_email', 'gateway_transaction_id'])
     .filter()
     .sort([
       'status',
@@ -332,8 +443,7 @@ export const getPaymentTransactions = async (
       'updated_at',
     ] as any)
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await paymentTransactionQuery.execute([
     {
@@ -359,11 +469,11 @@ export const getPaymentTransaction = async (
 ): Promise<TPaymentTransaction> => {
   const result = await PaymentTransaction.findById(id)
     .populate([
-      { path: 'user_wallet', select: '_id token' },
+      { path: 'user_wallet', select: '_id credits' },
       { path: 'payment_method', select: '_id name currency' },
       { path: 'package', select: '_id name' },
       { path: 'plan', select: '_id name duration' },
-      { path: 'price', select: '_id price token' }, // package-plan
+      { path: 'price', select: '_id price credits' }, // package-plan
       // Note: user is NOT populated because user database is separate
       // user field contains ObjectId directly
     ])
@@ -719,6 +829,7 @@ export const initiatePayment = async (options: {
   customerEmail?: string;
   customerName?: string;
   customerPhone?: string;
+  coupon_code?: string;
   session?: mongoose.ClientSession;
 }): Promise<{
   payment_transaction: TPaymentTransaction;
@@ -735,6 +846,7 @@ export const initiatePayment = async (options: {
     customerEmail,
     customerName,
     customerPhone,
+    coupon_code,
     session,
   } = options;
   // Get payment method
@@ -791,7 +903,8 @@ export const initiatePayment = async (options: {
       [
         {
           user: userId,
-          token: 0,
+          email: customerEmail,
+          credits: 0,
         },
       ],
       { session },
@@ -799,17 +912,33 @@ export const initiatePayment = async (options: {
     wallet = newWallet[0].toObject() as NonNullable<typeof wallet>;
   }
 
-  // Get amount based on payment method currency
   const gatewayAmount =
     paymentMethod.currency === 'USD'
       ? packagePlan.price.USD
       : packagePlan.price.BDT;
 
+  // Coupon handling
+  let discountAmount = 0;
+  let couponId: mongoose.Types.ObjectId | undefined;
+
+  if (coupon_code) {
+    const { coupon, discount_amount } = await CouponServices.validateCoupon(
+      coupon_code,
+      packageId,
+      planId,
+      paymentMethod.currency as 'USD' | 'BDT',
+    );
+    discountAmount = discount_amount;
+    couponId = coupon._id;
+  }
+
+  const finalAmount = gatewayAmount - discountAmount;
+
   // Validate amount is greater than 0
-  if (!gatewayAmount || gatewayAmount <= 0) {
+  if (finalAmount < 0) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      `Package-plan price for ${paymentMethod.currency} is not available or invalid`,
+      `Calculated payment amount cannot be negative`,
     );
   }
 
@@ -818,6 +947,7 @@ export const initiatePayment = async (options: {
     [
       {
         user: userId,
+        email: customerEmail,
         user_wallet: wallet._id,
         status: 'pending',
         payment_method: paymentMethodId,
@@ -825,10 +955,13 @@ export const initiatePayment = async (options: {
         package: packageId,
         plan: planId,
         price: packagePlan._id, // Store package-plan document _id
-        amount: gatewayAmount,
+        coupon: couponId,
+        discount_amount: discountAmount,
+        amount: finalAmount,
         currency: paymentMethod.currency,
         return_url: returnUrl, // Store frontend return URL
         cancel_url: cancelUrl, // Store frontend cancel URL
+        is_test: paymentMethod.is_test || false,
       },
     ],
     { session },
@@ -836,9 +969,7 @@ export const initiatePayment = async (options: {
 
   try {
     // Construct webhook URL for SSLCommerz IPN
-    const webhookUrl =
-      paymentMethod.webhook_url ||
-      `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
+    const webhookUrl = `${config.url}/api/payment-transactions/webhook/${paymentMethodId}`;
 
     // Construct server redirect URLs (gateway will redirect to these)
     const serverReturnUrl = `${config.url}/api/payment-transactions/redirect?transaction_id=${paymentTransaction[0]._id}&status=success`;
@@ -847,7 +978,7 @@ export const initiatePayment = async (options: {
     // Initiate payment with gateway (using server redirect URLs)
     const gateway = PaymentGatewayFactory.create(paymentMethod);
     const paymentResponse = await gateway.initiatePayment({
-      amount: gatewayAmount,
+      amount: finalAmount,
       currency: paymentMethod.currency,
       packageId,
       userId,
@@ -929,11 +1060,113 @@ export const handlePaymentRedirect = async (params: {
 
   // Get transaction to retrieve stored frontend URLs and payment_method_id
   const transaction = await PaymentTransaction.findById(transactionId)
-    .select('return_url cancel_url status payment_method')
+    .select(
+      'return_url cancel_url status payment_method gateway_transaction_id',
+    )
+    .populate('payment_method') // Populate to get payment method details
     .lean();
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  // Extract payment method
+  const paymentMethod = transaction.payment_method as any;
+
+  // **bKash Execute Payment Logic**
+  // bKash requires explicit payment execution after user authorization
+  if (paymentMethod && paymentMethod.value === 'bkash') {
+    console.log(
+      '[bKash Redirect] Processing bKash callback, executing payment...',
+    );
+
+    // Extract paymentID from params (bKash sends this in callback)
+    const paymentID =
+      (typeof params.paymentID === 'string'
+        ? params.paymentID
+        : params.paymentID?.[0]) ||
+      (typeof params.payment_id === 'string'
+        ? params.payment_id
+        : params.payment_id?.[0]) ||
+      transaction.gateway_transaction_id;
+
+    if (!paymentID) {
+      console.error('[bKash Redirect] No paymentID found in callback');
+      // Redirect to cancel URL
+      const redirectUrl =
+        transaction.cancel_url || transaction.return_url || '/';
+      return { redirectUrl, statusUpdated: false };
+    }
+
+    try {
+      // Create gateway instance
+      const gateway = PaymentGatewayFactory.create(paymentMethod);
+
+      // Check if gateway supports executePayment
+      if (gateway.executePayment) {
+        console.log('[bKash Redirect] Executing payment:', paymentID);
+
+        // Execute payment
+        const executeResult = await gateway.executePayment(paymentID);
+
+        console.log('[bKash Redirect] Payment execution result:', {
+          statusCode: executeResult.statusCode,
+          transactionStatus: executeResult.transactionStatus,
+          trxID: executeResult.trxID,
+        });
+
+        // Check if payment was successful
+        if (
+          executeResult.statusCode === '0000' &&
+          executeResult.transactionStatus === 'Completed'
+        ) {
+          console.log(
+            '[bKash Redirect] Payment successful, updating transaction...',
+          );
+
+          // Update transaction to success (this will also update wallet)
+          await updatePaymentTransactionStatus(transactionId, 'success');
+
+          // Update with bKash transaction ID and response
+          await PaymentTransaction.findByIdAndUpdate(transactionId, {
+            gateway_status: 'Completed',
+            gateway_response: executeResult,
+          });
+
+          console.log('[bKash Redirect] Transaction updated to success');
+
+          // Update local transaction object for redirect URL determination
+          transaction.status = 'success';
+        } else {
+          console.log('[bKash Redirect] Payment failed or incomplete');
+
+          // Update transaction to failed
+          await PaymentTransaction.findByIdAndUpdate(transactionId, {
+            status: 'failed',
+            gateway_status: executeResult.transactionStatus,
+            failure_reason:
+              executeResult.statusMessage || 'Payment execution failed',
+            failed_at: new Date(),
+            gateway_response: executeResult,
+          });
+
+          // Update local transaction object for redirect URL determination
+          transaction.status = 'failed';
+        }
+      }
+    } catch (error: any) {
+      console.error('[bKash Redirect] Payment execution error:', error.message);
+
+      // Mark transaction as failed
+      await PaymentTransaction.findByIdAndUpdate(transactionId, {
+        status: 'failed',
+        failure_reason: `bKash execution failed: ${error.message}`,
+        failed_at: new Date(),
+      });
+
+      // Update local transaction object for redirect URL determination
+      transaction.status = 'failed';
+    }
   }
 
   // Log redirect parameters for debugging
@@ -963,12 +1196,13 @@ export const handlePaymentRedirect = async (params: {
       : params.error?.[0] || ''
     ).trim() !== '';
 
-  // Use cancel_url if params suggest failure/cancel
+  // Use cancel_url if params suggest failure/cancel OR if transaction status is failed
   if (
     hasError ||
     statusParam === 'FAILED' ||
     statusParam === 'failed' ||
-    statusParam === 'cancel'
+    statusParam === 'cancel' ||
+    transaction.status === 'failed'
   ) {
     redirectUrl = transaction.cancel_url || transaction.return_url || '/';
     console.log('[Redirect] Redirecting to cancel URL based on params');
@@ -1261,7 +1495,7 @@ export const handlePaymentWebhook = async (
         session,
       );
       console.log(
-        '[Webhook] Successfully updated wallet and created token transaction',
+        '[Webhook] Successfully updated wallet and created credits transaction',
       );
     } catch (error) {
       console.error('[Webhook] Failed to update wallet:', {

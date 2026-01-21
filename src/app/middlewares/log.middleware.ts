@@ -52,6 +52,43 @@ logSchema.index(
 // Log model
 const Log = mongoose.model('Log', logSchema);
 
+// Sensitive keys to redact
+const SENSITIVE_KEYS = [
+  'password',
+  'token',
+  'access_token',
+  'refresh_token',
+  'secret',
+  'otp',
+  'current_password',
+  'new_password',
+];
+
+/**
+ * Redact sensitive fields from an object or array recursively.
+ */
+const redact = (data: any): any => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(redact);
+  }
+
+  const redacted: any = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (SENSITIVE_KEYS.includes(key.toLowerCase())) {
+      redacted[key] = '***REDACTED***';
+    } else if (typeof value === 'object') {
+      redacted[key] = redact(value);
+    } else {
+      redacted[key] = value;
+    }
+  }
+  return redacted;
+};
+
 // Log Middleware
 const log: RequestHandler = (req, res, next) => {
   const start = Date.now();
@@ -70,7 +107,10 @@ const log: RequestHandler = (req, res, next) => {
     try {
       if (req.method === 'GET') return;
 
-      const token = req.headers['authorization'];
+      const authorization = req.headers['authorization'];
+      if (!authorization) return;
+
+      const token = authorization.split(' ')?.[1];
       if (!token) return;
 
       let _id: string | undefined;
@@ -90,6 +130,19 @@ const log: RequestHandler = (req, res, next) => {
       // Skip if user role is "user"
       if (!_id || !role || (role && role === 'user')) return;
 
+      // Parse and redact response if possible
+      let sanitizedResponse = responseBody;
+      try {
+        if (typeof responseBody === 'string') {
+          const parsed = JSON.parse(responseBody);
+          sanitizedResponse = redact(parsed);
+        } else if (typeof responseBody === 'object') {
+          sanitizedResponse = redact(responseBody);
+        }
+      } catch (e) {
+        // Keep as is if not JSON
+      }
+
       await Log.create({
         user: _id,
         role: role,
@@ -98,8 +151,8 @@ const log: RequestHandler = (req, res, next) => {
         method: req.method,
         url: req.originalUrl,
         status: res.statusCode,
-        payload: req.body,
-        response: responseBody,
+        payload: redact(req.body),
+        response: sanitizedResponse,
         duration: Date.now() - start,
         date: new Date(),
       });

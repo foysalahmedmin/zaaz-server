@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as PaymentTransactionServices from './payment-transaction.service';
 
 export const createPaymentTransaction = catchAsync(async (req, res) => {
@@ -157,12 +157,13 @@ export const initiatePayment = catchAsync(async (req, res) => {
     customer_email: customerEmail,
     customer_name: customerName,
     customer_phone: customerPhone,
+    coupon: couponCode,
   } = req.body;
 
   // Use user info from JWT if customer info not provided
   const finalCustomerEmail = customerEmail || req.user.email;
   const finalCustomerName = customerName || req.user.name;
-  const finalCustomerPhone = customerPhone || req.user.phone || '01700000000'; // Default Bangladesh phone format
+  const finalCustomerPhone = customerPhone || req.user.phone;
 
   const result = await PaymentTransactionServices.initiatePayment({
     userId,
@@ -174,6 +175,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
     customerEmail: finalCustomerEmail,
     customerName: finalCustomerName,
     customerPhone: finalCustomerPhone,
+    coupon_code: couponCode,
   });
 
   sendResponse(res, {

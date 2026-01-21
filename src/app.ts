@@ -4,26 +4,37 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { Application } from 'express';
 import session from 'express-session';
+import helmet from 'helmet';
 import path from 'path';
 import config from './app/config';
 import error from './app/middlewares/error.middleware';
 import log from './app/middlewares/log.middleware';
 import notfound from './app/middlewares/not-found.middleware';
+import { globalRateLimiter } from './app/middlewares/rate-limit.middleware';
+import sanitizeMiddleware from './app/middlewares/sanitize.middleware';
 import router from './app/routes';
 
 dotenv.config();
 const app: Application = express();
 
-app.set('trust proxy', true);
+// Use helmet for security headers
+app.use(helmet());
 
-// Global JSON body parser - but skip webhook routes (they need raw body for signature verification)
+// Apply global rate limiting
+app.use(globalRateLimiter);
+
+app.set('trust proxy', 1);
+
+// Global JSON body parser - but skip webhook routes
 app.use((req, res, next) => {
-  // Skip body parsing for webhook routes - they need raw body for Stripe signature verification
   if (req.path.includes('/webhook/')) {
     return next();
   }
   express.json({ limit: '1mb' })(req, res, next);
 });
+
+// Sanitize data after body parsing
+app.use(sanitizeMiddleware);
 
 app.use(cookieParser());
 
@@ -33,9 +44,13 @@ app.use(
       'http://localhost:3000',
       'http://localhost:3008',
       'http://localhost:8080',
+      'http://localhost:8081',
       'http://localhost:5000',
       'http://localhost:5005',
-    ],
+      process.env.URL as string,
+      process.env.ADMINPANEL_URL as string,
+      process.env.WEBSITE_URL as string,
+    ]?.filter(Boolean),
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],

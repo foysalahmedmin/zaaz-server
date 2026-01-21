@@ -1,12 +1,20 @@
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
+import { rateLimiter } from '../../middlewares/rate-limit.middleware';
 import validation from '../../middlewares/validation.middleware';
 import * as ContactControllers from './contact.controller';
 import * as ContactValidations from './contact.validation';
 
 const router = express.Router();
 
+const contactRateLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: 'Too many contact requests, please try again after an hour',
+});
+
 // GET
+// ... (lines 10-23)
 router.get(
   '/',
   auth('admin'),
@@ -24,6 +32,7 @@ router.get(
 // POST
 router.post(
   '/',
+  contactRateLimiter,
   validation(ContactValidations.createContactValidationSchema),
   ContactControllers.createContact,
 );
@@ -75,4 +84,3 @@ router.post(
 const ContactRoutes = router;
 
 export default ContactRoutes;
-

@@ -66,17 +66,21 @@ CMD ["pnpm", "run", "start:dev"]
 FROM base AS production
 
 ENV NODE_ENV=production
+ENV HUSKY=0
 
-# Copy package files and install only production deps
+# Copy package files and install all deps (needed for build)
 COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile
 
 # Copy app files and build
 COPY . .
 RUN pnpm run build
 
-# Remove source and cache
-RUN rm -rf src node_modules/.cache && pnpm store prune
+# Remove dev dependencies, source, and cache
+# Use --ignore-scripts to skip prepare script (husky) during production install
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts && \
+    rm -rf src node_modules/.cache .husky && \
+    pnpm store prune
 
 # Adjust permissions
 RUN chown -R appuser:appuser /app

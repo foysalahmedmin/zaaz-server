@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import os from 'os';
 import app from './app';
 import config from './app/config';
+import { RabbitMQ, initializeRabbitMQ } from './app/rabbitmq';
 import {
   cacheClient,
   initializeRedis,
@@ -17,14 +18,28 @@ let server: http.Server | null = null;
 // Start the server
 const main = async (): Promise<void> => {
   try {
-    await mongoose.connect(config.database_url);
-    console.log(`✅ MongoDB connected - PID: ${process.pid}`);
+    try {
+      await mongoose.connect(config.database_url);
+      console.log(`✅ MongoDB connected - PID: ${process.pid}`);
+    } catch (mongoErr) {
+      console.error(
+        `❌ MongoDB connection failed - PID: ${process.pid}`,
+        mongoErr,
+      );
+      throw mongoErr;
+    }
 
     try {
       await initializeRedis();
       console.log(`🔌 Redis initialized - PID: ${process.pid}`);
     } catch (redisErr) {
       console.warn(`⚠️ Redis setup failed - PID: ${process.pid}`, redisErr);
+    }
+
+    try {
+      await initializeRabbitMQ();
+    } catch (rabbitErr) {
+      console.warn(`⚠️ RabbitMQ setup failed - PID: ${process.pid}`, rabbitErr);
     }
 
     server = http.createServer(app);
@@ -72,6 +87,9 @@ const shutdown = async (reason: string): Promise<void> => {
       await subClient.quit();
       console.log('🔌 Redis (sub) disconnected');
     }
+
+    // Close RabbitMQ connection
+    await RabbitMQ.disconnect();
 
     // Close HTTP server
     if (server) {

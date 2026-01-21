@@ -32,10 +32,10 @@ router.get(
 );
 
 router.get(
-  '/token-flow',
+  '/credits-flow',
   auth('admin', 'super-admin'),
   validation(DashboardValidations.dashboardPeriodValidationSchema),
-  DashboardControllers.getDashboardTokenFlow,
+  DashboardControllers.getDashboardCreditsFlow,
 );
 
 router.get(
@@ -60,4 +60,3 @@ router.get(
 const DashboardRoutes = router;
 
 export default DashboardRoutes;
-

@@ -3,17 +3,7 @@ import { z } from 'zod';
 export const statusEnum = z.enum(['active', 'inactive', 'archived']);
 export const priorityEnum = z.enum(['low', 'medium', 'high', 'urgent']);
 export const channelEnum = z.enum(['web', 'push', 'email']);
-export const typeEnum = z.enum([
-  'news-request',
-  'news-request-approval',
-  'news-headline-request',
-  'news-headline-request-approval',
-  'news-break-request',
-  'news-break-request-approval',
-  'reaction',
-  'comment',
-  'reply',
-]);
+export const typeEnum = z.enum(['request', 'approval']);
 
 const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
   message: 'Invalid ID format',

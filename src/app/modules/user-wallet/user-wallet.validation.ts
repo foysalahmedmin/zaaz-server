@@ -14,12 +14,14 @@ export const getUserWalletValidationSchema = z.object({
 export const createUserWalletValidationSchema = z.object({
   body: z.object({
     user: idSchema,
+    email: z.string().email('Invalid email format').optional(),
     package: idSchema.optional(),
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater'),
+    credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater'),
     expires_at: z.string().datetime().optional(),
+    type: z.enum(['free', 'paid']).optional(),
   }),
 });
 
@@ -28,12 +30,13 @@ export const updateUserWalletValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater')
+    credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater')
       .optional(),
     expires_at: z.string().datetime().optional(),
+    type: z.enum(['free', 'paid']).optional(),
   }),
 });
 
@@ -49,15 +52,16 @@ export const userWalletsOperationValidationSchema = z.object({
   }),
 });
 
-export const giveInitialTokenValidationSchema = z.object({
+export const giveInitialCreditsValidationSchema = z.object({
   body: z.object({
     user_id: idSchema,
-    token: z
+    email: z.string().email('Invalid email format').optional(),
+    credits: z
       .number({
-        invalid_type_error: 'Token must be a number',
+        invalid_type_error: 'Credits must be a number',
       })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater')
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater')
       .optional(),
     duration: z
       .number({
@@ -69,20 +73,31 @@ export const giveInitialTokenValidationSchema = z.object({
   }),
 });
 
-export const giveBonusTokenValidationSchema = z.object({
+export const giveBonusCreditsValidationSchema = z.object({
   body: z.object({
     user_id: idSchema,
-    token: z
+    email: z.string().email('Invalid email format').optional(),
+    credits: z
       .number({
-        invalid_type_error: 'Token must be a number',
+        invalid_type_error: 'Credits must be a number',
       })
-      .int('Token must be an integer')
-      .positive('Token must be greater than 0'),
+      .int('Credits must be an integer')
+      .positive('Credits must be greater than 0'),
   }),
 });
 
 export const giveInitialPackageValidationSchema = z.object({
   body: z.object({
     user_id: idSchema,
+    email: z.string().email('Invalid email format').optional(),
+  }),
+});
+export const assignPackageValidationSchema = z.object({
+  body: z.object({
+    user_id: idSchema,
+    package_id: idSchema,
+    plan_id: idSchema,
+    increase_source: z.enum(['payment', 'bonus']),
+    email: z.string().email('Invalid email format').optional(),
   }),
 });

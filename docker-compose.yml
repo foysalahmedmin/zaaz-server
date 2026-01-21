@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ${TARGET:-development}
-    container_name: mehdihasanrafi-portfolio-server-app
+    container_name: main-server-app
     restart: unless-stopped
     ports:
       - '${APP_PORT:-5000}:5000'
@@ -35,7 +35,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: mehdihasanrafi-portfolio-server-redis
+    container_name: main-server-redis
     restart: unless-stopped
     ports:
       - '${REDIS_PORT:-6379}:6379'
@@ -53,7 +53,7 @@ services:
   # MongoDB Express (Development only)
   mongo-express:
     image: mongo-express:latest
-    container_name: mehdihasanrafi-portfolio-server-mongo-express
+    container_name: main-server-mongo-express
     restart: unless-stopped
     ports:
       - '${MONGO_EXPRESS_PORT:-8081}:8081'
@@ -69,7 +69,7 @@ services:
   # Mailhog (Development only)
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: mehdihasanrafi-portfolio-server-mailhog
+    container_name: main-server-mailhog
     restart: unless-stopped
     ports:
       - '${MAILHOG_SMTP_PORT:-1025}:1025'

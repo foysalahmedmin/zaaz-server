@@ -12,6 +12,12 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       required: [true, 'User is required'],
       index: true,
     },
+    email: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      index: true,
+    },
     user_wallet: {
       type: Schema.Types.ObjectId,
       ref: 'UserWallet',
@@ -23,11 +29,13 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       required: [true, 'Status is required'],
       enum: ['pending', 'success', 'failed', 'refunded'],
       default: 'pending',
+      index: true,
     },
     payment_method: {
       type: Schema.Types.ObjectId,
       ref: 'PaymentMethod',
       required: [true, 'Payment method is required'],
+      index: true,
     },
     gateway_transaction_id: {
       type: String,
@@ -49,6 +57,7 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: Schema.Types.ObjectId,
       ref: 'Package',
       required: [true, 'Package is required'],
+      index: true,
     },
     plan: {
       type: Schema.Types.ObjectId,
@@ -61,6 +70,14 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       ref: 'PackagePlan',
       required: [true, 'Price (package-plan) is required'],
       index: true,
+    },
+    coupon: {
+      type: Schema.Types.ObjectId,
+      ref: 'Coupon',
+    },
+    discount_amount: {
+      type: Number,
+      default: 0,
     },
     amount: {
       type: Number,
@@ -97,6 +114,7 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: String,
       trim: true,
       lowercase: true,
+      index: true,
     },
     customer_name: {
       type: String,
@@ -114,6 +132,13 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: Schema.Types.Mixed,
       select: false, // Don't include in default queries (large data)
     },
+    is_test: {
+      type: Boolean,
+      default: false,
+    },
+    is_active: {
+      type: Boolean,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {
@@ -125,6 +150,9 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
     toObject: { virtuals: true },
   },
 );
+
+paymentTransactionSchema.index({ created_at: -1 });
+paymentTransactionSchema.index({ is_deleted: 1 });
 
 // toJSON override to remove sensitive fields from output
 paymentTransactionSchema.methods.toJSON = function () {

@@ -1,9 +1,30 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
+import { invalidateCache, withCache } from '../../utils/cache.utils';
+import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
+import { PackagePlan } from '../package-plan/package-plan.model';
+import { getPackagePlansByPackage } from '../package-plan/package-plan.service';
+import { PackageTransaction } from '../package-transaction/package-transaction.model';
+import { Package } from '../package/package.model';
+import { Plan } from '../plan/plan.model';
 import { UserWallet } from './user-wallet.model';
 import { TUserWallet } from './user-wallet.type';
+
+const WALLET_CACHE_TTL = 43200; // 12 hours (Optimized for production with proper invalidation)
+
+export const clearUserWalletCache = async (userId: string) => {
+  await invalidateCache(`user-wallet:${userId}`);
+};
+
+export const getFreshWallet = async (
+  userId: string,
+): Promise<TUserWallet | null> => {
+  return await UserWallet.findOne({ user: userId })
+    .select('credits package email')
+    .lean();
+};
 
 export const createUserWallet = async (
   data: TUserWallet,
@@ -24,7 +45,6 @@ export const createUserWallet = async (
   // Get plan to calculate expires_at if duration exists (if plan is provided)
   let expiresAt: Date | undefined;
   if (data.plan) {
-    const { Plan } = await import('../plan/plan.model');
     const planData = await Plan.findById(data.plan)
       .session(session || null)
       .lean();
@@ -45,20 +65,78 @@ export const createUserWallet = async (
   };
 
   const result = await UserWallet.create([walletData], { session });
+
+  // Clear cache for safety (though it shouldn't exist)
+  await clearUserWalletCache(data.user.toString());
+
   return result[0].toObject();
+};
+
+export const getSelfUserWallet = async (
+  userId: string,
+  email?: string,
+): Promise<TUserWallet | null> => {
+  const result = await withCache(
+    `user-wallet:${userId}`,
+    WALLET_CACHE_TTL,
+    async () => {
+      const wallet = await UserWallet.findOne({ user: userId })
+        .populate({
+          path: 'package',
+          populate: {
+            path: 'features',
+            select: '_id name description type max_word',
+            populate: {
+              path: 'feature_endpoints',
+            },
+          },
+        })
+        .populate({
+          path: 'plan',
+          select: '_id name duration',
+        })
+        .lean();
+      return wallet;
+    },
+  );
+
+  // If email is missing in the wallet, update it with the provided email
+  if (result && !result.email && email) {
+    await UserWallet.updateOne({ _id: (result as any)._id }, { email });
+    result.email = email;
+    // Clear cache to ensure next retrieval has the email
+    await clearUserWalletCache(userId);
+  }
+
+  return result;
 };
 
 export const getUserWallet = async (
   userId: string,
 ): Promise<TUserWallet | null> => {
-  const result = await UserWallet.findOne({ user: userId })
-    .populate('package')
-    .lean();
-  return result;
+  return withCache(`user-wallet:${userId}`, WALLET_CACHE_TTL, async () => {
+    const result = await UserWallet.findOne({ user: userId })
+      .populate({
+        path: 'package',
+        populate: {
+          path: 'features',
+          select: '_id name description type max_word',
+          populate: {
+            path: 'feature_endpoints',
+          },
+        },
+      })
+      .populate({
+        path: 'plan',
+        select: '_id name duration',
+      })
+      .lean();
+    return result;
+  });
 };
 
 export const getUserWalletById = async (id: string): Promise<TUserWallet> => {
-  const result = await UserWallet.findById(id).populate('package');
+  const result = await UserWallet.findById(id).populate(['package', 'plan']);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
@@ -67,7 +145,7 @@ export const getUserWalletById = async (id: string): Promise<TUserWallet> => {
 
 export const updateUserWallet = async (
   id: string,
-  payload: Partial<Pick<TUserWallet, 'token' | 'expires_at'>>,
+  payload: Partial<Pick<TUserWallet, 'credits' | 'expires_at'>>,
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
   const wallet = await UserWallet.findById(id)
@@ -88,22 +166,18 @@ export const updateUserWallet = async (
     runValidators: true,
   }).session(session || null);
 
+  if (result) {
+    await clearUserWalletCache(result.user.toString());
+  }
+
   return result!;
 };
 
 export const updateUserWalletByUser = async (
   userId: string,
-  payload: Partial<Pick<TUserWallet, 'token' | 'expires_at'>>,
+  payload: Partial<Pick<TUserWallet, 'credits' | 'expires_at'>>,
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
-  const wallet = await UserWallet.findOne({ user: userId })
-    .session(session || null)
-    .lean();
-
-  if (!wallet) {
-    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
-  }
-
   const updateData: any = { ...payload };
   if (payload.expires_at) {
     updateData.expires_at = new Date(payload.expires_at);
@@ -118,20 +192,65 @@ export const updateUserWalletByUser = async (
     },
   ).session(session || null);
 
-  return result!;
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  await clearUserWalletCache(userId);
+
+  return result;
+};
+
+export const decrementWalletCredits = async (
+  userId: string,
+  credits: number,
+  session?: mongoose.ClientSession,
+): Promise<TUserWallet> => {
+  const result = await UserWallet.findOneAndUpdate(
+    { user: userId },
+    { $inc: { credits: -credits } },
+    {
+      new: true,
+      runValidators: true,
+      session,
+    },
+  );
+
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  await clearUserWalletCache(userId);
+
+  return result.toObject();
 };
 
 export const getUserWallets = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TUserWallet[]; meta: any }> => {
-  const appQuery = new AppQueryFind(UserWallet, query_params)
-    .populate('package')
-    .search(['user'])
+  const { user, package: packageId, plan, ...rest } = query_params;
+  const filter: Record<string, unknown> = {};
+
+  if (user) filter.user = new mongoose.Types.ObjectId(user as string);
+  if (packageId)
+    filter.package = new mongoose.Types.ObjectId(packageId as string);
+  if (plan) filter.plan = new mongoose.Types.ObjectId(plan as string);
+
+  const appQuery = new AppAggregationQuery<TUserWallet>(UserWallet, {
+    ...rest,
+    ...filter,
+  });
+
+  appQuery
+    .populate([
+      { path: 'package', justOne: true },
+      { path: 'plan', justOne: true },
+    ])
+    .search(['email'])
     .filter()
-    .sort(['token', 'expires_at', 'created_at', 'updated_at'] as any)
+    .sort(['credits', 'expires_at', 'created_at', 'updated_at'] as any)
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await appQuery.execute([
     {
@@ -149,6 +268,14 @@ export const getUserWallets = async (
         expires_at: { $lt: new Date() },
       },
     },
+    {
+      key: 'free',
+      filter: { type: 'free' },
+    },
+    {
+      key: 'paid',
+      filter: { type: 'paid' },
+    },
   ]);
 
   return result;
@@ -161,6 +288,8 @@ export const deleteUserWallet = async (id: string): Promise<void> => {
   }
 
   await UserWallet.findByIdAndUpdate(id, { is_deleted: true });
+
+  await clearUserWalletCache(wallet.user.toString());
 };
 
 export const deleteUserWalletPermanent = async (id: string): Promise<void> => {
@@ -172,6 +301,8 @@ export const deleteUserWalletPermanent = async (id: string): Promise<void> => {
   }
 
   await UserWallet.findByIdAndDelete(id);
+
+  await clearUserWalletCache(wallet.user.toString());
 };
 
 export const deleteUserWallets = async (
@@ -185,6 +316,11 @@ export const deleteUserWallets = async (
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   await UserWallet.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+
+  // Clear cache for all found wallets
+  await Promise.all(
+    wallets.map((wallet) => clearUserWalletCache(wallet.user.toString())),
+  );
 
   return {
     count: foundIds.length,
@@ -206,6 +342,11 @@ export const deleteUserWalletsPermanent = async (
     bypassDeleted: true,
   });
 
+  // Clear cache for all found wallets
+  await Promise.all(
+    wallets.map((wallet) => clearUserWalletCache(wallet.user.toString())),
+  );
+
   return {
     count: foundIds.length,
     not_found_ids: notFoundIds,
@@ -225,6 +366,8 @@ export const restoreUserWallet = async (id: string): Promise<TUserWallet> => {
       'User wallet not found or not deleted',
     );
   }
+
+  await clearUserWalletCache(wallet.user.toString());
 
   return wallet;
 };
@@ -246,18 +389,212 @@ export const restoreUserWallets = async (
   );
   const notFoundIds = ids.filter((id) => !restoredIds.has(id));
 
+  // Clear cache for all restored wallets
+  await Promise.all(
+    restoredWallets.map((wallet) =>
+      clearUserWalletCache(wallet.user.toString()),
+    ),
+  );
+
   return {
     count: result.modifiedCount,
     not_found_ids: notFoundIds,
   };
 };
 
+export const giveInitialCredits = async (
+  user_id: string,
+  credits?: number,
+  duration?: number,
+  session?: mongoose.ClientSession,
+  email?: string,
+): Promise<TUserWallet> => {
+  const INITIAL_CREDITS = Number.parseInt(process.env.INITIAL_CREDITS || '100');
+  const amount = credits || INITIAL_CREDITS;
+
+  // Calculate expires_at if duration is provided (duration in days)
+  let expiresAt: Date | undefined;
+  if (duration && duration > 0) {
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + duration);
+  }
+
+  // Check if wallet exists (bypass expired check for initial credits)
+  const existingWallet = await UserWallet.findOne({ user: user_id })
+    .session(session || null)
+    .setOptions({ bypassExpired: true })
+    .lean();
+
+  // If wallet doesn't exist, create it
+  if (!existingWallet) {
+    await createUserWallet(
+      {
+        user: new mongoose.Types.ObjectId(user_id),
+        email: email,
+        credits: 0,
+        package: null,
+        initial_credits_given: false,
+        type: 'free',
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+      },
+      session,
+    );
+  }
+
+  // Check if initial credits already given using atomic operation
+  const updatedWallet = await UserWallet.findOneAndUpdate(
+    {
+      user: user_id,
+      initial_credits_given: { $ne: true },
+    },
+    {
+      $inc: { credits: amount },
+      $set: { initial_credits_given: true },
+      ...(expiresAt ? { expires_at: expiresAt } : {}),
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .session(session || null)
+    .setOptions({ bypassExpired: true });
+
+  if (!updatedWallet) {
+    // Check if credits was already given
+    const existingWallet = await UserWallet.findOne({ user: user_id })
+      .session(session || null)
+      .setOptions({ bypassExpired: true })
+      .lean();
+
+    if (existingWallet?.initial_credits_given) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        'Initial credits has already been given to this user',
+      );
+    }
+
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Clear cache after update
+  await clearUserWalletCache(user_id);
+
+  // Create credits transaction record for tracking
+  try {
+    await CreditsTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          email: email,
+          type: 'increase',
+          increase_source: 'bonus',
+          credits: amount,
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    // Log error but don't block the operation
+    console.error(
+      '[Give Initial Credits] Failed to create transaction:',
+      error,
+    );
+  }
+
+  return updatedWallet.toObject();
+};
+
+export const giveBonusCredits = async (
+  user_id: string,
+  credits: number,
+  session?: mongoose.ClientSession,
+  email?: string,
+): Promise<TUserWallet> => {
+  if (credits <= 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Credits amount must be greater than 0',
+    );
+  }
+
+  // Check if wallet exists (bypass expired check for bonus credits)
+  const existingWallet = await UserWallet.findOne({ user: user_id })
+    .session(session || null)
+    .setOptions({ bypassExpired: true })
+    .lean();
+
+  // If wallet doesn't exist, create it
+  if (!existingWallet) {
+    await createUserWallet(
+      {
+        user: new mongoose.Types.ObjectId(user_id),
+        email: email,
+        credits: 0,
+        package: null,
+        initial_credits_given: false,
+        type: 'free',
+      },
+      session,
+    );
+  }
+
+  // Update wallet: add bonus credits
+  const updatedWallet = await UserWallet.findOneAndUpdate(
+    { user: user_id },
+    {
+      $inc: { credits: credits },
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .session(session || null)
+    .setOptions({ bypassExpired: true });
+
+  if (!updatedWallet) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
+  }
+
+  // Clear cache after update
+  await clearUserWalletCache(user_id);
+
+  // Create credits transaction record for tracking
+  try {
+    await CreditsTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          email: email,
+          type: 'increase',
+          increase_source: 'bonus',
+          credits: credits,
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    // Log error but don't block the operation
+    console.error('[Give Bonus Credits] Failed to create transaction:', error);
+  }
+
+  return updatedWallet.toObject();
+};
+
 export const giveInitialPackage = async (
   user_id: string,
+  is_verified?: boolean,
   session?: mongoose.ClientSession,
+  email?: string,
 ): Promise<TUserWallet> => {
+  if (!is_verified) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'User is not verified');
+  }
+
   // Find the initial package
-  const { Package } = await import('../package/package.model');
   const initialPackage = await Package.findOne({
     is_initial: true,
     is_active: true,
@@ -274,9 +611,6 @@ export const giveInitialPackage = async (
   }
 
   // Get the initial plan for this package
-  const { getPackagePlansByPackage } = await import(
-    '../package-plan/package-plan.service'
-  );
   const packagePlans = await getPackagePlansByPackage(
     initialPackage._id.toString(),
     false,
@@ -292,7 +626,6 @@ export const giveInitialPackage = async (
   }
 
   // Get plan details
-  const { Plan } = await import('../plan/plan.model');
   const planData = await Plan.findById(initialPlan.plan)
     .session(session || null)
     .lean();
@@ -319,11 +652,13 @@ export const giveInitialPackage = async (
     await createUserWallet(
       {
         user: new mongoose.Types.ObjectId(user_id),
-        token: 0,
+        email: email,
+        credits: 0,
         package: null,
         plan: null,
-        initial_token_given: false,
+        initial_credits_given: false,
         initial_package_given: false,
+        type: 'free',
         ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
@@ -337,7 +672,7 @@ export const giveInitialPackage = async (
       initial_package_given: { $ne: true },
     },
     {
-      $inc: { token: initialPlan.token },
+      $inc: { credits: initialPlan.credits },
       $set: {
         package: initialPackage._id,
         plan: planData._id,
@@ -370,19 +705,43 @@ export const giveInitialPackage = async (
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
 
-  // Create token transaction record for tracking
+  // Clear cache after update
+  await clearUserWalletCache(user_id);
+
+  // Create package transaction record for tracking
   try {
-    const { TokenTransaction } = await import(
-      '../token-transaction/token-transaction.model'
-    );
-    await TokenTransaction.create(
+    await PackageTransaction.create(
       [
         {
           user: new mongoose.Types.ObjectId(user_id),
           user_wallet: updatedWallet._id,
+          email: email || updatedWallet.email,
+          package: initialPackage._id,
+          plan: planData._id,
+          credits: initialPlan.credits,
+          increase_source: 'bonus',
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    console.error(
+      '[Give Initial Package] Failed to create package transaction:',
+      error,
+    );
+  }
+
+  // Create credits transaction record for tracking
+  try {
+    await CreditsTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          email: email || updatedWallet.email,
           type: 'increase',
           increase_source: 'bonus',
-          token: initialPlan.token,
+          credits: initialPlan.credits,
           plan: planData._id,
         },
       ],
@@ -398,24 +757,47 @@ export const giveInitialPackage = async (
 
   return updatedWallet.toObject();
 };
-
-export const giveInitialToken = async (
+export const assignPackage = async (
   user_id: string,
-  token?: number,
-  duration?: number,
+  package_id: string,
+  plan_id: string,
+  increase_source: 'payment' | 'bonus',
   session?: mongoose.ClientSession,
+  email?: string,
 ): Promise<TUserWallet> => {
-  const INITIAL_TOKEN = Number.parseInt(process.env.INITIAL_TOKEN || '100');
-  const amount = token || INITIAL_TOKEN;
+  // Find the package plan
+  const packagePlan = await PackagePlan.findOne({
+    package: package_id,
+    plan: plan_id,
+    is_active: true,
+  })
+    .session(session || null)
+    .lean();
 
-  // Calculate expires_at if duration is provided (duration in days)
-  let expiresAt: Date | undefined;
-  if (duration && duration > 0) {
-    expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + duration);
+  if (!packagePlan) {
+    throw new AppError(
+      httpStatus.NOT_FOUND,
+      'Package plan not found or not active',
+    );
   }
 
-  // Check if wallet exists (bypass expired check for initial token)
+  // Get plan details
+  const planData = await Plan.findById(plan_id)
+    .session(session || null)
+    .lean();
+
+  if (!planData) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
+  }
+
+  // Calculate expires_at if plan has duration
+  let expiresAt: Date | undefined;
+  if (planData.duration && planData.duration > 0) {
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + planData.duration);
+  }
+
+  // Check if wallet exists
   const existingWallet = await UserWallet.findOne({ user: user_id })
     .session(session || null)
     .setOptions({ bypassExpired: true })
@@ -426,112 +808,30 @@ export const giveInitialToken = async (
     await createUserWallet(
       {
         user: new mongoose.Types.ObjectId(user_id),
-        token: 0,
+        email: email,
+        credits: 0,
         package: null,
-        initial_token_given: false,
+        plan: null,
+        initial_credits_given: false,
+        initial_package_given: false,
+        type: 'free',
         ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
     );
   }
 
-  // Check if initial token already given using atomic operation
-  const updatedWallet = await UserWallet.findOneAndUpdate(
-    {
-      user: user_id,
-      initial_token_given: { $ne: true },
-    },
-    {
-      $inc: { token: amount },
-      $set: { initial_token_given: true },
-      ...(expiresAt ? { expires_at: expiresAt } : {}),
-    },
-    {
-      new: true,
-      runValidators: true,
-    },
-  )
-    .session(session || null)
-    .setOptions({ bypassExpired: true });
-
-  if (!updatedWallet) {
-    // Check if token was already given
-    const existingWallet = await UserWallet.findOne({ user: user_id })
-      .session(session || null)
-      .setOptions({ bypassExpired: true })
-      .lean();
-
-    if (existingWallet?.initial_token_given) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'Initial token has already been given to this user',
-      );
-    }
-
-    throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
-  }
-
-  // Create token transaction record for tracking
-  try {
-    const { TokenTransaction } = await import(
-      '../token-transaction/token-transaction.model'
-    );
-    await TokenTransaction.create(
-      [
-        {
-          user: new mongoose.Types.ObjectId(user_id),
-          user_wallet: updatedWallet._id,
-          type: 'increase',
-          increase_source: 'bonus',
-          token: amount,
-        },
-      ],
-      { session },
-    );
-  } catch (error) {
-    // Log error but don't block the operation
-    console.error('[Give Initial Token] Failed to create transaction:', error);
-  }
-
-  return updatedWallet.toObject();
-};
-
-export const giveBonusToken = async (
-  user_id: string,
-  token: number,
-  session?: mongoose.ClientSession,
-): Promise<TUserWallet> => {
-  if (token <= 0) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'Token amount must be greater than 0',
-    );
-  }
-
-  // Check if wallet exists (bypass expired check for bonus token)
-  const existingWallet = await UserWallet.findOne({ user: user_id })
-    .session(session || null)
-    .setOptions({ bypassExpired: true })
-    .lean();
-
-  // If wallet doesn't exist, create it
-  if (!existingWallet) {
-    await createUserWallet(
-      {
-        user: new mongoose.Types.ObjectId(user_id),
-        token: 0,
-        package: null,
-        initial_token_given: false,
-      },
-      session,
-    );
-  }
-
-  // Update wallet: add bonus tokens
+  // Update wallet: add credits and set package/plan
   const updatedWallet = await UserWallet.findOneAndUpdate(
     { user: user_id },
     {
-      $inc: { token: token },
+      $inc: { credits: packagePlan.credits },
+      $set: {
+        package: package_id,
+        plan: plan_id,
+        type: 'paid', // Mark as paid if a package is assigned (usually)
+        ...(expiresAt ? { expires_at: expiresAt } : {}),
+      },
     },
     {
       new: true,
@@ -545,26 +845,53 @@ export const giveBonusToken = async (
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
 
-  // Create token transaction record for tracking
+  // Clear cache after update
+  await clearUserWalletCache(user_id);
+
+  // Create package transaction record for tracking
   try {
-    const { TokenTransaction } = await import(
-      '../token-transaction/token-transaction.model'
-    );
-    await TokenTransaction.create(
+    await PackageTransaction.create(
       [
         {
           user: new mongoose.Types.ObjectId(user_id),
           user_wallet: updatedWallet._id,
-          type: 'increase',
-          increase_source: 'bonus',
-          token: token,
+          email: email || updatedWallet.email,
+          package: new mongoose.Types.ObjectId(package_id),
+          plan: new mongoose.Types.ObjectId(plan_id),
+          credits: packagePlan.credits,
+          increase_source,
         },
       ],
       { session },
     );
   } catch (error) {
-    // Log error but don't block the operation
-    console.error('[Give Bonus Token] Failed to create transaction:', error);
+    console.error(
+      '[Assign Package] Failed to create package transaction:',
+      error,
+    );
+  }
+
+  // Create credits transaction record for tracking
+  try {
+    await CreditsTransaction.create(
+      [
+        {
+          user: new mongoose.Types.ObjectId(user_id),
+          user_wallet: updatedWallet._id,
+          email: email || updatedWallet.email,
+          type: 'increase',
+          increase_source,
+          credits: packagePlan.credits,
+          plan: new mongoose.Types.ObjectId(plan_id),
+        },
+      ],
+      { session },
+    );
+  } catch (error) {
+    console.error(
+      '[Assign Package] Failed to create credits transaction:',
+      error,
+    );
   }
 
   return updatedWallet.toObject();

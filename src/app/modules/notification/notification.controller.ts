@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as NotificationServices from './notification.service';
 
 export const createNotification = catchAsync(async (req, res) => {

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as FeatureServices from './feature.service';
 
 export const createFeature = catchAsync(async (req, res) => {
@@ -16,17 +16,6 @@ export const createFeature = catchAsync(async (req, res) => {
 export const getPublicFeature = catchAsync(async (req, res) => {
   const { id } = req.params;
   const result = await FeatureServices.getPublicFeature(id);
-  sendResponse(res, {
-    status: httpStatus.OK,
-    success: true,
-    message: 'Feature retrieved successfully',
-    data: result,
-  });
-});
-
-export const getPublicFeatureByValue = catchAsync(async (req, res) => {
-  const { value } = req.params;
-  const result = await FeatureServices.getPublicFeatureByValue(value);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -52,6 +41,17 @@ export const getPublicFeatures = catchAsync(async (req, res) => {
     status: httpStatus.OK,
     success: true,
     message: 'Features retrieved successfully',
+    meta: result.meta,
+    data: result.data,
+  });
+});
+
+export const getPublicFeaturesWithPopups = catchAsync(async (req, res) => {
+  const result = await FeatureServices.getPublicFeaturesWithConfigs(req.query);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Features with popups retrieved successfully',
     meta: result.meta,
     data: result.data,
   });

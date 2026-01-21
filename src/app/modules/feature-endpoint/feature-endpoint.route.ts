@@ -10,13 +10,6 @@ const router = express.Router();
 router.get('/public', FeatureEndpointControllers.getPublicFeatureEndpoints);
 router.get('/', auth('admin'), FeatureEndpointControllers.getFeatureEndpoints);
 
-router.get(
-  '/:value/public',
-  validation(
-    FeatureEndpointValidations.getFeatureEndpointByValueValidationSchema,
-  ),
-  FeatureEndpointControllers.getPublicFeatureEndpointByValue,
-);
 router.get('/:id/public', FeatureEndpointControllers.getPublicFeatureEndpoint);
 router.get(
   '/:id',

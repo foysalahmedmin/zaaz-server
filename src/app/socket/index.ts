@@ -20,9 +20,13 @@ export const initializeSocket = async (
           'http://localhost:3000',
           'http://localhost:3008',
           'http://localhost:8080',
+          'http://localhost:8081',
           'http://localhost:5000',
           'http://localhost:5005',
-        ],
+          process.env.URL as string,
+          process.env.ADMINPANEL_URL as string,
+          process.env.WEBSITE_URL as string,
+        ]?.filter(Boolean),
         methods: ['GET', 'POST'],
         credentials: true,
       },
@@ -113,7 +117,8 @@ const handleConnection = (socket: Socket): void => {
 
   // Join user-specific rooms if authenticated
   if (user?._id) {
-    socket.join(`user:${user._id}`);
+    const userRoom = `user:${user._id}`;
+    socket.join(userRoom);
 
     if (user.role) {
       socket.join(`role:${user.role}`);

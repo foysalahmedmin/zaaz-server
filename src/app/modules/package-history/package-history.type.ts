@@ -37,7 +37,7 @@ export type TPackagePlanHistory = {
   plan: TPlanHistory;
   price: TPackagePrice;
   previous_price?: TPackagePrice;
-  token: number;
+  credits: number;
   is_initial: boolean;
   is_active: boolean;
   created_at?: Date;
@@ -46,10 +46,11 @@ export type TPackagePlanHistory = {
 
 export type TPackageHistory = {
   package: mongoose.Types.ObjectId;
+  value?: string;
   name: string;
   description?: string;
   content?: string;
-  type?: 'token' | 'subscription';
+  type?: 'credits' | 'subscription';
   badge?: string;
   points?: string[];
   features: TFeatureHistory[];

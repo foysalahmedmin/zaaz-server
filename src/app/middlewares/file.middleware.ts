@@ -3,8 +3,8 @@ import fs from 'fs';
 import httpStatus from 'http-status';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'path';
-import AppError from '../builder/app-error';
-import catchAsync from '../utils/catch-async';
+import AppError from '../builder/AppError';
+import catchAsync from '../utils/catchAsync';
 
 type TFile = {
   name: string;

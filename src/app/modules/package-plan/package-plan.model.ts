@@ -41,10 +41,10 @@ const packagePlanSchema = new Schema<TPackagePlanDocument>(
         min: [0, 'Price BDT must be 0 or greater'],
       },
     },
-    token: {
+    credits: {
       type: Number,
-      required: [true, 'Token is required'],
-      min: [0, 'Token must be 0 or greater'],
+      required: [true, 'Credits is required'],
+      min: [0, 'Credits must be 0 or greater'],
       index: true,
     },
     is_initial: {
@@ -74,6 +74,8 @@ packagePlanSchema.index({ package: 1, plan: 1 }, { unique: true });
 packagePlanSchema.index({ package: 1, is_initial: 1, is_active: 1 });
 packagePlanSchema.index({ package: 1, is_active: 1, is_deleted: 1 });
 packagePlanSchema.index({ plan: 1 });
+packagePlanSchema.index({ is_deleted: 1 });
+packagePlanSchema.index({ created_at: -1 });
 
 // toJSON override to remove sensitive fields from output
 packagePlanSchema.methods.toJSON = function () {
@@ -117,4 +119,3 @@ export const PackagePlan = mongoose.model<
   TPackagePlanDocument,
   TPackagePlanModel
 >('PackagePlan', packagePlanSchema);
-

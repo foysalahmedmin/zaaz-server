@@ -13,12 +13,20 @@ export default {
     `http://localhost:${process.env.PORT || 5000}`,
   cluster_enabled: process.env.CLUSTER_ENABLED === 'true' ? true : false,
   redis_enabled: !!(
-    process.env.REDIS_ENABLED === 'true' && !!process.env.REDIS_URL
+    process.env.REDIS_ENABLED === 'true' &&
+    (!!process.env.REDIS_URL || !!process.env.REDIS_HOST)
   )
     ? true
     : false,
-  redis_url: process.env.REDIS_URL as string,
+  redis_host: process.env.REDIS_HOST as string,
+  redis_port: process.env.REDIS_PORT as string,
   redis_password: process.env.REDIS_PASSWORD as string,
+  rabbitmq_enabled: !!(
+    process.env.RABBITMQ_ENABLED === 'true' && !!process.env.RABBITMQ_URL
+  )
+    ? true
+    : false,
+  rabbitmq_url: process.env.RABBITMQ_URL as string,
   database_url: process.env.DATABASE_URL as string,
   front_end_url: process.env.FRONT_END_URL as string,
   bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS as string,
@@ -42,6 +50,8 @@ export default {
   auth_user_email: process.env.AUTH_USER_EMAIL as string,
   auth_user_email_password: process.env.AUTH_USER_EMAIL_PASSWORD as string,
   server_api_key: process.env.SERVER_API_KEY as string,
+  google_client_id: process.env.GOOGLE_CLIENT_ID as string,
+  google_client_secret: process.env.GOOGLE_CLIENT_SECRET as string,
 };
 
 // node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

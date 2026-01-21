@@ -1,11 +1,12 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as UserWalletServices from './user-wallet.service';
 
 export const getSelfWallet = catchAsync(async (req, res) => {
   const userId = req.user._id;
-  const result = await UserWalletServices.getUserWallet(userId);
+  const email = req.user.email;
+  const result = await UserWalletServices.getSelfUserWallet(userId, email);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -140,20 +141,51 @@ export const restoreUserWallets = catchAsync(async (req, res) => {
   });
 });
 
-export const giveSelfInitialPackage = catchAsync(async (req, res) => {
-  const userId = req.user._id;
-  const result = await UserWalletServices.giveInitialPackage(userId);
+export const giveInitialCredits = catchAsync(async (req, res) => {
+  const { user_id, credits, duration, email } = req.body;
+
+  const result = await UserWalletServices.giveInitialCredits(
+    user_id,
+    credits,
+    duration,
+    undefined, // session
+    email,
+  );
+
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
-    message: 'Initial package given successfully',
+    message: 'Initial credits given successfully',
+    data: result,
+  });
+});
+
+export const giveBonusCredits = catchAsync(async (req, res) => {
+  const { user_id, credits, email } = req.body;
+
+  const result = await UserWalletServices.giveBonusCredits(
+    user_id,
+    credits,
+    undefined, // session
+    email,
+  );
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Bonus credits given successfully',
     data: result,
   });
 });
 
 export const giveInitialPackage = catchAsync(async (req, res) => {
-  const { user_id } = req.body;
-  const result = await UserWalletServices.giveInitialPackage(user_id);
+  const { user_id, email } = req.body;
+  const result = await UserWalletServices.giveInitialPackage(
+    user_id,
+    undefined, // is_verified
+    undefined, // session
+    email,
+  );
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -162,28 +194,37 @@ export const giveInitialPackage = catchAsync(async (req, res) => {
   });
 });
 
-export const giveInitialToken = catchAsync(async (req, res) => {
-  const { user_id, token, duration } = req.body;
-  const result = await UserWalletServices.giveInitialToken(
-    user_id,
-    token,
-    duration,
+export const giveSelfInitialPackage = catchAsync(async (req, res) => {
+  const { _id, is_verified, email } = req.user || {};
+  const result = await UserWalletServices.giveInitialPackage(
+    _id,
+    is_verified,
+    undefined, // session
+    email,
   );
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
-    message: 'Initial token given successfully',
+    message: 'Initial package given successfully',
     data: result,
   });
 });
+export const assignPackage = catchAsync(async (req, res) => {
+  const { user_id, package_id, plan_id, increase_source, email } = req.body;
 
-export const giveBonusToken = catchAsync(async (req, res) => {
-  const { user_id, token } = req.body;
-  const result = await UserWalletServices.giveBonusToken(user_id, token);
+  const result = await UserWalletServices.assignPackage(
+    user_id,
+    package_id,
+    plan_id,
+    increase_source,
+    undefined, // session
+    email,
+  );
+
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
-    message: 'Bonus token given successfully',
+    message: 'Package assigned successfully',
     data: result,
   });
 });

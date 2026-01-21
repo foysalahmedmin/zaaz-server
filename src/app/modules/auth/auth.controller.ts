@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as AuthServices from './auth.service';
 
 const COOKIE_NAME = 'refresh_token';
@@ -22,6 +22,29 @@ export const signin = catchAsync(async (req, res) => {
     status: httpStatus.OK,
     success: true,
     message: 'User is singed in successfully!',
+    data: {
+      token: access_token,
+      info: info,
+    },
+  });
+});
+
+export const googleSignin = catchAsync(async (req, res) => {
+  const { refresh_token, access_token, info } = await AuthServices.googleSignin(
+    req.body,
+  );
+
+  res.cookie(COOKIE_NAME, refresh_token, {
+    maxAge: COOKIE_MAX_AGE,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  });
+
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'User is signed in successfully with Google!',
     data: {
       token: access_token,
       info: info,

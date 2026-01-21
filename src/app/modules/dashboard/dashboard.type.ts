@@ -8,12 +8,12 @@ export type TDashboardStatistics = {
   };
   total_users: number;
   total_transactions: number;
-  total_tokens: number;
+  total_credits: number;
   trends: {
     revenue: { type: TrendType; percentage: number };
     users: { type: TrendType; percentage: number };
     transactions: { type: TrendType; percentage: number };
-    tokens: { type: TrendType; percentage: number };
+    credits: { type: TrendType; percentage: number };
   };
 };
 
@@ -35,7 +35,7 @@ export type TDashboardPaymentMethod = {
   revenue: { USD: number; BDT: number };
 }[];
 
-export type TDashboardTokenFlow = {
+export type TDashboardCreditsFlow = {
   date: string;
   increase: number;
   decrease: number;
@@ -55,6 +55,5 @@ export type TDashboardPackagePerformance = {
 export type TDashboardFeaturePerformance = {
   feature_name: string;
   usage_count: number;
-  total_tokens_used: number;
-}[];
-
+  total_credits_used: number;
+};

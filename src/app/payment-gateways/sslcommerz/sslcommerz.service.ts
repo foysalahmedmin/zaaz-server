@@ -1,4 +1,5 @@
 import axios from 'axios';
+import https from 'https';
 import { TPaymentMethod } from '../../modules/payment-method/payment-method.type';
 import {
   IPaymentGateway,
@@ -12,22 +13,36 @@ export class SSLCommerzService implements IPaymentGateway {
   private readonly storeId: string;
   private readonly storePassword: string;
   private readonly baseUrl: string;
+  private readonly isTestMode: boolean;
+  private readonly httpsAgent: https.Agent;
 
   constructor(paymentMethod: TPaymentMethod) {
     // Parse credentials from secret (format: storeId:storePassword)
-    const credentials = paymentMethod.secret.split(':');
-    if (credentials.length !== 2) {
-      throw new Error(
-        'Invalid SSL Commerz credentials format. Expected: storeId:storePassword',
-      );
-    }
-    this.storeId = credentials[0].trim();
-    this.storePassword = credentials[1].trim();
+    const { storeId, storePassword } = paymentMethod?.config || {};
+
+    this.isTestMode = paymentMethod?.is_test || false;
+
+    this.storeId = this.isTestMode
+      ? storeId?.trim() || process.env.SSLCOMMERZ_STORE_ID_TEST || ''
+      : storeId?.trim() || process.env.SSLCOMMERZ_STORE_ID || '';
+
+    this.storePassword = this.isTestMode
+      ? storePassword?.trim() ||
+        process.env.SSLCOMMERZ_STORE_PASSWORD_TEST ||
+        ''
+      : storePassword?.trim() || process.env.SSLCOMMERZ_STORE_PASSWORD || '';
 
     // Use environment variable or default to sandbox
-    this.baseUrl = paymentMethod.is_test
-      ? 'https://sandbox.sslcommerz.com'
-      : 'https://securepay.sslcommerz.com';
+    this.baseUrl = this.isTestMode
+      ? process.env.SSLCOMMERZ_BASE_URL_TEST || 'https://sandbox.sslcommerz.com'
+      : process.env.SSLCOMMERZ_BASE_URL || 'https://securepay.sslcommerz.com';
+
+    // Configure HTTPS agent based on environment
+    // In test/sandbox mode, relax SSL verification to handle incomplete certificate chains
+    // In production, maintain strict SSL verification for security
+    this.httpsAgent = new https.Agent({
+      rejectUnauthorized: !this.isTestMode, // false for test mode, true for production
+    });
   }
 
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse> {
@@ -85,6 +100,7 @@ export class SSLCommerzService implements IPaymentGateway {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
+          httpsAgent: this.httpsAgent, // Use configured HTTPS agent for SSL handling
         },
       );
 
@@ -186,6 +202,7 @@ export class SSLCommerzService implements IPaymentGateway {
             v: 1,
             requested_session_id: transactionId,
           },
+          httpsAgent: this.httpsAgent, // Use configured HTTPS agent for SSL handling
         },
       );
 

@@ -1,6 +1,7 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import mongoose from 'mongoose';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import { PackageHistory } from './package-history.model';
 import { TPackageHistory } from './package-history.type';
 
@@ -11,15 +12,20 @@ export const getPackageHistories = async (
   data: TPackageHistory[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const packageHistoryQuery = new AppQueryFind(PackageHistory, {
-    ...query,
-    package: packageId,
-  })
-    .populate([{ path: 'package' }, { path: 'features' }])
+  const packageHistoryQuery = new AppAggregationQuery<TPackageHistory>(
+    PackageHistory,
+    query,
+  );
+
+  packageHistoryQuery.pipeline([
+    { $match: { package: new mongoose.Types.ObjectId(packageId) } },
+  ]);
+
+  packageHistoryQuery
+    .populate([{ path: 'package', justOne: true }, { path: 'features' }])
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await packageHistoryQuery.execute();
 

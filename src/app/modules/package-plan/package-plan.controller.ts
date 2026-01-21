@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as PackagePlanServices from './package-plan.service';
 
 export const createPackagePlan = catchAsync(async (req, res) => {
@@ -66,3 +66,4 @@ export const deletePackagePlan = catchAsync(async (req, res) => {
     data: null,
   });
 });
+

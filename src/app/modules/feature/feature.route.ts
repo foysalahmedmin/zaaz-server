@@ -7,14 +7,13 @@ import * as FeatureValidations from './feature.validation';
 const router = express.Router();
 
 // GET
+router.get(
+  '/public/with-configs',
+  FeatureControllers.getPublicFeaturesWithPopups,
+);
 router.get('/public', FeatureControllers.getPublicFeatures);
 router.get('/', auth('admin'), FeatureControllers.getFeatures);
 
-router.get(
-  '/:value/public',
-  validation(FeatureValidations.getFeatureByValueValidationSchema),
-  FeatureControllers.getPublicFeatureByValue,
-);
 router.get('/:id/public', FeatureControllers.getPublicFeature);
 router.get(
   '/:id',
@@ -92,4 +91,3 @@ router.post(
 const FeatureRoutes = router;
 
 export default FeatureRoutes;
-

@@ -20,10 +20,10 @@ export const createPackagePlanValidationSchema = z.object({
     package: idSchema,
     previous_price: priceSchema.optional(),
     price: priceSchema,
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater'),
+    credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater'),
     is_initial: z.boolean().optional(),
     is_active: z.boolean().optional(),
   }),
@@ -42,10 +42,10 @@ export const updatePackagePlanValidationSchema = z.object({
     package: idSchema.optional(),
     previous_price: priceSchema.optional(),
     price: priceSchema.optional(),
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater')
+    credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater')
       .optional(),
     is_initial: z.boolean().optional(),
     is_active: z.boolean().optional(),
@@ -57,4 +57,3 @@ export const packagePlanOperationValidationSchema = z.object({
     id: idSchema,
   }),
 });
-

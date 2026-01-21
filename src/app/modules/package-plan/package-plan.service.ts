@@ -1,8 +1,9 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import { Package } from '../package/package.model';
+import { clearPackageCache } from '../package/package.service';
 import { Plan } from '../plan/plan.model';
 import { PackagePlan } from './package-plan.model';
 import { TPackagePlan } from './package-plan.type';
@@ -59,6 +60,10 @@ export const createPackagePlan = async (
   }
 
   const result = await PackagePlan.create([data], { session });
+
+  // Clear package cache
+  await clearPackageCache();
+
   return result[0].toObject();
 };
 
@@ -95,6 +100,10 @@ export const createPackagePlans = async (
   }
 
   const results = await PackagePlan.create(data, { session });
+
+  // Clear package cache
+  await clearPackageCache();
+
   return results.map((r) => r.toObject());
 };
 
@@ -120,22 +129,23 @@ export const getPackagePlans = async (
   const filter: Record<string, unknown> = {};
 
   if (packageId) {
-    filter.package = packageId;
+    filter.package = new mongoose.Types.ObjectId(packageId as string);
   }
 
   if (planId) {
-    filter.plan = planId;
+    filter.plan = new mongoose.Types.ObjectId(planId as string);
   }
 
-  const packagePlanQuery = new AppQueryFind(PackagePlan, { ...rest, ...filter })
-    .populate('plan')
-    .populate('package')
-    .search([])
-    .filter()
-    .sort()
-    .paginate()
-    .fields()
-    .tap((q) => q.lean());
+  const packagePlanQuery = new AppAggregationQuery<TPackagePlan>(PackagePlan, {
+    ...rest,
+    ...filter,
+  });
+
+  packagePlanQuery
+    .populate({ path: 'plan', justOne: true })
+    .populate({ path: 'package', justOne: true });
+
+  packagePlanQuery.search([]).filter().sort().paginate().fields();
 
   const result = await packagePlanQuery.execute([
     {
@@ -239,6 +249,9 @@ export const updatePackagePlan = async (
     runValidators: true,
   }).session(session || null);
 
+  // Clear package cache
+  await clearPackageCache();
+
   return result!;
 };
 
@@ -252,6 +265,9 @@ export const deletePackagePlan = async (
   }
 
   await packagePlan.softDelete();
+
+  // Clear package cache
+  await clearPackageCache();
 };
 
 export const deletePackagePlansByPackage = async (
@@ -263,6 +279,9 @@ export const deletePackagePlansByPackage = async (
     { is_deleted: true },
     { session },
   );
+
+  // Clear package cache
+  await clearPackageCache();
 };
 
 export const restorePackagePlansByPackage = async (
@@ -274,4 +293,7 @@ export const restorePackagePlansByPackage = async (
     { is_deleted: false },
     { session },
   );
+
+  // Clear package cache
+  await clearPackageCache();
 };

@@ -3,13 +3,6 @@ import { TFeature, TFeatureDocument, TFeatureModel } from './feature.type';
 
 const featureSchema = new Schema<TFeatureDocument>(
   {
-    value: {
-      type: String,
-      required: [true, 'Value is required'],
-      trim: true,
-      lowercase: true,
-      index: true,
-    },
     parent: {
       type: Schema.Types.ObjectId,
       ref: 'Feature',
@@ -20,6 +13,14 @@ const featureSchema = new Schema<TFeatureDocument>(
       trim: true,
       minlength: [2, 'Name must be at least 2 characters'],
       maxlength: [100, 'Name cannot exceed 100 characters'],
+    },
+    value: {
+      type: String,
+      required: [true, 'Value is required'],
+      trim: true,
+      lowercase: true,
+      minlength: [2, 'Value must be at least 2 characters'],
+      maxlength: [100, 'Value cannot exceed 100 characters'],
     },
     description: {
       type: String,
@@ -38,6 +39,16 @@ const featureSchema = new Schema<TFeatureDocument>(
     type: {
       type: String,
       enum: ['writing', 'generation', 'other'],
+    },
+    max_word: {
+      free: {
+        type: Number,
+        min: [0, 'Max word must be 0 or greater'],
+      },
+      paid: {
+        type: Number,
+        min: [0, 'Max word must be 0 or greater'],
+      },
     },
     sequence: {
       type: Number,
@@ -60,21 +71,18 @@ const featureSchema = new Schema<TFeatureDocument>(
   },
 );
 
-// Unique index for value (only for non-deleted records)
-featureSchema.index(
-  { value: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { is_deleted: { $ne: true } },
-    name: 'value_unique',
-  },
-);
-
 // Virtual field for children
 featureSchema.virtual('children', {
   ref: 'Feature',
   localField: '_id',
   foreignField: 'parent',
+  match: { is_deleted: { $ne: true } },
+});
+
+featureSchema.virtual('feature_endpoints', {
+  ref: 'FeatureEndpoint',
+  localField: '_id',
+  foreignField: 'feature',
   match: { is_deleted: { $ne: true } },
 });
 
@@ -104,6 +112,21 @@ featureSchema.pre('aggregate', function (next) {
   this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
   next();
 });
+
+// Indexes
+featureSchema.index({ created_at: -1 });
+featureSchema.index({ is_active: 1 });
+featureSchema.index({ is_deleted: 1 });
+
+// Unique index for value field (only for non-deleted records)
+featureSchema.index(
+  { value: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_deleted: { $ne: true } },
+    name: 'value_unique',
+  },
+);
 
 // Static methods
 featureSchema.statics.isFeatureExist = async function (_id: string) {

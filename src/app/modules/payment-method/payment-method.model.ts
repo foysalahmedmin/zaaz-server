@@ -29,31 +29,10 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       uppercase: true,
       length: [3, 'Currency must be a 3-letter ISO code'],
     },
-    secret: {
-      type: String,
-      required: [true, 'Secret is required'],
-      trim: true,
-    },
-    public_key: {
-      type: String,
-      trim: true,
-    },
-    webhook_key: {
-      type: String,
-      trim: true,
-    },
     description: {
       type: String,
       trim: true,
       maxlength: [500, 'Description cannot exceed 500 characters'],
-    },
-    webhook_url: {
-      type: String,
-      trim: true,
-    },
-    is_test: {
-      type: Boolean,
-      default: false,
     },
     sequence: {
       type: Number,
@@ -67,6 +46,10 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     config: {
       type: Schema.Types.Mixed,
       select: false, // Don't include in default queries
+    },
+    is_test: {
+      type: Boolean,
+      default: false,
     },
     is_active: {
       type: Boolean,
@@ -83,6 +66,12 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     toObject: { virtuals: true },
   },
 );
+
+// Indexes
+paymentMethodSchema.index({ is_active: 1 });
+paymentMethodSchema.index({ is_deleted: 1 });
+paymentMethodSchema.index({ currency: 1 });
+paymentMethodSchema.index({ created_at: -1 });
 
 // Compound unique index
 paymentMethodSchema.index(

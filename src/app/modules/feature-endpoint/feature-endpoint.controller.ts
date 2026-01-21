@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as FeatureEndpointServices from './feature-endpoint.service';
 
 export const createFeatureEndpoint = catchAsync(async (req, res) => {
@@ -23,20 +23,6 @@ export const getPublicFeatureEndpoint = catchAsync(async (req, res) => {
     data: result,
   });
 });
-
-export const getPublicFeatureEndpointByValue = catchAsync(
-  async (req, res) => {
-    const { value } = req.params;
-    const result =
-      await FeatureEndpointServices.getPublicFeatureEndpointByValue(value);
-    sendResponse(res, {
-      status: httpStatus.OK,
-      success: true,
-      message: 'Feature endpoint retrieved successfully',
-      data: result,
-    });
-  },
-);
 
 export const getFeatureEndpoint = catchAsync(async (req, res) => {
   const { id } = req.params;
@@ -112,16 +98,18 @@ export const deleteFeatureEndpoint = catchAsync(async (req, res) => {
   });
 });
 
-export const deleteFeatureEndpointPermanent = catchAsync(async (req, res) => {
-  const { id } = req.params;
-  await FeatureEndpointServices.deleteFeatureEndpointPermanent(id);
-  sendResponse(res, {
-    status: httpStatus.OK,
-    success: true,
-    message: 'Feature endpoint permanently deleted successfully',
-    data: null,
-  });
-});
+export const deleteFeatureEndpointPermanent = catchAsync(
+  async (req, res) => {
+    const { id } = req.params;
+    await FeatureEndpointServices.deleteFeatureEndpointPermanent(id);
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: 'Feature endpoint permanently deleted successfully',
+      data: null,
+    });
+  },
+);
 
 export const deleteFeatureEndpoints = catchAsync(async (req, res) => {
   const { ids } = req.body;
@@ -173,3 +161,4 @@ export const restoreFeatureEndpoints = catchAsync(async (req, res) => {
     },
   });
 });
+

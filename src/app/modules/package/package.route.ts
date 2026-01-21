@@ -94,4 +94,3 @@ router.post(
 const PackageRoutes = router;
 
 export default PackageRoutes;
-

@@ -12,6 +12,11 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
       ref: 'Package',
       required: [true, 'Package is required'],
     },
+    value: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],
@@ -27,7 +32,7 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
     },
     type: {
       type: String,
-      enum: ['token', 'subscription'],
+      enum: ['credits', 'subscription'],
     },
     badge: {
       type: String,
@@ -138,7 +143,7 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
             min: 0,
           },
         },
-        token: {
+        credits: {
           type: Number,
           required: true,
           min: 0,

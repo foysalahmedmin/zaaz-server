@@ -24,9 +24,11 @@ const userSchema = new Schema<TUserDocument>(
     },
     password: {
       type: String,
-      required: true,
+      required: function (this: TUserDocument) {
+        return this.auth_source === 'email';
+      },
       minlength: [6, 'the password should minimum 6 character'],
-      maxlength: [12, 'the password should maximum 12 character'],
+      maxlength: [100, 'the password should maximum 100 character'],
       select: false,
     },
     password_changed_at: { type: Date, default: Date.now, select: false },
@@ -47,6 +49,14 @@ const userSchema = new Schema<TUserDocument>(
       type: String,
       enum: ['in-progress', 'blocked'],
       default: 'in-progress',
+    },
+    auth_source: {
+      type: String,
+      enum: ['email', 'google'],
+      default: 'email',
+    },
+    google_id: {
+      type: String,
     },
     is_verified: { type: Boolean, default: false },
     is_deleted: { type: Boolean, default: false, select: false },
@@ -70,6 +80,24 @@ userSchema.index(
   },
 );
 
+userSchema.index(
+  { google_id: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      is_deleted: false,
+      google_id: { $exists: true, $ne: null },
+    },
+    name: 'unique_google_id_not_deleted',
+  },
+);
+
+userSchema.index({ created_at: -1 });
+userSchema.index({ role: 1 });
+userSchema.index({ status: 1 });
+userSchema.index({ is_verified: 1 });
+userSchema.index({ is_deleted: 1 });
+
 // toJSON override to remove sensitive fields from output
 userSchema.methods.toJSON = function () {
   const user = this.toObject();
@@ -88,7 +116,7 @@ userSchema.post('save', function (document, next) {
 // Pre save middleware/ hook
 userSchema.pre('save', async function (next) {
   // Hash password
-  if (this.isModified('password')) {
+  if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(
       this.password,
       Number(config.bcrypt_salt_rounds),

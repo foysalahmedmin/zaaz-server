@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const signinValidationSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    password: z.string().min(6).max(12),
+    password: z.string().min(6).max(100),
   }),
 });
 
@@ -11,7 +11,7 @@ export const signupValidationSchema = z.object({
   body: z.object({
     name: z.string(),
     email: z.string().email(),
-    password: z.string().min(6).max(12),
+    password: z.string().min(6).max(100),
   }),
 });
 
@@ -24,8 +24,8 @@ export const refreshTokenValidationSchema = z.object({
 export const changePasswordValidationSchema = z.object({
   body: z
     .object({
-      current_password: z.string().min(6).max(12),
-      new_password: z.string().min(6).max(12),
+      current_password: z.string().min(6).max(100),
+      new_password: z.string().min(6).max(100),
     })
     .refine((value) => value.current_password !== value.new_password, {
       message: 'New password must be unique',
@@ -40,6 +40,12 @@ export const forgetPasswordValidationSchema = z.object({
 
 export const resetPasswordValidationSchema = z.object({
   body: z.object({
-    password: z.string().min(6).max(12),
+    password: z.string().min(6).max(100),
+  }),
+});
+
+export const googleSigninValidationSchema = z.object({
+  body: z.object({
+    id_token: z.string(),
   }),
 });

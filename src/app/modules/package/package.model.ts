@@ -3,6 +3,13 @@ import { TPackage, TPackageDocument, TPackageModel } from './package.type';
 
 const packageSchema = new Schema<TPackageDocument>(
   {
+    value: {
+      type: String,
+      required: [true, 'Value is required'],
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],
@@ -21,8 +28,8 @@ const packageSchema = new Schema<TPackageDocument>(
     },
     type: {
       type: String,
-      enum: ['token', 'subscription'],
-      default: 'token',
+      enum: ['credits', 'subscription'],
+      default: 'credits',
     },
     badge: {
       type: String,
@@ -74,6 +81,10 @@ const packageSchema = new Schema<TPackageDocument>(
 );
 
 // Indexes
+packageSchema.index({ value: 1 }, { unique: true, sparse: true });
+packageSchema.index({ created_at: -1 });
+packageSchema.index({ is_active: 1 });
+packageSchema.index({ is_deleted: 1 });
 packageSchema.index({ is_initial: 1, is_active: 1, is_deleted: 1 });
 
 // toJSON override to remove sensitive fields from output

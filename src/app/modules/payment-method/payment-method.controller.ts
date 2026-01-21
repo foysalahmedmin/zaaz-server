@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as PaymentMethodServices from './payment-method.service';
 
 export const createPaymentMethod = catchAsync(async (req, res) => {
@@ -59,7 +59,10 @@ export const getPaymentMethods = catchAsync(async (req, res) => {
 
 export const updatePaymentMethod = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await PaymentMethodServices.updatePaymentMethod(id, req.body);
+  const result = await PaymentMethodServices.updatePaymentMethod(
+    id,
+    req.body,
+  );
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -70,7 +73,10 @@ export const updatePaymentMethod = catchAsync(async (req, res) => {
 
 export const updatePaymentMethods = catchAsync(async (req, res) => {
   const { ids, ...payload } = req.body;
-  const result = await PaymentMethodServices.updatePaymentMethods(ids, payload);
+  const result = await PaymentMethodServices.updatePaymentMethods(
+    ids,
+    payload,
+  );
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -150,3 +156,4 @@ export const restorePaymentMethods = catchAsync(async (req, res) => {
     },
   });
 });
+

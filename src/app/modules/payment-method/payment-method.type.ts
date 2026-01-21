@@ -4,15 +4,11 @@ export type TPaymentMethod = {
   name: string;
   value: string;
   currency: string;
-  secret: string;
   description?: string;
-  public_key?: string;
-  webhook_key?: string;
-  webhook_url?: string;
   currencies?: string[];
   config?: Record<string, any>;
-  is_test?: boolean;
   sequence?: number;
+  is_test?: boolean;
   is_active: boolean;
   is_deleted?: boolean;
 };

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as DashboardServices from './dashboard.service';
 
 export const getDashboardStatistics = catchAsync(async (_req, res) => {
@@ -44,13 +44,13 @@ export const getDashboardPaymentMethods = catchAsync(async (_req, res) => {
   });
 });
 
-export const getDashboardTokenFlow = catchAsync(async (req, res) => {
+export const getDashboardCreditsFlow = catchAsync(async (req, res) => {
   const period = (req.query.period as string) || '30d';
-  const result = await DashboardServices.getDashboardTokenFlow(period);
+  const result = await DashboardServices.getDashboardCreditsFlow(period);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
-    message: 'Dashboard token flow data retrieved successfully',
+    message: 'Dashboard credits flow data retrieved successfully',
     data: result,
   });
 });

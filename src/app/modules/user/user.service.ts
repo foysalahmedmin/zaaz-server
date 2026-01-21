@@ -1,8 +1,8 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
-import { deleteFiles } from '../../utils/delete-files';
+import { deleteFiles } from '../../utils/deleteFiles';
 import { User } from './user.model';
 import { TUser } from './user.type';
 
@@ -20,16 +20,10 @@ export const getWritersUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppQueryFind(User, {
-    ...query,
-    role: { $in: ['admin', 'author'] },
-  })
-    .search(['name', 'email'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields()
-    .tap((q) => q.lean());
+  const userQuery = new AppAggregationQuery<TUser>(User, query);
+  userQuery.pipeline([{ $match: { role: { $in: ['admin', 'author'] } } }]);
+
+  userQuery.search(['name', 'email']).filter().sort().paginate().fields();
 
   const result = await userQuery.execute();
 
@@ -42,7 +36,7 @@ export const getUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppQueryFind(User, query)
+  const userQuery = new AppAggregationQuery<TUser>(User, query)
     .search(['name', 'email', 'image'])
     .filter()
     .sort([
@@ -54,8 +48,7 @@ export const getUsers = async (
       'updated_at',
     ] as any)
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await userQuery.execute([
     {
@@ -92,7 +85,7 @@ export const updateSelf = async (
   }
 
   if (payload?.image !== data.image && data.image) {
-    deleteFiles(data.image, 'uploads/users');
+    deleteFiles(data.image, 'user/images');
     payload.image = payload.image || '';
   }
 

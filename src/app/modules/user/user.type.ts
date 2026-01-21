@@ -2,15 +2,18 @@ import { Document, Model, Types } from 'mongoose';
 import { TRole } from '../../types/jsonwebtoken.type';
 
 export type TStatus = 'in-progress' | 'blocked';
+export type TAuthSource = 'email' | 'google';
 
 export type TUser = {
   image?: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   password_changed_at?: Date;
   role: TRole;
   status: TStatus;
+  auth_source: TAuthSource;
+  google_id?: string;
   is_verified: boolean;
   is_deleted: boolean;
 };

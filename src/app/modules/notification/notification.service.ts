@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
 import { Notification } from './notification.model';
 import { TNotification } from './notification.type';
 
@@ -25,13 +25,15 @@ export const getNotifications = async (
   data: TNotification[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const notificationQuery = new AppQueryFind(Notification, query)
+  const notificationQuery = new AppAggregationQuery<TNotification>(
+    Notification,
+    query,
+  )
     .search(['title', 'message', 'type', 'priority'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await notificationQuery.execute();
 

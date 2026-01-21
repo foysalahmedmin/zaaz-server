@@ -3,13 +3,17 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 export type TFeatureType = 'writing' | 'generation' | 'other';
 
 export type TFeature = {
-  value: string;
   parent?: mongoose.Types.ObjectId | null;
   name: string;
+  value: string;
   description?: string;
   path?: string;
   prefix?: string;
   type?: TFeatureType;
+  max_word?: {
+    free: number;
+    paid: number;
+  };
   sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;

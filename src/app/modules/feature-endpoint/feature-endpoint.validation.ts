@@ -9,14 +9,14 @@ const methodEnum = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 export const createFeatureEndpointValidationSchema = z.object({
   body: z.object({
+    feature: idSchema,
+    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     value: z
       .string()
       .trim()
-      .min(1, 'Value is required')
-      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
-      .toLowerCase(),
-    feature: idSchema,
-    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+      .min(2, 'Value must be at least 2 characters')
+      .max(100, 'Value cannot exceed 100 characters')
+      .transform((val) => val.toLowerCase()),
     description: z
       .string()
       .trim()
@@ -24,10 +24,20 @@ export const createFeatureEndpointValidationSchema = z.object({
       .optional(),
     endpoint: z.string().trim().min(1, 'Endpoint is required'),
     method: methodEnum,
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater'),
+    min_credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater'),
+    max_word: z.object({
+      free: z
+        .number({ invalid_type_error: 'Max word (free) must be a number' })
+        .int('Max word must be an integer')
+        .nonnegative('Max word must be 0 or greater'),
+      paid: z
+        .number({ invalid_type_error: 'Max word (paid) must be a number' })
+        .int('Max word must be an integer')
+        .nonnegative('Max word must be 0 or greater'),
+    }),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
@@ -42,30 +52,44 @@ export const updateFeatureEndpointValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
-    value: z
-      .string()
-      .trim()
-      .min(1, 'Value is required')
-      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
-      .toLowerCase()
-      .optional(),
     feature: idSchema.optional(),
     name: z
       .string()
       .trim()
       .min(2, 'Name must be at least 2 characters')
       .optional(),
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .max(100, 'Value cannot exceed 100 characters')
+      .transform((val) => val.toLowerCase())
+      .optional(),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    endpoint: z.string().trim().min(1, 'Endpoint is required').optional(),
+    min_credits: z.string().trim().min(1, 'Endpoint is required').optional(),
     method: methodEnum.optional(),
-    token: z
-      .number({ invalid_type_error: 'Token must be a number' })
-      .int('Token must be an integer')
-      .nonnegative('Token must be 0 or greater')
+    credits: z
+      .number({ invalid_type_error: 'Credits must be a number' })
+      .int('Credits must be an integer')
+      .nonnegative('Credits must be 0 or greater')
+      .optional(),
+    max_word: z
+      .object({
+        free: z
+          .number({ invalid_type_error: 'Max word (free) must be a number' })
+          .int('Max word must be an integer')
+          .nonnegative('Max word must be 0 or greater')
+          .optional(),
+        paid: z
+          .number({ invalid_type_error: 'Max word (paid) must be a number' })
+          .int('Max word must be an integer')
+          .nonnegative('Max word must be 0 or greater')
+          .optional(),
+      })
       .optional(),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
@@ -100,11 +124,5 @@ export const featureEndpointsOperationValidationSchema = z.object({
     ids: z
       .array(idSchema)
       .nonempty('At least one feature endpoint ID is required'),
-  }),
-});
-
-export const getFeatureEndpointByValueValidationSchema = z.object({
-  params: z.object({
-    value: z.string().trim().min(1, 'Value is required').toLowerCase(),
   }),
 });

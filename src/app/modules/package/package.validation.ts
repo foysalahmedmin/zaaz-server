@@ -17,16 +17,21 @@ const priceSchema = z.object({
 const packagePlanDataSchema = z.object({
   plan: idSchema,
   price: priceSchema,
-  token: z
-    .number({ invalid_type_error: 'Token must be a number' })
-    .int('Token must be an integer')
-    .nonnegative('Token must be 0 or greater'),
+  credits: z
+    .number({ invalid_type_error: 'Credits must be a number' })
+    .int('Credits must be an integer')
+    .nonnegative('Credits must be 0 or greater'),
   is_initial: z.boolean().optional(),
   is_active: z.boolean().optional(),
 });
 
 export const createPackageValidationSchema = z.object({
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .toLowerCase(),
     name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     description: z
       .string()
@@ -34,7 +39,7 @@ export const createPackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
-    type: z.enum(['token', 'subscription']).optional(),
+    type: z.enum(['credits', 'subscription']).optional(),
     badge: z.string().trim().optional(),
     points: z.array(z.string().trim()).optional(),
     features: z
@@ -62,6 +67,12 @@ export const updatePackageValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .toLowerCase()
+      .optional(),
     name: z
       .string()
       .trim()
@@ -73,7 +84,7 @@ export const updatePackageValidationSchema = z.object({
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
     content: z.string().trim().optional(),
-    type: z.enum(['token', 'subscription']).optional(),
+    type: z.enum(['credits', 'subscription']).optional(),
     badge: z.string().trim().optional(),
     points: z.array(z.string().trim()).optional(),
     features: z

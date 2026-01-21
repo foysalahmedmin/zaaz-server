@@ -1,19 +1,112 @@
 import bcrypt from 'bcrypt';
+import { OAuth2Client } from 'google-auth-library';
 import httpStatus from 'http-status';
 import { JwtPayload } from 'jsonwebtoken';
-import AppError from '../../builder/app-error';
+import AppError from '../../builder/AppError';
 import config from '../../config';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
-import { sendEmail } from '../../utils/send-email';
+import { sendEmail } from '../../utils/sendEmail';
 import { User } from '../user/user.model';
 import {
   TChangePassword,
   TForgetPassword,
+  TGoogleSignin,
   TResetPassword,
   TSignin,
   TSignup,
 } from './auth.type';
 import { createToken, verifyToken } from './auth.utils';
+
+const client = new OAuth2Client(config.google_client_id as string);
+
+export const googleSignin = async (payload: TGoogleSignin) => {
+  const { id_token } = payload;
+
+  const ticket = await client.verifyIdToken({
+    idToken: id_token,
+    audience: config.google_client_id as string,
+  });
+
+  const googlePayload = ticket.getPayload();
+
+  if (!googlePayload) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid Google token!');
+  }
+
+  const {
+    email,
+    name,
+    picture: image,
+    sub: google_id,
+    email_verified,
+  } = googlePayload;
+
+  if (!email) {
+    throw new AppError(httpStatus.UNAUTHORIZED, 'Email not found in Google!');
+  }
+
+  let user = await User.isUserExistByEmail(email);
+
+  if (!user) {
+    // Create new user
+    user = await User.create({
+      name: name || email.split('@')[0],
+      email: email,
+      image: image,
+      role: 'user',
+      auth_source: 'google',
+      google_id: google_id,
+      is_verified: email_verified || false,
+      status: 'in-progress',
+    });
+  } else {
+    // Update existing user if needed
+    if (user.auth_source === 'email') {
+      user.auth_source = 'google';
+      user.google_id = google_id;
+      if (!user.is_verified) {
+        user.is_verified = email_verified || false;
+      }
+      await user.save();
+    }
+  }
+
+  if (user?.is_deleted) {
+    throw new AppError(httpStatus.FORBIDDEN, 'User is deleted!');
+  }
+
+  if (user?.status == 'blocked') {
+    throw new AppError(httpStatus.FORBIDDEN, 'User is blocked!');
+  }
+
+  const jwtPayload: TJwtPayload = {
+    _id: user._id.toString(),
+    name: user.name,
+    email: user.email,
+    role: user.role || 'user',
+    is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
+    ...(user.image && { image: user.image }),
+  };
+
+  const accessToken = createToken(
+    jwtPayload,
+    config.jwt_access_secret,
+    config.jwt_access_secret_expires_in,
+  );
+
+  const refreshToken = createToken(
+    jwtPayload,
+    config.jwt_refresh_secret,
+    config.jwt_refresh_secret_expires_in,
+  );
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    info: jwtPayload,
+  };
+};
 
 export const signin = async (payload: TSignin) => {
   const user = await User.isUserExistByEmail(payload.email);
@@ -30,7 +123,11 @@ export const signin = async (payload: TSignin) => {
     throw new AppError(httpStatus.FORBIDDEN, 'User is blocked!');
   }
 
-  if (!(await bcrypt.compare(payload?.password, user?.password))) {
+  if (
+    !payload.password ||
+    !user.password ||
+    !(await bcrypt.compare(payload.password, user.password))
+  ) {
     throw new AppError(httpStatus.FORBIDDEN, 'Password do not matched!');
   }
 
@@ -40,6 +137,7 @@ export const signin = async (payload: TSignin) => {
     email: user.email,
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
     ...(user.image && { image: user.image }),
   };
 
@@ -83,6 +181,7 @@ export const signup = async (payload: TSignup) => {
     email: user.email,
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
     ...(user.image && { image: user.image }),
   };
 
@@ -147,6 +246,7 @@ export const refreshToken = async (token: string) => {
     email: user.email,
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
     ...(user.image && { image: user.image }),
   };
 
@@ -163,10 +263,25 @@ export const refreshToken = async (token: string) => {
 };
 
 export const changePassword = async (
-  user: JwtPayload,
+  userToken: JwtPayload,
   payload: TChangePassword,
 ) => {
-  if (!(await bcrypt.compare(payload?.current_password, user?.password))) {
+  const user = await User.isUserExist(userToken._id);
+
+  if (!user) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  }
+
+  if (user.auth_source === 'google') {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Google users cannot change password manually.',
+    );
+  }
+
+  if (
+    !(await bcrypt.compare(payload?.current_password, user?.password || ''))
+  ) {
     throw new AppError(httpStatus.FORBIDDEN, 'Password do not matched!');
   }
 
@@ -208,12 +323,20 @@ export const forgetPassword = async (payload: TForgetPassword) => {
     throw new AppError(httpStatus.FORBIDDEN, 'User is blocked!');
   }
 
+  if (user.auth_source === 'google') {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Google users cannot reset password this way.',
+    );
+  }
+
   const jwtPayload: TJwtPayload = {
     _id: user._id.toString(),
     name: user.name,
     email: user.email,
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
     ...(user.image && { image: user.image }),
   };
 
@@ -289,6 +412,7 @@ export const emailVerificationSource = async (user: TJwtPayload) => {
     email: user.email,
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
+    auth_source: user.auth_source,
     ...(user.image && { image: user.image }),
   };
 

@@ -11,6 +11,7 @@ const currencyEnum = z.enum(['USD', 'BDT']);
 export const createPaymentTransactionValidationSchema = z.object({
   body: z.object({
     user: idSchema,
+    email: z.string().email('Invalid email format').optional(),
     user_wallet: idSchema,
     status: statusEnum.optional(),
     payment_method: idSchema,
@@ -57,9 +58,11 @@ export const updatePaymentTransactionValidationSchema = z.object({
 export const getPaymentTransactionsValidationSchema = z.object({
   query: z.object({
     user: idSchema.optional(),
+    email: z.string().optional(),
     user_wallet: idSchema.optional(),
     status: statusEnum.optional(),
     payment_method: idSchema.optional(),
+    is_test: z.boolean().optional(),
     page: z.string().optional(),
     limit: z.string().optional(),
   }),
@@ -81,6 +84,7 @@ export const initiatePaymentValidationSchema = z.object({
     customer_email: z.string().email('Invalid email format').optional(),
     customer_name: z.string().trim().optional(),
     customer_phone: z.string().trim().optional(),
+    coupon: z.string().trim().optional(),
   }),
 });
 

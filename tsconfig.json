@@ -15,33 +15,3 @@
   "include": ["src", "eslint.config.js"],
   "exclude": ["node_modules"]
 }
-
-/* 
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "node",
-    "rootDir": "./src/",
-    "outDir": "./dist/",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": false,
-    "skipLibCheck": true,
-    "noImplicitReturns": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "allowImportingTsExtensions": false,
-    "noEmit": false,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": false,
-    "allowJs": true,
-    "checkJs": false,
-    "resolveJsonModule": true,
-    "declaration": false,
-    "sourceMap": false,
-    "removeComments": true
-  },
-}
-*/

@@ -9,11 +9,7 @@ const router = express.Router();
 
 // GET
 router.get('/self', auth('user', 'admin'), UserWalletControllers.getSelfWallet);
-router.get(
-  '/',
-  auth('admin'),
-  UserWalletControllers.getUserWallets,
-);
+router.get('/', auth('admin'), UserWalletControllers.getUserWallets);
 router.get(
   '/user/:user_id',
   auth('admin'),
@@ -36,30 +32,58 @@ router.post(
 );
 
 router.post(
-  '/give-initial-package/self',
-  auth('admin', 'user'),
-  UserWalletControllers.giveSelfInitialPackage,
+  '/give-bonus-credits',
+  auth('admin'),
+  validation(UserWalletValidations.giveBonusCreditsValidationSchema),
+  UserWalletControllers.giveBonusCredits,
+);
+
+router.post(
+  '/give-initial-credits',
+  auth('admin'),
+  validation(UserWalletValidations.giveInitialCreditsValidationSchema),
+  UserWalletControllers.giveInitialCredits,
 );
 
 router.post(
   '/give-initial-package',
+  auth('admin'),
+  validation(UserWalletValidations.giveInitialPackageValidationSchema),
+  UserWalletControllers.giveInitialPackage,
+);
+
+router.post(
+  '/assign-package',
+  auth('admin'),
+  validation(UserWalletValidations.assignPackageValidationSchema),
+  UserWalletControllers.assignPackage,
+);
+
+router.post(
+  '/give-bonus-credits/server',
+  serverAuth(),
+  validation(UserWalletValidations.giveBonusCreditsValidationSchema),
+  UserWalletControllers.giveBonusCredits,
+);
+
+router.post(
+  '/give-initial-credits/server',
+  serverAuth(),
+  validation(UserWalletValidations.giveInitialCreditsValidationSchema),
+  UserWalletControllers.giveInitialCredits,
+);
+
+router.post(
+  '/give-initial-package/server',
   serverAuth(),
   validation(UserWalletValidations.giveInitialPackageValidationSchema),
   UserWalletControllers.giveInitialPackage,
 );
 
 router.post(
-  '/give-initial-token',
-  serverAuth(),
-  validation(UserWalletValidations.giveInitialTokenValidationSchema),
-  UserWalletControllers.giveInitialToken,
-);
-
-router.post(
-  '/give-bonus-token',
-  serverAuth(),
-  validation(UserWalletValidations.giveBonusTokenValidationSchema),
-  UserWalletControllers.giveBonusToken,
+  '/give-initial-package/self',
+  auth('admin', 'user'),
+  UserWalletControllers.giveSelfInitialPackage,
 );
 
 // PATCH

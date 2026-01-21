@@ -1,4 +1,5 @@
 import { TPaymentMethod } from '../modules/payment-method/payment-method.type';
+import { BkashService } from './bkash/bkash.service';
 import { SSLCommerzService } from './sslcommerz/sslcommerz.service';
 import { StripeService } from './stripe/stripe.service';
 
@@ -46,6 +47,8 @@ export interface IPaymentGateway {
   initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse>;
   verifyPayment(transactionId: string): Promise<PaymentVerificationResponse>;
   handleWebhook(payload: any, signature: string): Promise<WebhookResponse>;
+  // Optional: For payment gateways that require explicit payment execution (e.g., bKash)
+  executePayment?(paymentID: string): Promise<any>;
 }
 
 export class PaymentGatewayFactory {
@@ -57,6 +60,8 @@ export class PaymentGatewayFactory {
         return new StripeService(paymentMethod);
       case 'sslcommerz':
         return new SSLCommerzService(paymentMethod);
+      case 'bkash':
+        return new BkashService(paymentMethod);
       default:
         throw new Error(`Unsupported payment method: ${paymentMethod.value}`);
     }

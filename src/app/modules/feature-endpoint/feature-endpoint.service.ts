@@ -1,34 +1,45 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/app-error';
-import AppQueryFind from '../../builder/app-query-find';
+import mongoose from 'mongoose';
+import AppAggregationQuery from '../../builder/AppAggregationQuery';
+import AppError from '../../builder/AppError';
+import { withCache } from '../../utils/cache.utils';
+import { clearFeatureCache } from '../feature/feature.service';
 import { FeatureEndpoint } from './feature-endpoint.model';
 import { TFeatureEndpoint } from './feature-endpoint.type';
+
+const CACHE_TTL = 86400; // 24 hours
 
 export const createFeatureEndpoint = async (
   data: TFeatureEndpoint,
 ): Promise<TFeatureEndpoint> => {
-  // Ensure value is lowercase
+  // Convert value to lowercase
   const featureEndpointData = {
     ...data,
-    value: data.value.toLowerCase().trim(),
+    value: data.value?.toLowerCase().trim(),
   };
 
-  // Check for duplicate value (non-deleted only)
-  const existingFeatureEndpoint = await FeatureEndpoint.findOne({
-    value: featureEndpointData.value,
-    is_deleted: { $ne: true },
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+  // Check if value already exists (for non-deleted records)
+  if (featureEndpointData.value) {
+    const existingFeatureEndpoint = await FeatureEndpoint.findOne({
+      value: featureEndpointData.value,
+      is_deleted: { $ne: true },
+    })
+      .setOptions({ bypassDeleted: true })
+      .lean();
 
-  if (existingFeatureEndpoint) {
-    throw new AppError(
-      httpStatus.CONFLICT,
-      'Feature endpoint with this value already exists',
-    );
+    if (existingFeatureEndpoint) {
+      throw new AppError(
+        httpStatus.CONFLICT,
+        `Feature endpoint with value '${featureEndpointData.value}' already exists`,
+      );
+    }
   }
 
   const result = await FeatureEndpoint.create(featureEndpointData);
+
+  // Clear feature cache
+  await clearFeatureCache();
+
   return result.toObject();
 };
 
@@ -45,17 +56,39 @@ export const getPublicFeatureEndpoint = async (
   return result;
 };
 
-export const getPublicFeatureEndpointByValue = async (
-  value: string,
-): Promise<TFeatureEndpoint> => {
-  const result = await FeatureEndpoint.findOne({
-    value: value.toLowerCase().trim(),
-    is_active: true,
-  }).populate('feature');
-  if (!result) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
+export const getPublicFeatureEndpointByIdOrValue = async ({
+  _id,
+  value,
+}: {
+  _id?: string;
+  value?: string;
+}): Promise<TFeatureEndpoint> => {
+  if (!_id && !value) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Invalid payload');
   }
-  return result;
+
+  return await withCache(
+    `feature-endpoint:public:${_id || value}`,
+    CACHE_TTL,
+    async () => {
+      const query: any = { is_active: true };
+
+      if (_id && mongoose.Types.ObjectId.isValid(_id) && value) {
+        query.$or = [{ _id: new mongoose.Types.ObjectId(_id) }, { value }];
+      } else if (_id && mongoose.Types.ObjectId.isValid(_id)) {
+        query._id = new mongoose.Types.ObjectId(_id);
+      } else if (value) {
+        query.value = value;
+      }
+
+      const result = await FeatureEndpoint.findOne(query).populate('feature');
+
+      if (!result) {
+        throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
+      }
+      return result;
+    },
+  );
 };
 
 export const getFeatureEndpoint = async (
@@ -81,24 +114,24 @@ export const getPublicFeatureEndpoints = async (
   };
 
   if (feature) {
-    filter.feature = feature;
+    filter.feature = new mongoose.Types.ObjectId(feature as string);
   }
 
   if (method) {
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQueryFind(FeatureEndpoint, {
-    ...rest,
-    ...filter,
-  })
-    .populate([{ path: 'feature' }])
-    .search(['name', 'endpoint', 'description'])
+  const featureEndpointQuery = new AppAggregationQuery<TFeatureEndpoint>(
+    FeatureEndpoint,
+    { ...rest, ...filter },
+  );
+  featureEndpointQuery
+    .populate([{ path: 'feature', justOne: true }])
+    .search(['name', 'value', 'endpoint', 'description'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await featureEndpointQuery.execute();
 
@@ -116,24 +149,24 @@ export const getFeatureEndpoints = async (
   const filter: Record<string, unknown> = {};
 
   if (feature) {
-    filter.feature = feature;
+    filter.feature = new mongoose.Types.ObjectId(feature as string);
   }
 
   if (method) {
     filter.method = method;
   }
 
-  const featureEndpointQuery = new AppQueryFind(FeatureEndpoint, {
-    ...rest,
-    ...filter,
-  })
-    .populate([{ path: 'feature' }])
-    .search(['name', 'endpoint', 'description'])
+  const featureEndpointQuery = new AppAggregationQuery<TFeatureEndpoint>(
+    FeatureEndpoint,
+    { ...rest, ...filter },
+  );
+  featureEndpointQuery
+    .populate([{ path: 'feature', justOne: true }])
+    .search(['name', 'value', 'endpoint', 'description'])
     .filter()
     .sort()
     .paginate()
-    .fields()
-    .tap((q) => q.lean());
+    .fields();
 
   const result = await featureEndpointQuery.execute([
     {
@@ -158,14 +191,14 @@ export const updateFeatureEndpoint = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
 
-  // If value is being updated, ensure it's lowercase and check for duplicates
-  const updatePayload: Partial<TFeatureEndpoint> = { ...payload };
+  // Convert value to lowercase if provided
+  const updateData: Partial<TFeatureEndpoint> = { ...payload };
   if (payload.value !== undefined) {
-    updatePayload.value = payload.value.toLowerCase().trim();
+    updateData.value = payload.value.toLowerCase().trim();
 
-    // Check for duplicate value (excluding current record and non-deleted only)
+    // Check if value already exists (for non-deleted records, excluding current feature endpoint)
     const existingFeatureEndpoint = await FeatureEndpoint.findOne({
-      value: updatePayload.value,
+      value: updateData.value,
       _id: { $ne: id },
       is_deleted: { $ne: true },
     })
@@ -175,15 +208,18 @@ export const updateFeatureEndpoint = async (
     if (existingFeatureEndpoint) {
       throw new AppError(
         httpStatus.CONFLICT,
-        'Feature endpoint with this value already exists',
+        `Feature endpoint with value '${updateData.value}' already exists`,
       );
     }
   }
 
-  const result = await FeatureEndpoint.findByIdAndUpdate(id, updatePayload, {
+  const result = await FeatureEndpoint.findByIdAndUpdate(id, updateData, {
     new: true,
     runValidators: true,
   });
+
+  // Clear feature cache
+  await clearFeatureCache();
 
   return result!;
 };
@@ -206,6 +242,9 @@ export const updateFeatureEndpoints = async (
     { ...payload },
   );
 
+  // Clear feature cache
+  await clearFeatureCache();
+
   return {
     count: result.modifiedCount,
     not_found_ids: notFoundIds,
@@ -219,6 +258,9 @@ export const deleteFeatureEndpoint = async (id: string): Promise<void> => {
   }
 
   await featureEndpoint.softDelete();
+
+  // Clear feature cache
+  await clearFeatureCache();
 };
 
 export const deleteFeatureEndpointPermanent = async (
@@ -235,6 +277,9 @@ export const deleteFeatureEndpointPermanent = async (
   await FeatureEndpoint.findByIdAndDelete(id).setOptions({
     bypassDeleted: true,
   });
+
+  // Clear feature cache
+  await clearFeatureCache();
 };
 
 export const deleteFeatureEndpoints = async (
@@ -253,6 +298,9 @@ export const deleteFeatureEndpoints = async (
     { _id: { $in: foundIds } },
     { is_deleted: true },
   );
+
+  // Clear feature cache
+  await clearFeatureCache();
 
   return {
     count: foundIds.length,
@@ -281,6 +329,9 @@ export const deleteFeatureEndpointsPermanent = async (
     is_deleted: true,
   }).setOptions({ bypassDeleted: true });
 
+  // Clear feature cache
+  await clearFeatureCache();
+
   return {
     count: foundIds.length,
     not_found_ids: notFoundIds,
@@ -303,6 +354,9 @@ export const restoreFeatureEndpoint = async (
     );
   }
 
+  // Clear feature cache
+  await clearFeatureCache();
+
   return featureEndpoint;
 };
 
@@ -322,6 +376,9 @@ export const restoreFeatureEndpoints = async (
   }).lean();
   const restoredIds = restoredFeatureEndpoints.map((fe) => fe._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+
+  // Clear feature cache
+  await clearFeatureCache();
 
   return {
     count: result.modifiedCount,

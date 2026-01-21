@@ -9,14 +9,14 @@ const featureTypeEnum = z.enum(['writing', 'generation', 'other']);
 
 export const createFeatureValidationSchema = z.object({
   body: z.object({
+    parent: idSchema.optional(),
+    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
     value: z
       .string()
       .trim()
-      .min(1, 'Value is required')
-      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
-      .toLowerCase(),
-    parent: idSchema.optional(),
-    name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+      .min(2, 'Value must be at least 2 characters')
+      .max(100, 'Value cannot exceed 100 characters')
+      .transform((val) => val.toLowerCase()),
     description: z
       .string()
       .trim()
@@ -33,6 +33,12 @@ export const createFeatureValidationSchema = z.object({
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
       .nonnegative('Sequence must be 0 or greater')
+      .optional(),
+    max_word: z
+      .object({
+        free: z.number().min(0, 'Max word must be 0 or greater'),
+        paid: z.number().min(0, 'Max word must be 0 or greater'),
+      })
       .optional(),
     is_active: z.boolean().optional(),
   }),
@@ -43,18 +49,18 @@ export const updateFeatureValidationSchema = z.object({
     id: idSchema,
   }),
   body: z.object({
-    value: z
-      .string()
-      .trim()
-      .min(1, 'Value is required')
-      .regex(/^[a-z0-9-_]+$/, 'Value must contain only lowercase letters, numbers, hyphens, and underscores')
-      .toLowerCase()
-      .optional(),
     parent: idSchema.optional(),
     name: z
       .string()
       .trim()
       .min(2, 'Name must be at least 2 characters')
+      .optional(),
+    value: z
+      .string()
+      .trim()
+      .min(2, 'Value must be at least 2 characters')
+      .max(100, 'Value cannot exceed 100 characters')
+      .transform((val) => val.toLowerCase())
       .optional(),
     description: z
       .string()
@@ -72,6 +78,12 @@ export const updateFeatureValidationSchema = z.object({
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
       .nonnegative('Sequence must be 0 or greater')
+      .optional(),
+    max_word: z
+      .object({
+        free: z.number().min(0, 'Max word must be 0 or greater'),
+        paid: z.number().min(0, 'Max word must be 0 or greater'),
+      })
       .optional(),
     is_active: z.boolean().optional(),
   }),
@@ -98,11 +110,5 @@ export const featureOperationValidationSchema = z.object({
 export const featuresOperationValidationSchema = z.object({
   body: z.object({
     ids: z.array(idSchema).nonempty('At least one feature ID is required'),
-  }),
-});
-
-export const getFeatureByValueValidationSchema = z.object({
-  params: z.object({
-    value: z.string().trim().min(1, 'Value is required').toLowerCase(),
   }),
 });

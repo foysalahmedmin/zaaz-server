@@ -1,12 +1,14 @@
 import { createClient, RedisClientOptions } from 'redis';
 import config from '../config';
 
-const url = config.redis_url || 'redis://localhost:6379';
+const host = config.redis_host || 'localhost';
+const port = Number(config.redis_port || '6379');
 
 // Redis client options with timeout and retry settings
 const redisOptions: RedisClientOptions = {
-  url: url,
   socket: {
+    host: host,
+    port: port,
     connectTimeout: 5000, // 5 seconds timeout
     reconnectStrategy: (retries: number) => {
       console.log(`🔄 Redis reconnection attempt: ${retries}`);
@@ -68,12 +70,21 @@ export const connectRedis = async () => {
   }
 
   try {
+    // Connect Cache Client
     if (!cacheClient.isOpen) {
       await cacheClient.connect();
     }
+    // Connect Pub Client
+    if (!pubClient.isOpen) {
+      await pubClient.connect();
+    }
+    // Connect Sub Client
+    if (!subClient.isOpen) {
+      await subClient.connect();
+    }
     return true;
   } catch (error) {
-    console.warn('⚠️ Redis cache connection failed:', error);
+    console.warn('⚠️ Redis connection failed:', error);
     return false;
   }
 };

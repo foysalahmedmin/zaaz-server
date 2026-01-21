@@ -9,15 +9,36 @@ import {
 } from '../index';
 
 export class StripeService implements IPaymentGateway {
+  // private readonly publicKey?: string;
+  private readonly secretKey?: string;
+  private readonly webhookSecretKey?: string;
   private readonly stripe: Stripe;
-  private readonly webhookSecret?: string;
 
   constructor(paymentMethod: TPaymentMethod) {
-    this.stripe = new Stripe(paymentMethod.secret, {
+    const { secretKey, webhookSecretKey } = paymentMethod.config || {};
+
+    // this.publicKey = paymentMethod?.is_test
+    //   ? publicKey?.trim() || process.env.STRIPE_PUBLIC_KEY_TEST || ''
+    //   : publicKey?.trim() || process.env.STRIPE_PUBLIC_KEY || '';
+
+    this.secretKey = paymentMethod?.is_test
+      ? secretKey?.trim() || process.env.STRIPE_SECRET_KEY_TEST || ''
+      : secretKey?.trim() || process.env.STRIPE_SECRET_KEY || '';
+
+    this.webhookSecretKey = paymentMethod?.is_test
+      ? webhookSecretKey?.trim() ||
+        process.env.STRIPE_WEBHOOK_SECRET_KEY_TEST ||
+        ''
+      : webhookSecretKey?.trim() || process.env.STRIPE_WEBHOOK_SECRET_KEY || '';
+
+    if (!this.secretKey) {
+      throw new Error('Stripe secret key not configured');
+    }
+
+    this.stripe = new Stripe(this.secretKey || '', {
       apiVersion: '2025-10-29.clover',
     });
     // Webhook secret key for signature verification
-    this.webhookSecret = paymentMethod.webhook_key || undefined;
   }
 
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse> {
@@ -30,7 +51,7 @@ export class StripeService implements IPaymentGateway {
               currency: data.currency.toLowerCase(),
               product_data: {
                 name: `Package Purchase`,
-                description: `Token Package Purchase`,
+                description: `Credits Package Purchase`,
               },
               unit_amount: Math.round(data.amount * 100), // Convert to cents
             },
@@ -80,7 +101,7 @@ export class StripeService implements IPaymentGateway {
     signature: string,
   ): Promise<WebhookResponse> {
     try {
-      if (!this.webhookSecret) {
+      if (!this.webhookSecretKey) {
         throw new Error('Webhook secret not configured');
       }
 
@@ -92,7 +113,7 @@ export class StripeService implements IPaymentGateway {
       const event = this.stripe.webhooks.constructEvent(
         rawBody,
         signature,
-        this.webhookSecret,
+        this.webhookSecretKey,
       );
 
       if (event.type === 'checkout.session.completed') {

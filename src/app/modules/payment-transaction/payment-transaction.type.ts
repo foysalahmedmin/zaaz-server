@@ -10,6 +10,7 @@ export type TCurrency = 'USD' | 'BDT';
 
 export type TPaymentTransaction = {
   user: mongoose.Types.ObjectId;
+  email?: string;
   user_wallet: mongoose.Types.ObjectId;
   status: TPaymentTransactionStatus;
   payment_method: mongoose.Types.ObjectId;
@@ -19,6 +20,8 @@ export type TPaymentTransaction = {
   package: mongoose.Types.ObjectId;
   plan: mongoose.Types.ObjectId;
   price: mongoose.Types.ObjectId; // PackagePlan document _id
+  coupon?: mongoose.Types.ObjectId; // Applied coupon ID
+  discount_amount?: number; // Calculated discount amount
   amount: number;
   currency: TCurrency;
   gateway_fee?: number; // Fee charged by payment gateway
@@ -32,12 +35,13 @@ export type TPaymentTransaction = {
   return_url?: string; // Frontend return URL (stored for redirect after payment)
   cancel_url?: string; // Frontend cancel URL (stored for redirect after payment)
   gateway_response?: Record<string, any>; // Raw response data from gateway (for debugging)
+  is_test?: boolean;
+  is_active?: boolean;
   is_deleted?: boolean;
 };
 
 export interface TPaymentTransactionDocument
-  extends TPaymentTransaction,
-    Document {
+  extends TPaymentTransaction, Document {
   _id: Types.ObjectId;
 }
 

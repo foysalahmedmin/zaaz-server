@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import AppError from '../builder/app-error';
+import AppError from '../builder/AppError';
 import config from '../config';
-import catchAsync from '../utils/catch-async';
+import catchAsync from '../utils/catchAsync';
 
 const serverAuth = () => {
   return catchAsync(

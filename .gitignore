@@ -6,6 +6,13 @@
 .env
 .vercel
 
+# Google Cloud Storage credentials
+/credentials
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -16,3 +23,4 @@
 *.njsproj
 *.sln
 *.sw?
+package-lock.json

@@ -21,7 +21,7 @@ router.get(
 
 router.get(
   '/:id/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.notificationRecipientOperationValidationSchema,
   ),
@@ -40,13 +40,13 @@ router.get(
 // PATCH
 router.patch(
   '/read-all/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   NotificationRecipientControllers.readAllNotificationRecipients,
 );
 
 router.patch(
   '/bulk/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.updateSelfNotificationRecipientsValidationSchema,
   ),
@@ -55,7 +55,7 @@ router.patch(
 
 router.patch(
   '/:id/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.updateSelfNotificationRecipientValidationSchema,
   ),
@@ -73,7 +73,7 @@ router.patch(
 
 router.patch(
   '/:id',
-  auth('admin', 'editor'),
+  auth('admin'),
   validation(
     NotificationRecipientValidations.updateNotificationRecipientValidationSchema,
   ),
@@ -83,7 +83,7 @@ router.patch(
 // DELETE
 router.delete(
   '/bulk/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.notificationRecipientsOperationValidationSchema,
   ),
@@ -110,7 +110,7 @@ router.delete(
 
 router.delete(
   '/:id/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.notificationRecipientOperationValidationSchema,
   ),
@@ -138,7 +138,7 @@ router.delete(
 // POST
 router.post(
   '/',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.createNotificationRecipientValidationSchema,
   ),
@@ -147,7 +147,7 @@ router.post(
 
 router.post(
   '/bulk/restore/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.notificationRecipientsOperationValidationSchema,
   ),
@@ -165,7 +165,7 @@ router.post(
 
 router.post(
   '/:id/restore/self',
-  auth('admin', 'author', 'editor', 'contributor', 'subscriber', 'user'),
+  auth('admin', 'user'),
   validation(
     NotificationRecipientValidations.notificationRecipientOperationValidationSchema,
   ),

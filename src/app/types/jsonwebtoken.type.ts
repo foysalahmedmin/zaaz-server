@@ -7,4 +7,5 @@ export type TJwtPayload = {
   image?: string;
   role?: TRole;
   is_verified?: boolean;
+  auth_source?: 'email' | 'google';
 };

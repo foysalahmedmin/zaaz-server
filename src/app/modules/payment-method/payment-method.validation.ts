@@ -18,15 +18,11 @@ export const createPaymentMethodValidationSchema = z.object({
       .trim()
       .length(3, 'Currency must be a 3-letter ISO code')
       .toUpperCase(),
-    secret: z.string().trim().min(1, 'Secret is required'),
-    public_key: z.string().trim().optional(),
-    webhook_key: z.string().trim().optional(),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
     currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),
@@ -61,15 +57,11 @@ export const updatePaymentMethodValidationSchema = z.object({
       .length(3, 'Currency must be a 3-letter ISO code')
       .toUpperCase()
       .optional(),
-    secret: z.string().trim().min(1, 'Secret is required').optional(),
-    public_key: z.string().trim().optional(),
-    webhook_key: z.string().trim().optional(),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    webhook_url: z.string().url('Webhook URL must be a valid URL').optional(),
     currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),

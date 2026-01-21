@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import catchAsync from '../../utils/catch-async';
-import sendResponse from '../../utils/send-response';
+import catchAsync from '../../utils/catchAsync';
+import sendResponse from '../../utils/sendResponse';
 import * as ContactServices from './contact.service';
 
 export const createContact = catchAsync(async (req, res) => {
@@ -108,3 +108,4 @@ export const restoreContacts = catchAsync(async (req, res) => {
     },
   });
 });
+

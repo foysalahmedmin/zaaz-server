@@ -47,6 +47,7 @@ const planSchema = new Schema<TPlanDocument>(
 // Indexes
 planSchema.index({ is_active: 1, is_deleted: 1 });
 planSchema.index({ duration: 1 });
+planSchema.index({ created_at: -1 });
 
 // toJSON override to remove sensitive fields from output
 planSchema.methods.toJSON = function () {
