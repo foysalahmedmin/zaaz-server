@@ -85,7 +85,7 @@ export const getSelfUserWallet = async (
           path: 'package',
           populate: {
             path: 'features',
-            select: '_id name description type max_word',
+            select: '_id name description type',
             populate: {
               path: 'feature_endpoints',
             },
@@ -120,7 +120,7 @@ export const getUserWallet = async (
         path: 'package',
         populate: {
           path: 'features',
-          select: '_id name description type max_word',
+          select: '_id name description type',
           populate: {
             path: 'feature_endpoints',
           },

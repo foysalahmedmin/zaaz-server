@@ -118,7 +118,6 @@ High-level service capability hierarchy.
 - `parent` — ObjectId (Self-Reference mapping sub-features)
 - `description`, `path`, `prefix` — Strings
 - `type` — Enum: `writing | generation | other`
-- `max_word` — Object: `{ free: Number, paid: Number }` (Tiered limits)
 - `sequence` — Number (Order)
 - `is_active`, `is_deleted` — Booleans
 
@@ -135,7 +134,6 @@ Low-level API path mapping with specific credit costs.
 - `endpoint` — String (API path)
 - `method` — Enum: `GET | POST | PUT | PATCH | DELETE`
 - `credits` — Number (Consumable cost per hit)
-- `max_word` — Object: `{ free: Number, paid: Number }`
 - `is_active`, `is_deleted` — Booleans
 
 ---
@@ -165,8 +163,6 @@ Tiered product offering containing features and multiple price plans.
 - `description`, `content`, `badge` — Strings
 - `type` — Enum: `credits | subscription`
 - `points` — Array of Strings (Selling points)
-- `features` — Array of ObjectIds (Ref: Feature)
-- `plans` — Array of ObjectIds (Ref: Plan)
 - `is_initial` — Boolean (System onboarding package)
 - `is_active`, `is_deleted` — Booleans
 
@@ -209,8 +205,6 @@ Immutable snapshots of Package data for historical financial auditing.
 
 - `package` — ObjectId (Source Reference)
 - `name`, `value`, `type` — Strings
-- `features` — Array of Full Feature Objects (Snapshots)
-- `plans` — Array of Full PackagePlan + Plan Objects (Snapshots)
 - `is_active`, `is_deleted` — Booleans
 
 ---

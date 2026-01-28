@@ -28,16 +28,6 @@ export const createFeatureEndpointValidationSchema = z.object({
       .number({ invalid_type_error: 'Credits must be a number' })
       .int('Credits must be an integer')
       .nonnegative('Credits must be 0 or greater'),
-    max_word: z.object({
-      free: z
-        .number({ invalid_type_error: 'Max word (free) must be a number' })
-        .int('Max word must be an integer')
-        .nonnegative('Max word must be 0 or greater'),
-      paid: z
-        .number({ invalid_type_error: 'Max word (paid) must be a number' })
-        .int('Max word must be an integer')
-        .nonnegative('Max word must be 0 or greater'),
-    }),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
@@ -76,20 +66,6 @@ export const updateFeatureEndpointValidationSchema = z.object({
       .number({ invalid_type_error: 'Credits must be a number' })
       .int('Credits must be an integer')
       .nonnegative('Credits must be 0 or greater')
-      .optional(),
-    max_word: z
-      .object({
-        free: z
-          .number({ invalid_type_error: 'Max word (free) must be a number' })
-          .int('Max word must be an integer')
-          .nonnegative('Max word must be 0 or greater')
-          .optional(),
-        paid: z
-          .number({ invalid_type_error: 'Max word (paid) must be a number' })
-          .int('Max word must be an integer')
-          .nonnegative('Max word must be 0 or greater')
-          .optional(),
-      })
       .optional(),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })

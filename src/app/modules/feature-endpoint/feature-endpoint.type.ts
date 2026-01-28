@@ -16,10 +16,6 @@ export type TFeatureEndpoint = {
   endpoint: string;
   method: TFeatureEndpointMethod;
   min_credits: number;
-  max_word: {
-    free: number;
-    paid: number;
-  };
   sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;

@@ -40,16 +40,6 @@ const featureSchema = new Schema<TFeatureDocument>(
       type: String,
       enum: ['writing', 'generation', 'other'],
     },
-    max_word: {
-      free: {
-        type: Number,
-        min: [0, 'Max word must be 0 or greater'],
-      },
-      paid: {
-        type: Number,
-        min: [0, 'Max word must be 0 or greater'],
-      },
-    },
     sequence: {
       type: Number,
       default: 0,

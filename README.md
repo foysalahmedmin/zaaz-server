@@ -298,14 +298,13 @@ erDiagram
 
     Package {
         ObjectId _id PK
+        string value "Unique, Indexed"
         string name
         string description
         string content "HTML content"
         string type "credits|subscription"
         string badge
         string[] points
-        ObjectId[] features FK
-        ObjectId[] plans FK
         number sequence
         boolean is_initial "Unique"
         boolean is_active
@@ -330,6 +329,15 @@ erDiagram
         object previous_price
         number credits
         boolean is_initial
+        boolean is_active
+        boolean is_deleted
+    }
+
+    PackageFeature {
+        ObjectId _id PK
+        ObjectId package FK
+        ObjectId feature FK
+        number sequence
         boolean is_active
         boolean is_deleted
     }
@@ -545,8 +553,9 @@ erDiagram
     %% Package Architecture
     Package ||--o{ PackagePlan : "priced_as"
     Plan ||--o{ PackagePlan : "defines_duration"
+    Package ||--o{ PackageFeature : "includes"
+    Feature ||--o{ PackageFeature : "available_in"
     Package ||--o{ PackageHistory : "versioned"
-    Package }o--o{ Feature : "includes"
 
     %% Payment Flow
     User ||--o{ PaymentTransaction : "makes"
@@ -573,7 +582,7 @@ erDiagram
 
 </div>
 
-The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 26 core persistent collections. Essential metadata and security fields are strictly enforced at the Mongoose layer. Critical transactional data is protected via SNAPSHOT History collections (AiModelHistory, PackageHistory, BillingSettingHistory, etc.), which capture immutable configurations at the point of sale, ensuring that historical records remain accurate regardless of future configuration changes.
+The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 27 core persistent collections. The architecture employs junction tables (`PackagePlan` and `PackageFeature`) to establish normalized many-to-many relationships between Packages, Plans, and Features, eliminating data redundancy while maintaining query performance through optimized aggregation pipelines. Essential metadata and security fields are strictly enforced at the Mongoose layer. Critical transactional data is protected via SNAPSHOT History collections (AiModelHistory, PackageHistory, BillingSettingHistory, etc.), which capture immutable configurations at the point of sale, ensuring that historical records remain accurate regardless of future configuration changes.
 
 ---
 
@@ -584,7 +593,7 @@ The service layer exposes the following API clusters via the `/api` namespace:
 - Identity Management: `/api/auth` (Sign-in, Sign-up, Google SSO, Password Recovery)
 - Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/credits-usages`
 - Financial Operations: `/api/payment-transactions`, `/api/payment-methods`, `/api/package-transactions`
-- Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/coupons`
+- Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/package-features`, `/api/coupons`
 - Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`
 - Intelligence Governance: `/api/ai-models`, `/api/billing-settings`
 - Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/storage`, `/api/contact`

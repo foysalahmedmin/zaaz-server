@@ -34,12 +34,6 @@ export const createFeatureValidationSchema = z.object({
       .int('Sequence must be an integer')
       .nonnegative('Sequence must be 0 or greater')
       .optional(),
-    max_word: z
-      .object({
-        free: z.number().min(0, 'Max word must be 0 or greater'),
-        paid: z.number().min(0, 'Max word must be 0 or greater'),
-      })
-      .optional(),
     is_active: z.boolean().optional(),
   }),
 });
@@ -78,12 +72,6 @@ export const updateFeatureValidationSchema = z.object({
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
       .nonnegative('Sequence must be 0 or greater')
-      .optional(),
-    max_word: z
-      .object({
-        free: z.number().min(0, 'Max word must be 0 or greater'),
-        paid: z.number().min(0, 'Max word must be 0 or greater'),
-      })
       .optional(),
     is_active: z.boolean().optional(),
   }),

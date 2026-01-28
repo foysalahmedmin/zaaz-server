@@ -10,10 +10,6 @@ export type TFeature = {
   path?: string;
   prefix?: string;
   type?: TFeatureType;
-  max_word?: {
-    free: number;
-    paid: number;
-  };
   sequence?: number;
   is_active: boolean;
   is_deleted?: boolean;

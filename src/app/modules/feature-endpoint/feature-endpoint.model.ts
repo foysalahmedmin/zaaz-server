@@ -50,18 +50,6 @@ const featureEndpointSchema = new Schema<TFeatureEndpointDocument>(
       required: [true, 'Credits is required'],
       min: [0, 'Credits must be 0 or greater'],
     },
-    max_word: {
-      free: {
-        type: Number,
-        required: [true, 'Max word (free) is required'],
-        min: [0, 'Max word must be 0 or greater'],
-      },
-      paid: {
-        type: Number,
-        required: [true, 'Max word (paid) is required'],
-        min: [0, 'Max word must be 0 or greater'],
-      },
-    },
     sequence: {
       type: Number,
       default: 0,

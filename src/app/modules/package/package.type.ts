@@ -15,7 +15,6 @@ export type TPackage = {
   type?: 'credits' | 'subscription';
   badge?: string;
   points?: string[];
-
   sequence?: number;
   is_active: boolean;
   is_initial?: boolean;
