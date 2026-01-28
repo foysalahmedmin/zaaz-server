@@ -640,6 +640,38 @@ export const updatePackage = async (
   return await getPackage(id);
 };
 
+export const updatePackages = async (
+  ids: string[],
+  payload: Partial<TPackage> & {
+    plans?: Array<{
+      plan: mongoose.Types.ObjectId | string;
+      price: { USD: number; BDT: number };
+      credits: number;
+      is_initial?: boolean;
+      is_active?: boolean;
+    }>;
+    features?: string[];
+  },
+): Promise<{
+  count: number;
+  not_found_ids: string[];
+}> => {
+  const foundPackages = await Package.find({ _id: { $in: ids } }).lean();
+  const foundIds = foundPackages.map((pkg) => pkg._id.toString());
+  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+
+  for (const id of foundIds) {
+    await updatePackage(id, payload);
+  }
+
+  await clearPackageCache();
+
+  return {
+    count: foundIds.length,
+    not_found_ids: notFoundIds,
+  };
+};
+
 export const deletePackage = async (id: string): Promise<void> => {
   const packageData = await Package.findById(id);
   if (!packageData) {
