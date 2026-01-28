@@ -76,6 +76,7 @@ export const updatePaymentTransactionStatus = async (
       | (TPaymentTransaction & { _id: mongoose.Types.ObjectId })
       | null = null;
 
+    let shouldProcessCoupon = false;
     if (!updateResult) {
       // Transaction already processed, fetch and check if wallet update is needed
       const existing = await PaymentTransaction.findById(id)
@@ -121,9 +122,11 @@ export const updatePaymentTransactionStatus = async (
         '[Payment Success] Credits transaction not found, wallet update needed even though transaction is already success',
       );
       // Continue with wallet update logic below using transactionData
+      shouldProcessCoupon = true;
     } else {
       // updateResult is the transaction data we'll use
       transactionData = updateResult;
+      shouldProcessCoupon = true;
     }
 
     // Get package-plan document using transaction.price (package-plan _id)
@@ -321,30 +324,56 @@ export const updatePaymentTransactionStatus = async (
     }
 
     // Increment coupon usage count if applicable (only once when status transitions to success)
-    if (updateResult && transactionData.coupon) {
+    if (shouldProcessCoupon && transactionData.coupon) {
       try {
         console.log('[Payment Success] Incrementing coupon usage count...', {
           couponId: transactionData.coupon,
           transactionId: id,
         });
 
-        await Coupon.findByIdAndUpdate(
+        const couponDoc = await Coupon.findByIdAndUpdate(
           transactionData.coupon,
           { $inc: { usage_count: 1 } },
-          { session },
-        );
+          { session, new: true },
+        ).lean();
 
-        console.log('[Payment Success] Coupon usage count incremented');
+        // Send report if it is an affiliate coupon
+        if (couponDoc && couponDoc.is_affiliate) {
+          try {
+            // await saveAffiliateCouponReport({
+            //   coupon_code: couponDoc.code,
+            //   price:
+            //     transactionData.amount + (transactionData.discount_amount || 0),
+            //   amount: transactionData.amount,
+            //   discount_amount: transactionData.discount_amount || 0,
+            //   currency: transactionData.currency,
+            //   transaction_id: transactionData._id.toString(),
+            //   user_id: transactionData.user.toString(),
+            //   user_email: transactionData.email,
+            // });
+          } catch (reportError) {
+            console.error(
+              '[Payment Success] Affiliate report failed to send:',
+              {
+                transactionId: id,
+                error:
+                  reportError instanceof Error
+                    ? reportError.message
+                    : String(reportError),
+              },
+            );
+          }
+        }
       } catch (error) {
         console.error(
-          '[Payment Success] Failed to increment coupon usage count:',
+          '[Payment Success] Failed to process coupon updates/reporting:',
           {
             couponId: transactionData.coupon,
             transactionId: id,
             error: error instanceof Error ? error.message : String(error),
           },
         );
-        // Don't throw error, just log it - coupon tracking is secondary to payment
+        // Don't throw error, just log it - coupon tracking/reporting is secondary to payment
       }
     }
 

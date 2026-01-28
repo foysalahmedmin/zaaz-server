@@ -1,4 +1,4 @@
-# Main Service Engine
+# ZaaZ Server
 
 This high-performance, enterprise-grade multi-purpose backend architecture orchestrates user wallets, multi-currency credit transactions, tiered subscription packages, AI model orchestration, and robust asynchronous processing. Engineered for scalability and high-concurrency, it serves as the backbone for the main ecosystem.
 
@@ -176,7 +176,7 @@ erDiagram
     %% ============================================
     %% CORE USER MANAGEMENT
     %% ============================================
-    
+
     User {
         ObjectId _id PK
         string name "Required, 2-50 chars"
@@ -195,7 +195,7 @@ erDiagram
     %% ============================================
     %% WALLET & CREDITS SYSTEM
     %% ============================================
-    
+
     UserWallet {
         ObjectId _id PK
         ObjectId user FK "Unique, Indexed"
@@ -249,7 +249,7 @@ erDiagram
     %% ============================================
     %% FEATURES & ENDPOINTS
     %% ============================================
-    
+
     Feature {
         ObjectId _id PK
         ObjectId parent FK "Self-reference"
@@ -295,7 +295,7 @@ erDiagram
     %% ============================================
     %% PACKAGES & PLANS
     %% ============================================
-    
+
     Package {
         ObjectId _id PK
         string name
@@ -347,7 +347,7 @@ erDiagram
     %% ============================================
     %% PAYMENT SYSTEM
     %% ============================================
-    
+
     PaymentMethod {
         ObjectId _id PK
         string name "e.g. Stripe"
@@ -415,7 +415,7 @@ erDiagram
     %% ============================================
     %% BILLING CONFIGURATION
     %% ============================================
-    
+
     BillingSetting {
         ObjectId _id PK
         number credit_price
@@ -482,7 +482,7 @@ erDiagram
     %% ============================================
     %% NOTIFICATIONS
     %% ============================================
-    
+
     Notification {
         ObjectId _id PK
         string title
@@ -509,7 +509,7 @@ erDiagram
     %% ============================================
     %% STORAGE
     %% ============================================
-    
+
     Storage {
         ObjectId _id PK
         string name
@@ -524,47 +524,47 @@ erDiagram
     %% ============================================
     %% PRIMARY RELATIONSHIPS
     %% ============================================
-    
+
     %% User to Wallet (1:1)
     User ||--|| UserWallet : "owns"
-    
+
     %% Wallet to Package/Plan
     UserWallet }o--|| Package : "subscribed_to"
     UserWallet }o--|| Plan : "active_plan"
-    
+
     %% Credits Flow
     User ||--o{ CreditsTransaction : "initiates"
     UserWallet ||--o{ CreditsTransaction : "tracks"
     CreditsTransaction ||--|| CreditsUsage : "details"
-    
+
     %% Feature System
     Feature ||--o{ Feature : "parent_child"
     Feature ||--o{ FeatureEndpoint : "exposes"
     FeatureEndpoint ||--o{ FeatureUsageLog : "logs"
-    
+
     %% Package Architecture
     Package ||--o{ PackagePlan : "priced_as"
     Plan ||--o{ PackagePlan : "defines_duration"
     Package ||--o{ PackageHistory : "versioned"
     Package }o--o{ Feature : "includes"
-    
+
     %% Payment Flow
     User ||--o{ PaymentTransaction : "makes"
     PaymentMethod ||--o{ PaymentTransaction : "processes"
     PaymentTransaction }o--|| PackagePlan : "purchases"
     PaymentTransaction }o--o| Coupon : "applies"
     PaymentTransaction ||--o| CreditsTransaction : "generates"
-    
+
     %% Usage Tracking
     User ||--o{ CreditsUsage : "consumes"
     User ||--o{ FeatureUsageLog : "activity"
     FeatureEndpoint ||--o| CreditsTransaction : "costs"
-    
+
     %% Notifications
     User ||--o{ Notification : "sends"
     User ||--o{ NotificationRecipient : "receives"
     Notification ||--o{ NotificationRecipient : "delivered_to"
-    
+
     %% Configuration History
     AiModel ||--o{ AiModelHistory : "tracks_changes"
     BillingSetting ||--o{ BillingSettingHistory : "tracks_changes"

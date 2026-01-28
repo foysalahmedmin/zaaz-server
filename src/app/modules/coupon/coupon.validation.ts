@@ -11,39 +11,101 @@ const priceSchema = z.object({
 
 export const createCouponValidationSchema = z.object({
   body: z.object({
-    code: z.string().trim().toUpperCase(),
+    code: z.string().trim(),
     discount_type: z.enum(['percentage', 'fixed']),
-    discount_value: z.number().nonnegative().optional().default(0),
-    fixed_amount: priceSchema.optional(),
-    min_purchase_amount: priceSchema.optional(),
-    max_discount_amount: priceSchema.optional(),
-    valid_from: z.coerce.date(),
-    valid_until: z.coerce.date(),
-    usage_limit: z.number().int().nonnegative(),
-    applicable_packages: z.array(idSchema).optional(),
-    is_active: z.boolean().optional(),
+    discount_value: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.number().nonnegative().optional().default(0),
+    ),
+    fixed_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    min_purchase_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    max_discount_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    valid_from: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.coerce.date().optional(),
+    ),
+    valid_until: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.coerce.date().optional(),
+    ),
+    usage_limit: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.number().int().nonnegative().optional(),
+    ),
+    applicable_packages: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.array(idSchema).optional(),
+    ),
+    is_active: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.boolean().optional(),
+    ),
+    is_affiliate: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.boolean().optional(),
+    ),
   }),
 });
 
 export const updateCouponValidationSchema = z.object({
   body: z.object({
-    code: z.string().trim().toUpperCase().optional(),
+    code: z.string().trim().optional(),
     discount_type: z.enum(['percentage', 'fixed']).optional(),
-    discount_value: z.number().nonnegative().optional(),
-    fixed_amount: priceSchema.optional(),
-    min_purchase_amount: priceSchema.optional(),
-    max_discount_amount: priceSchema.optional(),
-    valid_from: z.coerce.date().optional(),
-    valid_until: z.coerce.date().optional(),
-    usage_limit: z.number().int().nonnegative().optional(),
-    applicable_packages: z.array(idSchema).optional(),
-    is_active: z.boolean().optional(),
+    discount_value: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.number().nonnegative().optional(),
+    ),
+    fixed_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    min_purchase_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    max_discount_amount: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      priceSchema.optional(),
+    ),
+    valid_from: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.coerce.date().optional(),
+    ),
+    valid_until: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.coerce.date().optional(),
+    ),
+    usage_limit: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.number().int().nonnegative().optional(),
+    ),
+    applicable_packages: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.array(idSchema).optional(),
+    ),
+    is_active: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.boolean().optional(),
+    ),
+    is_affiliate: z.preprocess(
+      (val) => (val === null ? undefined : val),
+      z.boolean().optional(),
+    ),
   }),
 });
 
 export const validateCouponValidationSchema = z.object({
   body: z.object({
-    code: z.string().trim().toUpperCase(),
+    code: z.string().trim(),
     package: idSchema,
     plan: idSchema,
     currency: z.enum(['USD', 'BDT']),

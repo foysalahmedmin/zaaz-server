@@ -64,6 +64,29 @@ const deleteCoupon = async (id: string) => {
   return await coupon.softDelete();
 };
 
+const updateCouponByCode = async (
+  code: string,
+  payload: Partial<TCoupon>,
+  options: Record<string, any> = {},
+) => {
+  const result = await Coupon.findOneAndUpdate({ code }, payload, {
+    new: true,
+    ...options,
+  }).setOptions(options);
+  return result;
+};
+
+const deleteCouponByCode = async (
+  code: string,
+  options: Record<string, any> = {},
+) => {
+  const coupon = await Coupon.findOne({ code }).setOptions(options);
+  if (!coupon) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Coupon not found');
+  }
+  return await coupon.softDelete();
+};
+
 const validateCoupon = async (
   code: string,
   packageId: string,
@@ -77,14 +100,21 @@ const validateCoupon = async (
   }
 
   const now = new Date();
-  if (now < coupon.valid_from || now > coupon.valid_until) {
+  if (
+    (coupon.valid_from && now < coupon.valid_from) ||
+    (coupon.valid_until && now > coupon.valid_until)
+  ) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
       'Coupon has expired or is not yet valid',
     );
   }
 
-  if (coupon.usage_limit > 0 && coupon.usage_count >= coupon.usage_limit) {
+  if (
+    typeof coupon.usage_limit === 'number' &&
+    coupon.usage_limit > 0 &&
+    coupon.usage_count >= coupon.usage_limit
+  ) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Coupon usage limit reached');
   }
 
@@ -148,6 +178,9 @@ export const CouponServices = {
   getAllCoupons,
   getCouponById,
   updateCoupon,
+  updateCouponByCode,
   deleteCoupon,
+  deleteCouponByCode,
   validateCoupon,
+  isCouponExist: Coupon.isCouponExist.bind(Coupon),
 };

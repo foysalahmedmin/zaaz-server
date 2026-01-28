@@ -18,12 +18,13 @@ export type TCoupon = {
     USD: number;
     BDT: number;
   }; // Used for percentage discounts
-  valid_from: Date;
-  valid_until: Date;
-  usage_limit: number;
+  valid_from?: Date;
+  valid_until?: Date;
+  usage_limit?: number;
   usage_count: number;
   applicable_packages: Types.ObjectId[]; // If empty, applicable to all packages
   is_active: boolean;
+  is_affiliate: boolean;
   is_deleted: boolean;
 };
 
@@ -33,5 +34,8 @@ export interface TCouponDocument extends TCoupon, Document {
 }
 
 export type TCouponModel = Model<TCouponDocument> & {
-  isCouponExist(code: string): Promise<TCouponDocument | null>;
+  isCouponExist(
+    code: string,
+    options?: Record<string, any>,
+  ): Promise<TCouponDocument | null>;
 };

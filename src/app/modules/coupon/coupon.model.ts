@@ -8,7 +8,6 @@ const couponSchema = new Schema<TCouponDocument>(
       required: [true, 'Coupon code is required'],
       unique: true,
       trim: true,
-      uppercase: true,
     },
     discount_type: {
       type: String,
@@ -33,16 +32,12 @@ const couponSchema = new Schema<TCouponDocument>(
     },
     valid_from: {
       type: Date,
-      required: [true, 'Valid from date is required'],
     },
     valid_until: {
       type: Date,
-      required: [true, 'Valid until date is required'],
     },
     usage_limit: {
       type: Number,
-      required: [true, 'Usage limit is required'],
-      default: 0,
     },
     usage_count: {
       type: Number,
@@ -57,6 +52,10 @@ const couponSchema = new Schema<TCouponDocument>(
     is_active: {
       type: Boolean,
       default: true,
+    },
+    is_affiliate: {
+      type: Boolean,
+      default: false,
     },
     is_deleted: {
       type: Boolean,
@@ -77,6 +76,7 @@ const couponSchema = new Schema<TCouponDocument>(
 // Indexes
 couponSchema.index({ code: 1 }, { unique: true });
 couponSchema.index({ is_active: 1 });
+couponSchema.index({ is_affiliate: 1 });
 couponSchema.index({ is_deleted: 1 });
 couponSchema.index({ valid_until: 1 });
 
@@ -102,8 +102,11 @@ couponSchema.pre('aggregate', function (next) {
 });
 
 // Static methods
-couponSchema.statics.isCouponExist = async function (code: string) {
-  return await this.findOne({ code });
+couponSchema.statics.isCouponExist = async function (
+  code: string,
+  options?: Record<string, any>,
+) {
+  return await this.findOne({ code }).setOptions(options);
 };
 
 // Instance methods
