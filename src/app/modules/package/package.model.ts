@@ -41,19 +41,6 @@ const packageSchema = new Schema<TPackageDocument>(
         trim: true,
       },
     ],
-    features: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Feature',
-        required: [true, 'At least one feature is required'],
-      },
-    ],
-    plans: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Plan',
-      },
-    ],
     sequence: {
       type: Number,
       default: 0,

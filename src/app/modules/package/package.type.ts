@@ -1,4 +1,4 @@
-import mongoose, { Document, Model, Types } from 'mongoose';
+import { Document, Model, Types } from 'mongoose';
 
 export type TCurrency = 'USD' | 'BDT';
 
@@ -15,8 +15,7 @@ export type TPackage = {
   type?: 'credits' | 'subscription';
   badge?: string;
   points?: string[];
-  features: mongoose.Types.ObjectId[];
-  plans: mongoose.Types.ObjectId[];
+
   sequence?: number;
   is_active: boolean;
   is_initial?: boolean;

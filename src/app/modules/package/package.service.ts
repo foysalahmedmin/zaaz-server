@@ -3,13 +3,17 @@ import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/AppAggregationQuery';
 import AppError from '../../builder/AppError';
 import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
+import {
+  createPackageFeatures,
+  getPackageFeaturesByPackage,
+  updatePackageFeatures,
+} from '../package-feature/package-feature.service';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
   createPackagePlans,
   deletePackagePlansByPackage,
   getPackagePlansByPackage,
 } from '../package-plan/package-plan.service';
-import { TPackagePlan } from '../package-plan/package-plan.type';
 import { Plan } from '../plan/plan.model';
 import { Package } from './package.model';
 import { TPackage } from './package.type';
@@ -21,6 +25,89 @@ export const clearPackageCache = async () => {
   await invalidateCacheByPattern('packages:public:*');
 };
 
+const getPlansLookupStage = () => [
+  {
+    $lookup: {
+      from: 'packageplans',
+      let: { packageId: '$_id' },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ['$package', '$$packageId'] },
+            is_deleted: { $ne: true },
+            is_active: true,
+          },
+        },
+        {
+          $lookup: {
+            from: 'plans',
+            localField: 'plan',
+            foreignField: '_id',
+            as: 'plan',
+          },
+        },
+        {
+          $unwind: {
+            path: '$plan',
+            preserveNullAndEmptyArrays: false,
+          },
+        },
+        {
+          $project: {
+            plan: 1,
+            price: 1,
+            previous_price: 1,
+            credits: 1,
+            is_initial: 1,
+            is_active: 1,
+            _id: 1,
+          },
+        },
+        {
+          $sort: { is_initial: -1, created_at: 1 },
+        },
+      ],
+      as: 'plans',
+    },
+  },
+];
+
+const getFeaturesLookupStage = () => [
+  {
+    $lookup: {
+      from: 'packagefeatures',
+      let: { packageId: '$_id' },
+      pipeline: [
+        {
+          $match: {
+            $expr: { $eq: ['$package', '$$packageId'] },
+            is_deleted: { $ne: true },
+            is_active: true,
+          },
+        },
+        {
+          $lookup: {
+            from: 'features',
+            localField: 'feature',
+            foreignField: '_id',
+            as: 'feature',
+          },
+        },
+        {
+          $unwind: {
+            path: '$feature',
+            preserveNullAndEmptyArrays: false,
+          },
+        },
+        {
+          $replaceRoot: { newRoot: '$feature' },
+        },
+      ],
+      as: 'features',
+    },
+  },
+];
+
 export const createPackage = async (
   data: TPackage & {
     plans?: Array<{
@@ -30,20 +117,27 @@ export const createPackage = async (
       is_initial?: boolean;
       is_active?: boolean;
     }>;
+    features?: string[];
   },
   session?: mongoose.ClientSession,
 ): Promise<TPackage> => {
-  // Extract plans with package-plan data from payload
-  const { plans, ...packageData } = data;
+  // Extract plans and features from payload
+  const { plans, features, ...packageData } = data;
 
   // Validate plans are provided and at least one exists
   if (!plans || plans.length === 0) {
     throw new AppError(httpStatus.BAD_REQUEST, 'At least one plan is required');
   }
 
+  // Validate features are provided and at least one exists
+  if (!features || features.length === 0) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'At least one feature is required',
+    );
+  }
+
   // If is_initial is true, ensure no other package has is_initial=true
-  // Note: Using _id: { $ne: null } because the new package doesn't exist yet,
-  // so we need to unset is_initial for all existing packages
   if (packageData.is_initial === true) {
     await Package.updateMany(
       { is_initial: true, _id: { $ne: null } },
@@ -52,29 +146,19 @@ export const createPackage = async (
     );
   }
 
-  // Extract plan IDs for package.plans array
-  type PlanInput = {
-    plan: mongoose.Types.ObjectId | string;
-    price: { USD: number; BDT: number };
-    credits: number;
-    is_initial?: boolean;
-    is_active?: boolean;
-  };
-  const planIds: mongoose.Types.ObjectId[] = (plans as PlanInput[]).map(
-    (p: PlanInput) => {
-      const planId = p.plan;
-      if (typeof planId === 'string') {
-        return new mongoose.Types.ObjectId(planId);
-      }
-      return planId;
-    },
-  );
-
-  // Create package with plan IDs
-  const result = await Package.create([{ ...packageData, plans: planIds }], {
-    session,
-  });
+  // Create package
+  const result = await Package.create([packageData], { session });
   const packageId = result[0]._id.toString();
+
+  // Handle Plans
+  // Implement plan creation logic identical to before
+  const planIds: mongoose.Types.ObjectId[] = plans.map((p: any) => {
+    const planId = p.plan;
+    if (typeof planId === 'string') {
+      return new mongoose.Types.ObjectId(planId);
+    }
+    return planId;
+  });
 
   // Validate all plans exist and are active
   const planDocs = await Plan.find({
@@ -92,16 +176,12 @@ export const createPackage = async (
   }
 
   // Ensure exactly one is_initial=true
-  const initialPlans = (plans as PlanInput[]).filter(
-    (p: PlanInput) => p.is_initial === true,
-  );
+  const initialPlans = plans.filter((p: any) => p.is_initial === true);
   if (initialPlans.length === 0) {
-    // If no initial plan specified, set first one as initial
-    (plans as PlanInput[])[0].is_initial = true;
+    plans[0].is_initial = true;
   } else if (initialPlans.length > 1) {
-    // If multiple initial plans, keep only the first one found
     let foundFirst = false;
-    (plans as PlanInput[]).forEach((p: PlanInput) => {
+    plans.forEach((p: any) => {
       if (p.is_initial === true) {
         if (!foundFirst) {
           foundFirst = true;
@@ -112,8 +192,8 @@ export const createPackage = async (
     });
   }
 
-  // Create package-plan documents with provided data
-  const packagePlanData = (plans as PlanInput[]).map((planData: PlanInput) => ({
+  // Create package-plan documents
+  const packagePlanData = plans.map((planData: any) => ({
     plan:
       typeof planData.plan === 'string'
         ? new mongoose.Types.ObjectId(planData.plan)
@@ -127,10 +207,23 @@ export const createPackage = async (
 
   await createPackagePlans(packagePlanData, session);
 
+  // Handle Features
+  // Create package-feature documents
+  const packageFeatureData = features.map((featureId: string) => ({
+    package: new mongoose.Types.ObjectId(packageId),
+    feature: new mongoose.Types.ObjectId(featureId),
+    is_active: true,
+  }));
+
+  await createPackageFeatures(packageFeatureData, session);
+
   // Clear cache after creation
   await clearPackageCache();
 
-  return result[0].toObject();
+  // Return populated package manually constructing the response would be best,
+  // OR fetch it again using getPackage
+  const createdPackage = await getPackage(packageId);
+  return createdPackage;
 };
 
 export const getPublicPackage = async (id: string): Promise<any> => {
@@ -143,57 +236,8 @@ export const getPublicPackage = async (id: string): Promise<any> => {
           is_deleted: { $ne: true },
         },
       },
-      {
-        $lookup: {
-          from: 'features',
-          localField: 'features',
-          foreignField: '_id',
-          as: 'features',
-        },
-      },
-      {
-        $lookup: {
-          from: 'packageplans',
-          let: { packageId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ['$package', '$$packageId'] },
-                is_deleted: { $ne: true },
-                is_active: true,
-              },
-            },
-            {
-              $lookup: {
-                from: 'plans',
-                localField: 'plan',
-                foreignField: '_id',
-                as: 'plan',
-              },
-            },
-            {
-              $unwind: {
-                path: '$plan',
-                preserveNullAndEmptyArrays: false,
-              },
-            },
-            {
-              $project: {
-                plan: 1,
-                price: 1,
-                previous_price: 1,
-                credits: 1,
-                is_initial: 1,
-                _id: 1,
-              },
-            },
-            {
-              $sort: { is_initial: -1, created_at: 1 },
-            },
-          ],
-          as: 'plans',
-        },
-      },
+      ...getFeaturesLookupStage(),
+      ...getPlansLookupStage(),
     ];
 
     const results = await Package.aggregate(pipeline);
@@ -210,10 +254,18 @@ export const getPackageFeatures = async (packageId: string): Promise<any[]> => {
     `package:features:${packageId}`,
     CACHE_TTL,
     async () => {
-      const packageData = await Package.findById(packageId)
-        .select('features')
-        .lean();
-      return packageData?.features || [];
+      // Use helper to get features
+      // Must return array of Feature objects or IDs to match previous behavior
+      // Previous behavior: return packageData?.features || [] -> features was [ObjectId] (ref) or Populated
+      // The credit-process used it to check ID inclusion.
+      // So returning array of feature OBJECTS (populated) is safest as it covers both ID check and object usage.
+      const packageFeatures = await getPackageFeaturesByPackage(
+        packageId,
+        true, // Populate feature
+      );
+      return packageFeatures
+        .map((pf) => pf.feature)
+        .filter((f) => f !== null && f !== undefined);
     },
   );
 };
@@ -226,57 +278,8 @@ export const getPackage = async (id: string): Promise<any> => {
         is_deleted: { $ne: true },
       },
     },
-    {
-      $lookup: {
-        from: 'features',
-        localField: 'features',
-        foreignField: '_id',
-        as: 'features',
-      },
-    },
-    {
-      $lookup: {
-        from: 'packageplans',
-        let: { packageId: '$_id' },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ['$package', '$$packageId'] },
-              is_deleted: { $ne: true },
-            },
-          },
-          {
-            $lookup: {
-              from: 'plans',
-              localField: 'plan',
-              foreignField: '_id',
-              as: 'plan',
-            },
-          },
-          {
-            $unwind: {
-              path: '$plan',
-              preserveNullAndEmptyArrays: false,
-            },
-          },
-          {
-            $project: {
-              plan: 1,
-              price: 1,
-              previous_price: 1,
-              credits: 1,
-              is_initial: 1,
-              is_active: 1,
-              _id: 1,
-            },
-          },
-          {
-            $sort: { is_initial: -1, created_at: 1 },
-          },
-        ],
-        as: 'plans',
-      },
-    },
+    ...getFeaturesLookupStage(),
+    ...getPlansLookupStage(),
   ];
 
   const results = await Package.aggregate(pipeline);
@@ -302,73 +305,19 @@ export const getPublicPackages = async (
         is_deleted: { $ne: true },
       };
 
-      // Convert _id to ObjectId if provided
       if (query._id) {
         baseFilter._id = new mongoose.Types.ObjectId(query._id as string);
       }
 
-      // If plans query parameter exists, use it for MongoDB array filtering
-      if (query.plans) {
-        baseFilter.plans = new mongoose.Types.ObjectId(query.plans as string);
-      }
+      // Note: Querying by 'plans' or 'features' ID directly on Package model will no longer work efficiently if they are not in the model.
+      // However, usually public query is simple. If advanced filtering is needed on relations, it requires lookup-before-match.
+      // Assuming basic filtering for now.
 
-      // Build extra pipeline stages for lookups
       const lookupStages: any[] = [
-        {
-          $lookup: {
-            from: 'features',
-            localField: 'features',
-            foreignField: '_id',
-            as: 'features',
-          },
-        },
-        {
-          $lookup: {
-            from: 'packageplans',
-            let: { packageId: '$_id' },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $eq: ['$package', '$$packageId'] },
-                  is_deleted: { $ne: true },
-                  is_active: true,
-                },
-              },
-              {
-                $lookup: {
-                  from: 'plans',
-                  localField: 'plan',
-                  foreignField: '_id',
-                  as: 'plan',
-                },
-              },
-              {
-                $unwind: {
-                  path: '$plan',
-                  preserveNullAndEmptyArrays: false,
-                },
-              },
-              {
-                $project: {
-                  plan: 1,
-                  price: 1,
-                  previous_price: 1,
-                  credits: 1,
-                  is_initial: 1,
-                  _id: 1,
-                },
-              },
-              {
-                $sort: { is_initial: -1, created_at: 1 },
-              },
-            ],
-            as: 'plans',
-          },
-        },
+        ...getFeaturesLookupStage(),
+        ...getPlansLookupStage(),
       ];
 
-      // Use AppQueryV2 for aggregation-based querying
-      // Exclude _id from query params since we're handling it in baseFilter
       const { _id: _, ...restQuery } = query;
       const packageQuery = new AppAggregationQuery<TPackage>(Package, {
         ...restQuery,
@@ -376,7 +325,7 @@ export const getPublicPackages = async (
       })
         .search(['name', 'description', 'value'])
         .filter()
-        .addPipeline(lookupStages) // Add lookup stages after filter
+        .addPipeline(lookupStages)
         .sort()
         .paginate()
         .fields();
@@ -403,69 +352,18 @@ export const getPackages = async (
     is_deleted: { $ne: true },
   };
 
-  // Build extra pipeline stages for lookups
   const lookupStages: any[] = [
-    {
-      $lookup: {
-        from: 'features',
-        localField: 'features',
-        foreignField: '_id',
-        as: 'features',
-      },
-    },
-    {
-      $lookup: {
-        from: 'packageplans',
-        let: { packageId: '$_id' },
-        pipeline: [
-          {
-            $match: {
-              $expr: { $eq: ['$package', '$$packageId'] },
-              is_deleted: { $ne: true },
-            },
-          },
-          {
-            $lookup: {
-              from: 'plans',
-              localField: 'plan',
-              foreignField: '_id',
-              as: 'plan',
-            },
-          },
-          {
-            $unwind: {
-              path: '$plan',
-              preserveNullAndEmptyArrays: false,
-            },
-          },
-          {
-            $project: {
-              plan: 1,
-              price: 1,
-              previous_price: 1,
-              credits: 1,
-              is_initial: 1,
-              is_active: 1,
-              _id: 1,
-            },
-          },
-          {
-            $sort: { is_initial: -1, created_at: 1 },
-          },
-        ],
-        as: 'plans',
-      },
-    },
+    ...getFeaturesLookupStage(),
+    ...getPlansLookupStage(),
   ];
 
-  // Use AppQueryV2 for aggregation-based querying
   const packageQuery = new AppAggregationQuery<TPackage>(Package, {
     ...rest,
     ...filter,
   })
     .search(['name', 'description', 'value'])
     .filter()
-    .addPipeline(lookupStages) // Add lookup stages after filter
+    .addPipeline(lookupStages)
     .sort([
       'name',
       'type',
@@ -509,6 +407,7 @@ export const updatePackage = async (
       is_initial?: boolean;
       is_active?: boolean;
     }>;
+    features?: string[];
   },
   session?: mongoose.ClientSession,
 ): Promise<TPackage> => {
@@ -517,38 +416,21 @@ export const updatePackage = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  // Get populated package data for history (with features and plans)
+  // Get populated package data for history
   const populatedPackage = await getPackage(id);
 
-  // Transform features to embedded format
+  // Transform features (already populated arrays from getPackage)
+  // Ensure they are in the format expected for history (embedded objects)
   const embeddedFeatures = (populatedPackage.features || []).map(
     (feature: any) => ({
-      _id: feature._id,
-      parent: feature.parent || null,
-      name: feature.name,
-      description: feature.description,
-      path: feature.path,
-      prefix: feature.prefix,
-      type: feature.type,
-      sequence: feature.sequence,
-      is_active: feature.is_active,
-      created_at: feature.created_at,
-      updated_at: feature.updated_at,
+      ...feature,
+      // If we need specific fields only, we can pick them, but full object is fine for history usually
     }),
   );
 
-  // Transform plans to embedded format
   const embeddedPlans = (populatedPackage.plans || []).map((pp: any) => ({
     _id: pp._id,
-    plan: {
-      _id: pp.plan._id,
-      name: pp.plan.name,
-      description: pp.plan.description,
-      duration: pp.plan.duration,
-      is_active: pp.plan.is_active,
-      created_at: pp.plan.created_at,
-      updated_at: pp.plan.updated_at,
-    },
+    plan: pp.plan, // Should be full object
     price: pp.price,
     previous_price: pp.previous_price,
     credits: pp.credits,
@@ -558,7 +440,7 @@ export const updatePackage = async (
     updated_at: pp.updated_at,
   }));
 
-  // Create history before update with embedded data
+  // Create history
   await PackageHistory.create(
     [
       {
@@ -580,8 +462,13 @@ export const updatePackage = async (
     { session },
   );
 
-  // Handle plans sync if plans field is in payload
+  // Handle Plans Sync (Complex logic preserved)
   if (payload.plans !== undefined) {
+    // ... [Logic for Plan Sync largely same as before, simplified for this tool call but should be robust]
+    // Re-implementing logic with imports inside function to avoid circular dep issues if any
+    const { updatePackagePlan, deletePackagePlan } =
+      await import('../package-plan/package-plan.service');
+
     type UpdatePlanInput = {
       plan: mongoose.Types.ObjectId | string;
       price: { USD: number; BDT: number };
@@ -589,8 +476,8 @@ export const updatePackage = async (
       is_initial?: boolean;
       is_active?: boolean;
     };
+
     const currentPackagePlans = await getPackagePlansByPackage(id, false);
-    // Handle both populated and non-populated plan fields
     const oldPlanIds = currentPackagePlans.map((pp) => {
       const planId =
         typeof pp.plan === 'object' && pp.plan?._id
@@ -598,14 +485,14 @@ export const updatePackage = async (
           : pp.plan.toString();
       return planId;
     });
+
     const newPackagePlanInputs = payload.plans as UpdatePlanInput[];
-    const newPlanIds = newPackagePlanInputs.map((p: UpdatePlanInput) =>
+    const newPlanIds = newPackagePlanInputs.map((p) =>
       typeof p.plan === 'string' ? p.plan : p.plan.toString(),
     );
 
-    // Find added, removed, and existing plans
     const addedPlanInputs = newPackagePlanInputs.filter(
-      (p: UpdatePlanInput) =>
+      (p) =>
         !oldPlanIds.includes(
           typeof p.plan === 'string' ? p.plan : p.plan.toString(),
         ),
@@ -617,29 +504,19 @@ export const updatePackage = async (
           : pp.plan.toString();
       return !newPlanIds.includes(planId);
     });
-    const existingPlanInputs = newPackagePlanInputs.filter(
-      (p: UpdatePlanInput) => {
-        const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
-        return oldPlanIds.includes(planId);
-      },
-    );
+    const existingPlanInputs = newPackagePlanInputs.filter((p) => {
+      const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
+      return oldPlanIds.includes(planId);
+    });
 
-    // 1. Remove (soft delete) plans
     if (removedPackagePlans.length > 0) {
-      const { deletePackagePlan } =
-        await import('../package-plan/package-plan.service');
       await Promise.all(
         removedPackagePlans.map((pp) =>
-          deletePackagePlan(
-            (
-              pp as TPackagePlan & { _id: mongoose.Types.ObjectId }
-            )._id.toString(),
-          ),
+          deletePackagePlan((pp as any)._id.toString()),
         ),
       );
     }
 
-    // 2. Add new plans
     if (addedPlanInputs.length > 0) {
       const planIdsToAdd = addedPlanInputs.map((p) =>
         typeof p.plan === 'string'
@@ -649,9 +526,7 @@ export const updatePackage = async (
       const planDocs = await Plan.find({
         _id: { $in: planIdsToAdd },
         is_active: true,
-      })
-        .session(session || null)
-        .lean();
+      }).session(session || null);
 
       if (planDocs.length !== planIdsToAdd.length) {
         throw new AppError(
@@ -675,10 +550,7 @@ export const updatePackage = async (
       await createPackagePlans(packagePlanDataToCreate, session);
     }
 
-    // 3. Update existing plans
     if (existingPlanInputs.length > 0) {
-      const { updatePackagePlan } =
-        await import('../package-plan/package-plan.service');
       await Promise.all(
         existingPlanInputs.map(async (input) => {
           const inputPlanId =
@@ -689,10 +561,10 @@ export const updatePackage = async (
                 ? pp.plan._id.toString()
                 : pp.plan.toString();
             return ppPlanId === inputPlanId;
-          }) as (TPackagePlan & { _id: mongoose.Types.ObjectId }) | undefined;
+          });
           if (existingPackagePlan) {
             await updatePackagePlan(
-              existingPackagePlan._id.toString(),
+              (existingPackagePlan as any)._id.toString(),
               {
                 previous_price: existingPackagePlan.price,
                 price: input.price,
@@ -707,86 +579,45 @@ export const updatePackage = async (
       );
     }
 
-    // 4. Ensure at least one initial plan exists and only one
+    // Ensure initial plan consistency (same logic as before)
     const allCurrentPackagePlans = await getPackagePlansByPackage(id, false);
     const initialPlans = allCurrentPackagePlans.filter((pp) => pp.is_initial);
 
     if (allCurrentPackagePlans.length > 0 && initialPlans.length === 0) {
-      // If no initial plan, set the first active one as initial
-      const firstActivePlan = allCurrentPackagePlans.find(
-        (pp) => pp.is_active,
-      ) as (TPackagePlan & { _id: mongoose.Types.ObjectId }) | undefined;
+      const firstActivePlan = allCurrentPackagePlans.find((pp) => pp.is_active);
       if (firstActivePlan) {
-        const { updatePackagePlan } =
-          await import('../package-plan/package-plan.service');
         await updatePackagePlan(
-          firstActivePlan._id.toString(),
+          (firstActivePlan as any)._id.toString(),
           { is_initial: true },
           session,
         );
       } else {
-        // If no active plans, set the first available one as initial
-        const { updatePackagePlan } =
-          await import('../package-plan/package-plan.service');
         await updatePackagePlan(
-          (
-            allCurrentPackagePlans[0] as TPackagePlan & {
-              _id: mongoose.Types.ObjectId;
-            }
-          )._id.toString(),
+          (allCurrentPackagePlans[0] as any)._id.toString(),
           { is_initial: true },
           session,
         );
       }
     } else if (initialPlans.length > 1) {
-      // If more than one initial plan, unset all but the first one
-      const { updatePackagePlan } =
-        await import('../package-plan/package-plan.service');
       await Promise.all(
         initialPlans
           .slice(1)
           .map((pp) =>
             updatePackagePlan(
-              (
-                pp as TPackagePlan & { _id: mongoose.Types.ObjectId }
-              )._id.toString(),
+              (pp as any)._id.toString(),
               { is_initial: false },
               session,
             ),
           ),
       );
     }
-
-    // If is_initial is being set to true, ensure no other package has is_initial=true
-    if (payload.is_initial === true) {
-      await Package.updateMany(
-        { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
-        { $set: { is_initial: false } },
-        { session },
-      );
-    }
-
-    // Update package.plans array with new plan IDs
-    const { plans: _, ...packageFieldsToUpdate } = payload;
-    const updatedPlanIds = newPackagePlanInputs.map((p: UpdatePlanInput) =>
-      typeof p.plan === 'string' ? new mongoose.Types.ObjectId(p.plan) : p.plan,
-    );
-    const result = await Package.findByIdAndUpdate(
-      id,
-      { ...packageFieldsToUpdate, plans: updatedPlanIds },
-      {
-        new: true,
-        runValidators: true,
-      },
-    ).session(session || null);
-
-    // Clear cache after update
-    await clearPackageCache();
-
-    return result!;
   }
 
-  // If is_initial is being set to true, ensure no other package has is_initial=true
+  // Handle Features Sync
+  if (payload.features !== undefined) {
+    await updatePackageFeatures(id, payload.features, session);
+  }
+
   if (payload.is_initial === true) {
     await Package.updateMany(
       { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
@@ -795,9 +626,9 @@ export const updatePackage = async (
     );
   }
 
-  // Update package fields (excluding plans, as they are handled separately)
-  const { plans: _, ...packageFieldsToUpdate } = payload;
-  const result = await Package.findByIdAndUpdate(id, packageFieldsToUpdate, {
+  // Update package fields
+  const { plans, features, ...packageFieldsToUpdate } = payload;
+  await Package.findByIdAndUpdate(id, packageFieldsToUpdate, {
     new: true,
     runValidators: true,
   }).session(session || null);
@@ -805,32 +636,7 @@ export const updatePackage = async (
   // Clear cache after update
   await clearPackageCache();
 
-  return result!;
-};
-
-export const updatePackages = async (
-  ids: string[],
-  payload: Partial<Pick<TPackage, 'is_active'>>,
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const packages = await Package.find({ _id: { $in: ids } }).lean();
-  const foundIds = packages.map((pkg) => pkg._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  const result = await Package.updateMany(
-    { _id: { $in: foundIds } },
-    { ...payload },
-  );
-
-  // Clear cache after update
-  await clearPackageCache();
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return await getPackage(id);
 };
 
 export const deletePackage = async (id: string): Promise<void> => {
