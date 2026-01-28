@@ -41,6 +41,14 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 - SNAPSHOT Versioning: PackageHistory architecture maintains immutable records of package states, ensuring financial integrity for active user subscriptions.
 - Onboarding Logic: Automated initial offer enforcement to streamline user acquisition credits.
 
+### Dynamic Package Configuration System
+
+- Granular Feature Control: Package-specific configurations for features and endpoints enabling differentiated service tiers.
+- Cascading Configuration: Three-tier resolution hierarchy (Endpoint-specific → Feature-wide → Global defaults) for maximum flexibility.
+- Real-time Override Engine: Dynamic credit costs, usage limits, quality tiers, and priority settings per package without code changes.
+- Admin-Controlled Flexibility: Full CRUD operations via secure admin API for instant configuration updates.
+- Performance Optimized: 24-hour cache TTL with intelligent invalidation for sub-millisecond config lookups.
+
 ### Payment Gateway Infrastructure
 
 - Omni-Channel Payment Support:
@@ -153,7 +161,7 @@ src/
 │   ├── errors/         # Specialized Handlers for Validation, Duplication, and Cast Errors
 │   ├── interface/      # Global Type Definitions and Interface Contracts
 │   ├── middlewares/    # Auth, RBAC, Rate-Limiting, and Data Sanitization
-│   ├── modules/        # Feature-specific Domain Modules (29 production-grade modules)
+│   ├── modules/        # Feature-specific Domain Modules (30 production-grade modules)
 │   ├── rabbitmq/       # Message Broker Connections and Consumer Registry
 │   ├── redis/          # Distributed Cache configuration and Pub/Sub logic
 │   ├── socket/         # Real-time Event Orchestration and Redis backplane
@@ -348,6 +356,18 @@ erDiagram
         string name
         object[] features "Snapshots"
         object[] plans "Snapshots"
+        boolean is_active
+        boolean is_deleted
+    }
+
+    PackageFeatureConfig {
+        ObjectId _id PK
+        ObjectId package FK "Required, Indexed"
+        ObjectId feature FK "Optional, Indexed"
+        ObjectId feature_endpoint FK "Optional, Indexed"
+        object config "JSON configuration"
+        string description
+        number sequence
         boolean is_active
         boolean is_deleted
     }
@@ -556,6 +576,9 @@ erDiagram
     Package ||--o{ PackageFeature : "includes"
     Feature ||--o{ PackageFeature : "available_in"
     Package ||--o{ PackageHistory : "versioned"
+    Package ||--o{ PackageFeatureConfig : "configures"
+    Feature ||--o{ PackageFeatureConfig : "configured_in"
+    FeatureEndpoint ||--o{ PackageFeatureConfig : "overridden_by"
 
     %% Payment Flow
     User ||--o{ PaymentTransaction : "makes"
@@ -582,7 +605,7 @@ erDiagram
 
 </div>
 
-The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 27 core persistent collections. The architecture employs junction tables (`PackagePlan` and `PackageFeature`) to establish normalized many-to-many relationships between Packages, Plans, and Features, eliminating data redundancy while maintaining query performance through optimized aggregation pipelines. Essential metadata and security fields are strictly enforced at the Mongoose layer. Critical transactional data is protected via SNAPSHOT History collections (AiModelHistory, PackageHistory, BillingSettingHistory, etc.), which capture immutable configurations at the point of sale, ensuring that historical records remain accurate regardless of future configuration changes.
+The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 28 core persistent collections. The architecture employs junction tables (`PackagePlan`, `PackageFeature`, and `PackageFeatureConfig`) to establish normalized many-to-many relationships between Packages, Plans, Features, and FeatureEndpoints, eliminating data redundancy while maintaining query performance through optimized aggregation pipelines. The `PackageFeatureConfig` collection enables dynamic, package-specific overrides for feature behavior, credit costs, and usage limits without code changes. Essential metadata and security fields are strictly enforced at the Mongoose layer. Critical transactional data is protected via SNAPSHOT History collections (AiModelHistory, PackageHistory, BillingSettingHistory, etc.), which capture immutable configurations at the point of sale, ensuring that historical records remain accurate regardless of future configuration changes.
 
 ---
 
@@ -593,7 +616,7 @@ The service layer exposes the following API clusters via the `/api` namespace:
 - Identity Management: `/api/auth` (Sign-in, Sign-up, Google SSO, Password Recovery)
 - Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/credits-usages`
 - Financial Operations: `/api/payment-transactions`, `/api/payment-methods`, `/api/package-transactions`
-- Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/package-features`, `/api/coupons`
+- Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
 - Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`
 - Intelligence Governance: `/api/ai-models`, `/api/billing-settings`
 - Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/storage`, `/api/contact`

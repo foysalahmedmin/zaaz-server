@@ -163,3 +163,13 @@ export const updatePackageIsInitial = catchAsync(async (req, res) => {
   });
 });
 
+export const getPackageWithConfigs = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const result = await PackageServices.getPackageWithConfigs(id);
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Package with configs retrieved successfully',
+    data: result,
+  });
+});

@@ -39,6 +39,7 @@ export type TCreditsProcessStartResponse = {
   credits: number;
   status: 'accessible' | 'not-accessible';
   message?: string;
+  config?: any;
 };
 
 export type TCreditsProcessEndResponse = {

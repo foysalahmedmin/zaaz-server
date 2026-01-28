@@ -454,6 +454,11 @@ export const getPaymentTransactions = async (
       { path: 'package', select: '_id name', justOne: true },
       { path: 'plan', select: '_id name duration', justOne: true },
       { path: 'price', select: '_id price credits', justOne: true }, // package-plan
+      {
+        path: 'coupon',
+        select: '_id code discount_type discount_value is_affiliate',
+        justOne: true,
+      },
     ])
     .search(['email', 'customer_email', 'gateway_transaction_id'])
     .filter()
@@ -503,6 +508,10 @@ export const getPaymentTransaction = async (
       { path: 'package', select: '_id name' },
       { path: 'plan', select: '_id name duration' },
       { path: 'price', select: '_id price credits' }, // package-plan
+      {
+        path: 'coupon',
+        select: '_id code discount_type discount_value is_affiliate',
+      },
       // Note: user is NOT populated because user database is separate
       // user field contains ObjectId directly
     ])

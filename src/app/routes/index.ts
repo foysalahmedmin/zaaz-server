@@ -31,10 +31,15 @@ import AiModelHistoryRoutes from '../modules/ai-model-history/ai-model-history.r
 import { AiModelRoutes } from '../modules/ai-model/ai-model.route';
 import { BillingSettingHistoryRoutes } from '../modules/billing-setting-history/billing-setting-history.route';
 import { BillingSettingRoutes } from '../modules/billing-setting/billing-setting.route';
+import { PackageFeatureConfigRoutes } from '../modules/package-feature-config/package-feature-config.route';
 
 const router = express.Router();
 
 const moduleRoutes = [
+  {
+    path: '/package-feature-configs',
+    route: PackageFeatureConfigRoutes,
+  },
   {
     path: '/auth',
     route: [authRateLimiter, AuthRoutes],

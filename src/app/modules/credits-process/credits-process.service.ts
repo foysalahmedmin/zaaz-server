@@ -7,6 +7,7 @@ import * as CreditsProfitServices from '../credits-profit/credits-profit.service
 import * as CreditsTransactionServices from '../credits-transaction/credits-transaction.service';
 import * as CreditsUsageServices from '../credits-usage/credits-usage.service';
 import * as FeatureEndpointServices from '../feature-endpoint/feature-endpoint.service';
+import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
 import * as PackageServices from '../package/package.service';
 import * as UserWalletServices from '../user-wallet/user-wallet.service';
 import {
@@ -128,6 +129,7 @@ export const creditsProcessStart = async (
 
     // 4. Validate package-restricted features
     // If a user has a package, we check if the requested feature is explicitly included
+    let effectiveConfig: any = null;
     if (freshWallet?.package && packageFeatures.length > 0) {
       const featureEndpointFeatureId =
         (featureEndpoint.feature as any)?._id?.toString() ||
@@ -151,12 +153,21 @@ export const creditsProcessStart = async (
             message: 'Your current package does not include this feature.',
           };
         }
+
+        // 4.1 Fetch package-specific configuration if accessible
+        effectiveConfig = await PackageFeatureConfigServices.getEffectiveConfig(
+          freshWallet.package.toString(),
+          featureEndpointFeatureId,
+          featureEndpoint._id!.toString(),
+        );
       }
     }
 
     // 5. Final credit balance check
     // We check if the user has at least the base credits required for the endpoint
-    const minimumCredits = featureEndpoint.min_credits || 0;
+    // Fallback order: Config min_credits -> Endpoint min_credits
+    const minimumCredits =
+      effectiveConfig?.min_credits ?? featureEndpoint.min_credits ?? 0;
     const hasAccess = userCredits >= minimumCredits;
 
     return {
@@ -165,8 +176,9 @@ export const creditsProcessStart = async (
       credits: userCredits,
       status: hasAccess ? 'accessible' : 'not-accessible',
       message: hasAccess
-        ? undefined
+        ? 'Access granted'
         : `Insufficient credits. Required: ${minimumCredits}, Available: ${userCredits}`,
+      config: effectiveConfig,
     };
   } catch (error: any) {
     // Global catch for internal service errors to prevent API crashes

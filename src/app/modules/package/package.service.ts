@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/AppAggregationQuery';
 import AppError from '../../builder/AppError';
 import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
+import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
 import {
   createPackageFeatures,
   getPackageFeaturesByPackage,
@@ -646,8 +647,9 @@ export const deletePackage = async (id: string): Promise<void> => {
   }
 
   await packageData.softDelete();
-  // Also soft delete associated package-plans
+  // Also soft delete associated package-plans and package-feature-configs
   await deletePackagePlansByPackage(id);
+  await PackageFeatureConfigServices.deleteConfigsByPackage(id);
 
   // Clear cache after deletion
   await clearPackageCache();
@@ -663,9 +665,14 @@ export const deletePackagePermanent = async (id: string): Promise<void> => {
   }
 
   await Package.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
-  // Also permanently delete associated package-plans
+  // Also permanently delete associated package-plans and package-feature-configs
   const { PackagePlan } = await import('../package-plan/package-plan.model');
   await PackagePlan.deleteMany({ package: id }).setOptions({
+    bypassDeleted: true,
+  });
+  const { PackageFeatureConfig } =
+    await import('../package-feature-config/package-feature-config.model');
+  await PackageFeatureConfig.deleteMany({ package: id }).setOptions({
     bypassDeleted: true,
   });
 
@@ -684,9 +691,14 @@ export const deletePackages = async (
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   await Package.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
-  // Also soft delete associated package-plans
+  // Also soft delete associated package-plans and package-feature-configs
   await Promise.all(
     foundIds.map((packageId) => deletePackagePlansByPackage(packageId)),
+  );
+  await Promise.all(
+    foundIds.map((packageId) =>
+      PackageFeatureConfigServices.deleteConfigsByPackage(packageId),
+    ),
   );
 
   // Clear cache after deletion
@@ -718,11 +730,16 @@ export const deletePackagesPermanent = async (
     _id: { $in: foundIds },
     is_deleted: true,
   }).setOptions({ bypassDeleted: true });
-  // Also permanently delete associated package-plans
+  // Also permanently delete associated package-plans and package-feature-configs
   const { PackagePlan } = await import('../package-plan/package-plan.model');
   await PackagePlan.deleteMany({ package: { $in: foundIds } }).setOptions({
     bypassDeleted: true,
   });
+  const { PackageFeatureConfig } =
+    await import('../package-feature-config/package-feature-config.model');
+  await PackageFeatureConfig.deleteMany({
+    package: { $in: foundIds },
+  }).setOptions({ bypassDeleted: true });
 
   // Clear cache after deletion
   await clearPackageCache();
@@ -828,4 +845,70 @@ export const updatePackageIsInitial = async (
   await clearPackageCache();
 
   return result.toObject();
+};
+
+/**
+ * Get package with all its feature configurations
+ */
+export const getPackageWithConfigs = async (id: string): Promise<any> => {
+  const packageData = await getPackage(id);
+
+  // Get all configs for this package
+  const configs = await PackageFeatureConfigServices.getPackageFeatureConfigs({
+    package: id,
+    is_active: true,
+  });
+
+  // Group configs by feature and endpoint
+  const configMap = groupConfigsByFeatureAndEndpoint(configs);
+
+  return {
+    ...packageData,
+    feature_configs: configMap,
+  };
+};
+
+/**
+ * Group configs by feature and endpoint for easier consumption
+ */
+export const groupConfigsByFeatureAndEndpoint = (
+  configs: any[],
+): Record<string, any> => {
+  const grouped: Record<string, any> = {};
+
+  configs.forEach((config) => {
+    const featureId =
+      typeof config.feature === 'string'
+        ? config.feature
+        : config.feature?._id?.toString();
+
+    if (!featureId) return;
+
+    if (!grouped[featureId]) {
+      grouped[featureId] = {
+        feature: config.feature,
+        feature_wide_config: null,
+        endpoint_configs: {},
+      };
+    }
+
+    // If no endpoint specified, it's a feature-wide config
+    if (!config.feature_endpoint) {
+      grouped[featureId].feature_wide_config = config.config;
+    } else {
+      const endpointId =
+        typeof config.feature_endpoint === 'string'
+          ? config.feature_endpoint
+          : config.feature_endpoint?._id?.toString();
+
+      if (endpointId) {
+        grouped[featureId].endpoint_configs[endpointId] = {
+          endpoint: config.feature_endpoint,
+          config: config.config,
+        };
+      }
+    }
+  });
+
+  return grouped;
 };

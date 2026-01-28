@@ -1,10 +1,26 @@
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
 import validation from '../../middlewares/validation.middleware';
+import * as PackageFeatureConfigControllers from '../package-feature-config/package-feature-config.controller';
+import * as PackageFeatureConfigValidations from '../package-feature-config/package-feature-config.validation';
 import * as PackageControllers from './package.controller';
 import * as PackageValidations from './package.validation';
 
 const router = express.Router();
+
+// Package Configs
+router.get(
+  '/:packageId/configs',
+  auth('super-admin', 'admin'),
+  PackageFeatureConfigControllers.getPackageConfigs,
+);
+
+router.post(
+  '/:packageId/configs/bulk',
+  auth('super-admin', 'admin'),
+  validation(PackageFeatureConfigValidations.bulkUpsertConfigsValidationSchema),
+  PackageFeatureConfigControllers.bulkUpsertConfigs,
+);
 
 // GET
 router.get('/public', PackageControllers.getPublicPackages);
@@ -16,6 +32,13 @@ router.get(
   auth('admin'),
   validation(PackageValidations.packageOperationValidationSchema),
   PackageControllers.getPackage,
+);
+
+router.get(
+  '/:id/with-configs',
+  auth('admin'),
+  validation(PackageValidations.packageOperationValidationSchema),
+  PackageControllers.getPackageWithConfigs,
 );
 
 // PATCH
