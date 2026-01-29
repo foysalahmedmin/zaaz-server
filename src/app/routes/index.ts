@@ -10,6 +10,7 @@ import CreditsTransactionRoutes from '../modules/credits-transaction/credits-tra
 import { CreditsUsageRoutes } from '../modules/credits-usage/credits-usage.route';
 import DashboardRoutes from '../modules/dashboard/dashboard.route';
 import FeatureEndpointRoutes from '../modules/feature-endpoint/feature-endpoint.route';
+import { FeatureFeedbackRoutes } from '../modules/feature-feedback/feature-feedback.route';
 import FeaturePopupRoutes from '../modules/feature-popup/feature-popup.route';
 import FeatureUsageLogRoutes from '../modules/feature-usage-log/feature-usage-log.route';
 import FeatureRoutes from '../modules/feature/feature.route';
@@ -160,6 +161,10 @@ const moduleRoutes = [
   {
     path: '/credits-usages',
     route: CreditsUsageRoutes,
+  },
+  {
+    path: '/feature-feedbacks',
+    route: FeatureFeedbackRoutes,
   },
 ];
 

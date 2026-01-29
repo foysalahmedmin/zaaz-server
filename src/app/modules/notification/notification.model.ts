@@ -46,6 +46,14 @@ const notificationSchema = new Schema<TNotificationDocument>(
       type: Date,
       default: () => new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
     },
+    url: {
+      type: String,
+      trim: true,
+    },
+    metadata: {
+      type: Schema.Types.Map,
+      of: Schema.Types.Mixed,
+    },
 
     status: {
       type: String,

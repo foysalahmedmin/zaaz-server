@@ -269,6 +269,17 @@ export const deleteSelfNotificationRecipients = async (
   return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
+export const deleteAllSelfNotificationRecipients = async (
+  user: TJwtPayload,
+): Promise<{ count: number }> => {
+  const result = await NotificationRecipient.updateMany(
+    { author: user._id, is_deleted: { $ne: true } },
+    { is_deleted: true },
+  );
+
+  return { count: result.modifiedCount };
+};
+
 export const deleteNotificationRecipients = async (
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {

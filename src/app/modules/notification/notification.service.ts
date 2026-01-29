@@ -1,6 +1,10 @@
 import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/AppAggregationQuery';
 import AppError from '../../builder/AppError';
+import { emitToUser } from '../../socket';
+import { NotificationRecipient } from '../notification-recipient/notification-recipient.model';
+import { TNotificationMetadata } from '../notification-recipient/notification-recipient.type';
+import { User } from '../user/user.model';
 import { Notification } from './notification.model';
 import { TNotification } from './notification.type';
 
@@ -198,4 +202,88 @@ export const restoreNotifications = async (
     count: result.modifiedCount,
     not_found_ids: notFoundIds,
   };
+};
+
+/**
+ * Unified helper to send notifications to all admins (admin & super-admin)
+ * Both persists in DB and emits via Socket.io
+ */
+export const notifyAdmins = async (
+  payload: Pick<TNotification, 'title' | 'message' | 'url' | 'metadata'>,
+  metadata: TNotificationMetadata = {},
+): Promise<void> => {
+  // 1. Find a sender (usually a system user or the first super-admin)
+  const systemUser = await User.findOne({ role: 'super-admin' }).lean();
+  if (!systemUser) return;
+
+  // 2. Create the notification base
+  const notification = await Notification.create({
+    ...payload,
+    type: 'request', // Default type for system alerts
+    channels: ['web'],
+    sender: systemUser._id,
+  });
+
+  // 3. Find all admin users
+  const admins = await User.find({
+    role: { $in: ['admin', 'super-admin'] },
+  }).lean();
+
+  // 4. Create recipients and emit
+  const recipientPromises = admins.map(async (admin) => {
+    const recipient = await NotificationRecipient.create({
+      notification: notification._id,
+      recipient: admin._id,
+      metadata,
+      is_read: false,
+    });
+
+    // Populate for socket emission
+    const populatedRecipient = await NotificationRecipient.findById(
+      recipient._id,
+    )
+      .populate('notification')
+      .lean();
+
+    emitToUser(
+      admin._id.toString(),
+      'notification-recipient-created',
+      populatedRecipient,
+    );
+  });
+
+  await Promise.all(recipientPromises);
+};
+
+/**
+ * Unified helper to send notification to a specific user
+ * Both persists in DB and emits via Socket.io
+ */
+export const notifyUser = async (
+  userId: string,
+  payload: Pick<TNotification, 'title' | 'message' | 'url' | 'metadata'>,
+  metadata: TNotificationMetadata = {},
+): Promise<void> => {
+  const systemUser = await User.findOne({ role: 'super-admin' }).lean();
+  if (!systemUser) return;
+
+  const notification = await Notification.create({
+    ...payload,
+    type: 'request',
+    channels: ['web'],
+    sender: systemUser._id,
+  });
+
+  const recipient = await NotificationRecipient.create({
+    notification: notification._id,
+    recipient: userId,
+    metadata,
+    is_read: false,
+  });
+
+  const populatedRecipient = await NotificationRecipient.findById(recipient._id)
+    .populate('notification')
+    .lean();
+
+  emitToUser(userId, 'notification-recipient-created', populatedRecipient);
 };

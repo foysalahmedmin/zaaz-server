@@ -199,6 +199,21 @@ export const deleteSelfNotificationRecipients = catchAsync(async (req, res) => {
   });
 });
 
+export const deleteAllSelfNotificationRecipients = catchAsync(
+  async (req, res) => {
+    const result =
+      await NotificationRecipientServices.deleteAllSelfNotificationRecipients(
+        req.user,
+      );
+    sendResponse(res, {
+      status: httpStatus.OK,
+      success: true,
+      message: 'All notifications deleted successfully',
+      data: result,
+    });
+  },
+);
+
 export const deleteNotificationRecipients = catchAsync(async (req, res) => {
   const { ids } = req.body;
   const result =

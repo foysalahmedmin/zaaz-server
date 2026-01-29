@@ -13,6 +13,8 @@ export type TNotification = {
   channels: TChannel[];
   sender: Types.ObjectId | string;
   expires_at?: Date;
+  url?: string;
+  metadata?: Record<string, any>;
   status?: TStatus;
   is_deleted?: boolean;
 };

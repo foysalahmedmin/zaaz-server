@@ -9,7 +9,7 @@ const router = express.Router();
 // GET
 router.get(
   '/self',
-  auth('admin'),
+  auth('admin', 'user'),
   NotificationRecipientControllers.getSelfNotificationRecipients,
 );
 
@@ -88,6 +88,12 @@ router.delete(
     NotificationRecipientValidations.notificationRecipientsOperationValidationSchema,
   ),
   NotificationRecipientControllers.deleteSelfNotificationRecipients,
+);
+
+router.delete(
+  '/all/self',
+  auth('admin', 'user'),
+  NotificationRecipientControllers.deleteAllSelfNotificationRecipients,
 );
 
 router.delete(
