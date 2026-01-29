@@ -63,11 +63,18 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 - Model Registry: Centralized management for Large Language Models (LLM) and specialized AI models with dynamic metadata.
 - Intelligence Billing: Global and model-specific billing rules for real-time cost/profit calculation during credit processing.
 
+### Feature Feedback System
+
+- **User-Centric Feedback**: Direct bridge for users to submit feature-specific suggestions, bug reports, and compliments.
+- **Admin Orchestration**: Centralized management for admins to review, update status (Pending, Reviewed, Resolved), and add internal `admin_note` responses.
+- **Real-time Alerting**: Immediate admin notification dispatch upon feedback submission, featuring deep-links for instant moderation.
+- **Bulk Operations**: High-performance bulk soft-deletion and status updates for large-scale feedback maintenance.
+
 ### Asynchronous Communication and Observability
 
 - Distributed Messaging: RabbitMQ-driven architecture featuring Dead Letter Queues (DLQ) and Publisher Confirms for usage telemetry.
 - Real-time Signaling: Socket.io with Redis backplane for horizontally scalable real-time event broadcasting.
-- Notification Engine: Multi-path delivery (Web, Push, Email) with priority tiers and delivery tracking.
+- Enhanced Notification Engine: Multi-path delivery (Web, Push, Email) with priority tiers, delivery tracking, and rich metadata support (URLs, images, custom action payloads).
 
 ---
 
@@ -535,6 +542,23 @@ erDiagram
     }
 
     %% ============================================
+    %% FEEDBACK SYSTEM
+    %% ============================================
+
+    FeatureFeedback {
+        ObjectId _id PK
+        ObjectId user FK
+        ObjectId feature FK
+        number rating "1-5"
+        string comment
+        string category "suggestion|bug|compliment|other"
+        string status "pending|reviewed|resolved"
+        string admin_note
+        boolean is_deleted
+        timestamp created_at
+    }
+
+    %% ============================================
     %% STORAGE
     %% ============================================
 
@@ -597,6 +621,10 @@ erDiagram
     User ||--o{ NotificationRecipient : "receives"
     Notification ||--o{ NotificationRecipient : "delivered_to"
 
+    %% Feedback Flow
+    User ||--o{ FeatureFeedback : "provides"
+    Feature ||--o{ FeatureFeedback : "received_on"
+
     %% Configuration History
     AiModel ||--o{ AiModelHistory : "tracks_changes"
     BillingSetting ||--o{ BillingSettingHistory : "tracks_changes"
@@ -617,9 +645,9 @@ The service layer exposes the following API clusters via the `/api` namespace:
 - Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/credits-usages`
 - Financial Operations: `/api/payment-transactions`, `/api/payment-methods`, `/api/package-transactions`
 - Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
-- Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`
+- Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`, `/api/feature-feedbacks`
 - Intelligence Governance: `/api/ai-models`, `/api/billing-settings`
-- Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/storage`, `/api/contact`
+- Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/notification-recipients`, `/api/storage`, `/api/contact`
 
 ---
 
