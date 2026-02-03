@@ -83,21 +83,23 @@ app.use(
 // Log request middleware
 app.use(log);
 
-// Root route
-app.get('/', (_req, res) => {
-  res.send('Welcome to the application!');
-});
+// API routes
+app.use('/api', router);
 
 // Health check route
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// API routes
-app.use('/api', router);
-
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Static file serving for frontend (SPA)
+app.use(express.static(path.join(__dirname, '../public/dist')));
+
+app.get(/.*/, (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/dist/index.html'));
+});
 
 // Error handling middleware
 app.use(error);
