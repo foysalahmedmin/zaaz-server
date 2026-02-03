@@ -41,6 +41,12 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: [
+      'https://zaaz.vercel.app',
+      'https://www.zaaz.vercel.app',
+      'https://zaaz-website.vercel.app',
+      'https://www.zaaz-website.vercel.app',
+      'https://zaaz-server.vercel.app',
+      'https://www.zaaz-server.vercel.app',
       'http://localhost:3000',
       'http://localhost:3008',
       'http://localhost:8080',
