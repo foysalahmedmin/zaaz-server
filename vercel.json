@@ -12,19 +12,19 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "^/api/(.*)",
       "dest": "dist/index.js"
     },
     {
-      "src": "/uploads/(.*)",
+      "src": "^/health$",
       "dest": "dist/index.js"
     },
     {
-      "src": "/health",
+      "src": "^/uploads/(.*)",
       "dest": "dist/index.js"
     },
     {
-      "src": "/static/(.*)",
+      "src": "^/static/(.*)",
       "dest": "public/dist/static/$1"
     },
     {
