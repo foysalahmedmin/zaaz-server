@@ -15,7 +15,7 @@ export const createContact = async (
   // Send email notification
   try {
     await sendEmail({
-      to: config.auth_user_email,
+      to: config.email,
       subject: `Contact Form: ${payload.subject}`,
       text: `You have received a new contact message from ${payload.name} (${payload.email}):\n\n${payload.message}`,
       html: `

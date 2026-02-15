@@ -73,7 +73,7 @@ app.use(
       ttl: 60 * 60 * 24 * 30,
     }),
     cookie: {
-      secure: config.node_dev === 'production',
+      secure: config.node_env === 'production',
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 30,
     },

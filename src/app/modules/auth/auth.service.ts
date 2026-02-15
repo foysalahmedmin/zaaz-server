@@ -349,10 +349,10 @@ export const forgetPassword = async (payload: TForgetPassword) => {
   const link = `${config.reset_password_ui_link}?id=${user.email}&token=${resetToken}`;
   const content = `<a href="${link}">Click here to reset your password</a>`;
 
-  sendEmail({
+  await sendEmail({
     to: user.email,
     subject: 'Password Change Link',
-    text: 'Reset your password within 10 minuets',
+    text: 'Reset your password within 10 minutes',
     html: content,
   });
 };
@@ -425,10 +425,10 @@ export const emailVerificationSource = async (user: TJwtPayload) => {
   const link = `${config.email_verification_ui_link}?id=${user.email}&token=${resetToken}`;
   const content = `<a href="${link}">Click here to verify your email</a>`;
 
-  sendEmail({
+  await sendEmail({
     to: user.email,
     subject: 'Email Verification Link',
-    text: 'Verify your email within 10 minuets',
+    text: 'Verify your email within 10 minutes',
     html: content,
   });
 };

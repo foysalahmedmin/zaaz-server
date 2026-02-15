@@ -63,7 +63,7 @@ const error: ErrorRequestHandler = (error, _req, res, _next) => {
     message,
     sources,
     error,
-    stack: config.node_dev === 'development' ? error?.stack : null,
+    stack: config.node_env === 'development' ? error?.stack : null,
   });
   return;
 };
