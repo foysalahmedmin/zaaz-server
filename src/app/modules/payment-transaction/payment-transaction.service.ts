@@ -15,6 +15,7 @@ import { Plan } from '../plan/plan.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { PaymentTransaction } from './payment-transaction.model';
 import { TPaymentTransaction } from './payment-transaction.type';
+import { sendPaymentNotificationEmail } from './payment-transaction.utils';
 
 export const createPaymentTransaction = async (
   data: TPaymentTransaction,
@@ -377,6 +378,11 @@ export const updatePaymentTransactionStatus = async (
       }
     }
 
+    // Send transaction success email (Non-blocking & Isolated)
+    if (transactionData.email) {
+      sendPaymentNotificationEmail('success', transactionData, packagePlan);
+    }
+
     return transactionData;
   }
 
@@ -406,6 +412,11 @@ export const updatePaymentTransactionStatus = async (
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  // Refactored to use sendPaymentNotificationEmail
+  if (status === 'failed' && result.email) {
+    sendPaymentNotificationEmail('failed', result);
   }
 
   return result;
