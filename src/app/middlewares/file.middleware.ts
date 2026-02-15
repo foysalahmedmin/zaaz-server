@@ -16,6 +16,15 @@ type TFile = {
 };
 
 const file = (...files: TFile[]) => {
+  // 🚨 Disable file system in serverless (Vercel)
+  if (process.env.VERCEL === '1') {
+    return (req: Request, _res: Response, next: NextFunction) => {
+      req.files = {};
+      console.warn('File upload disabled in this environment');
+      next();
+    };
+  }
+
   const storage = multer.diskStorage({
     destination: (_req, file, cb) => {
       const folder = files.find((f) => f.name === file.fieldname)?.folder || '';

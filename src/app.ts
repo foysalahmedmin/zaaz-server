@@ -1,4 +1,3 @@
-import MongoStore from 'connect-mongo';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -68,10 +67,10 @@ app.use(
     secret: config.session_secret,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: config.database_url,
-      ttl: 60 * 60 * 24 * 30,
-    }),
+    // store: MongoStore.create({
+    //   mongoUrl: config.database_url,
+    //   ttl: 60 * 60 * 24 * 30,
+    // }),
     cookie: {
       secure: config.node_env === 'production',
       httpOnly: true,
