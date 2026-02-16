@@ -47,8 +47,14 @@ export interface IPaymentGateway {
   initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse>;
   verifyPayment(transactionId: string): Promise<PaymentVerificationResponse>;
   handleWebhook(payload: any, signature: string): Promise<WebhookResponse>;
-  // Optional: For payment gateways that require explicit payment execution (e.g., bKash)
-  executePayment?(paymentID: string): Promise<any>;
+  processRedirect(params: any): Promise<PaymentRedirectResult>;
+}
+
+export interface PaymentRedirectResult {
+  status: 'success' | 'failed' | 'pending';
+  gatewayTransactionId?: string;
+  gatewayResponse?: any;
+  message?: string;
 }
 
 export class PaymentGatewayFactory {

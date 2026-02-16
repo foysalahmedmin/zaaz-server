@@ -4,18 +4,20 @@ import AppAggregationQuery from '../../builder/AppAggregationQuery';
 import AppError from '../../builder/AppError';
 import config from '../../config';
 import { PaymentGatewayFactory } from '../../payment-gateways';
-import { Coupon } from '../coupon/coupon.model';
+import { RabbitMQ } from '../../rabbitmq';
 import { CouponServices } from '../coupon/coupon.service';
-import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
 import { PackagePlan } from '../package-plan/package-plan.model';
-import { PackageTransaction } from '../package-transaction/package-transaction.model';
 import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
 import { Plan } from '../plan/plan.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
+import { PaymentAuditLog } from './payment-audit.model';
+import { PaymentStateMachine } from './payment-state-machine';
 import { PaymentTransaction } from './payment-transaction.model';
 import { TPaymentTransaction } from './payment-transaction.type';
 import { sendPaymentNotificationEmail } from './payment-transaction.utils';
+import { handlePaymentCompleted } from './payment.consumers';
+import { PaymentEventPayload } from './payment.events';
 
 export const createPaymentTransaction = async (
   data: TPaymentTransaction,
@@ -52,341 +54,9 @@ export const updatePaymentTransactionStatus = async (
   id: string,
   status: TPaymentTransaction['status'],
   session?: mongoose.ClientSession,
+  auditMetadata?: any,
+  additionalUpdates?: Partial<TPaymentTransaction>,
 ): Promise<TPaymentTransaction> => {
-  // Use atomic update to prevent double processing for success status
-  if (status === 'success') {
-    // First, try to update status atomically (only if not already success)
-    const updateResult = await PaymentTransaction.findOneAndUpdate(
-      {
-        _id: id,
-        status: { $ne: 'success' }, // Only update if not already success
-      },
-      {
-        $set: {
-          status: 'success',
-          paid_at: new Date(),
-        },
-      },
-      {
-        new: true,
-        session,
-      },
-    ).lean();
-
-    let transactionData:
-      | (TPaymentTransaction & { _id: mongoose.Types.ObjectId })
-      | null = null;
-
-    let shouldProcessCoupon = false;
-    if (!updateResult) {
-      // Transaction already processed, fetch and check if wallet update is needed
-      const existing = await PaymentTransaction.findById(id)
-        .session(session || null)
-        .lean();
-      if (!existing) {
-        throw new AppError(
-          httpStatus.NOT_FOUND,
-          'Payment transaction not found',
-        );
-      }
-      transactionData = existing;
-
-      // Check if wallet update is needed (if transaction is already success but wallet might not be updated)
-      // This can happen if webhook updated status but wallet update failed or was skipped
-      console.log(
-        '[Payment Success] Transaction already success, checking if wallet update needed...',
-        {
-          transactionId: id,
-          userWallet: transactionData.user_wallet,
-        },
-      );
-
-      // Check if credits transaction exists for this payment transaction
-      const existingCreditsTransaction = await CreditsTransaction.findOne({
-        payment_transaction: id,
-        type: 'increase',
-        increase_source: 'payment',
-      })
-        .session(session || null)
-        .lean();
-
-      if (existingCreditsTransaction) {
-        // Credits transaction exists, wallet should be updated, just return
-        console.log(
-          '[Payment Success] Credits transaction already exists, wallet should be updated, skipping',
-        );
-        return transactionData;
-      }
-
-      // Credits transaction doesn't exist, wallet update is needed
-      console.log(
-        '[Payment Success] Credits transaction not found, wallet update needed even though transaction is already success',
-      );
-      // Continue with wallet update logic below using transactionData
-      shouldProcessCoupon = true;
-    } else {
-      // updateResult is the transaction data we'll use
-      transactionData = updateResult;
-      shouldProcessCoupon = true;
-    }
-
-    // Get package-plan document using transaction.price (package-plan _id)
-    const packagePlan = await PackagePlan.findById(transactionData.price)
-      .populate('plan')
-      .session(session || null)
-      .lean();
-
-    if (!packagePlan) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Package-plan not found');
-    }
-
-    const planData = packagePlan.plan as any;
-
-    // Prepare wallet update data
-    const updateWalletData: any = {
-      $inc: { credits: packagePlan.credits },
-      package: transactionData.package, // Update to newly purchased package
-      plan: transactionData.plan, // Update to purchased plan
-      type: 'paid',
-    };
-
-    // Calculate and set expires_at using plan's duration
-    if (planData && planData.duration) {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + planData.duration);
-      updateWalletData.expires_at = expiresAt;
-    }
-
-    // Update wallet with package credits, package reference, plan, and expiration
-    try {
-      console.log('[Payment Success] Updating wallet...', {
-        walletId: transactionData.user_wallet,
-        transactionId: id,
-        creditsToAdd: packagePlan.credits,
-        packageId: transactionData.package,
-        planId: transactionData.plan,
-      });
-
-      const walletUpdateResult = await UserWallet.findByIdAndUpdate(
-        transactionData.user_wallet,
-        updateWalletData,
-        { session, new: true },
-      );
-
-      if (!walletUpdateResult) {
-        console.error('[Payment Success] Wallet not found for update:', {
-          walletId: transactionData.user_wallet,
-          transactionId: id,
-        });
-        throw new AppError(
-          httpStatus.NOT_FOUND,
-          'User wallet not found for update',
-        );
-      }
-
-      console.log('[Payment Success] Wallet updated successfully:', {
-        walletId: transactionData.user_wallet,
-        transactionId: id,
-        creditsAdded: packagePlan.credits,
-        packageId: transactionData.package,
-        planId: transactionData.plan,
-        newCreditsBalance: walletUpdateResult.credits,
-      });
-    } catch (error) {
-      console.error('[Payment Success] Failed to update wallet:', {
-        walletId: transactionData.user_wallet,
-        transactionId: id,
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      throw error;
-    }
-
-    // Check if credits transaction already exists for this payment transaction
-    // This prevents duplicate credits transactions in case of race conditions
-    const existingCreditsTransaction = await CreditsTransaction.findOne({
-      payment_transaction: id,
-      type: 'increase',
-      increase_source: 'payment',
-    })
-      .session(session || null)
-      .lean();
-
-    if (!existingCreditsTransaction) {
-      // Create credits transaction record only if it doesn't exist
-      try {
-        console.log('[Payment Success] Creating credits transaction...', {
-          transactionId: id,
-          creditsAmount: packagePlan.credits,
-          userId: transactionData.user,
-          userWallet: transactionData.user_wallet,
-        });
-
-        await CreditsTransaction.create(
-          [
-            {
-              user: transactionData.user, // ObjectId directly, not populated
-              user_wallet: transactionData.user_wallet,
-              email: transactionData.email,
-              type: 'increase',
-              credits: packagePlan.credits,
-              increase_source: 'payment',
-              payment_transaction: id,
-              plan: transactionData.plan,
-            },
-          ],
-          { session },
-        );
-        console.log('[Payment Success] Credits transaction created:', {
-          transactionId: id,
-          creditsAmount: packagePlan.credits,
-          userId: transactionData.user,
-        });
-      } catch (error) {
-        console.error(
-          '[Payment Success] Failed to create credits transaction:',
-          {
-            transactionId: id,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-        );
-        throw error;
-      }
-    } else {
-      console.log(
-        '[Payment Success] Credits transaction already exists, skipping:',
-        {
-          transactionId: id,
-        },
-      );
-    }
-
-    // Check if package transaction already exists for this payment transaction
-    // This prevents duplicate package transactions in case of race conditions
-    const existingPackageTransaction = await PackageTransaction.findOne({
-      payment_transaction: id,
-      increase_source: 'payment',
-    })
-      .session(session || null)
-      .lean();
-
-    if (!existingPackageTransaction) {
-      // Create package transaction record only if it doesn't exist
-      try {
-        console.log('[Payment Success] Creating package transaction...', {
-          transactionId: id,
-          packageId: transactionData.package,
-          planId: transactionData.plan,
-          creditsAmount: packagePlan.credits,
-          userId: transactionData.user,
-          userWallet: transactionData.user_wallet,
-        });
-
-        await PackageTransaction.create(
-          [
-            {
-              user: transactionData.user,
-              user_wallet: transactionData.user_wallet,
-              email: transactionData.email,
-              package: transactionData.package,
-              plan: transactionData.plan,
-              credits: packagePlan.credits,
-              increase_source: 'payment',
-              payment_transaction: id,
-            },
-          ],
-          { session },
-        );
-        console.log('[Payment Success] Package transaction created:', {
-          transactionId: id,
-          packageId: transactionData.package,
-          planId: transactionData.plan,
-          creditsAmount: packagePlan.credits,
-        });
-      } catch (error) {
-        console.error(
-          '[Payment Success] Failed to create package transaction:',
-          {
-            transactionId: id,
-            error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          },
-        );
-        // Don't throw error, just log it - package transaction is for tracking only
-      }
-    } else {
-      console.log(
-        '[Payment Success] Package transaction already exists, skipping:',
-        {
-          transactionId: id,
-        },
-      );
-    }
-
-    // Increment coupon usage count if applicable (only once when status transitions to success)
-    if (shouldProcessCoupon && transactionData.coupon) {
-      try {
-        console.log('[Payment Success] Incrementing coupon usage count...', {
-          couponId: transactionData.coupon,
-          transactionId: id,
-        });
-
-        const couponDoc = await Coupon.findByIdAndUpdate(
-          transactionData.coupon,
-          { $inc: { usage_count: 1 } },
-          { session, new: true },
-        ).lean();
-
-        // Send report if it is an affiliate coupon
-        if (couponDoc && couponDoc.is_affiliate) {
-          try {
-            // await saveAffiliateCouponReport({
-            //   coupon_code: couponDoc.code,
-            //   price:
-            //     transactionData.amount + (transactionData.discount_amount || 0),
-            //   amount: transactionData.amount,
-            //   discount_amount: transactionData.discount_amount || 0,
-            //   currency: transactionData.currency,
-            //   transaction_id: transactionData._id.toString(),
-            //   user_id: transactionData.user.toString(),
-            //   user_email: transactionData.email,
-            // });
-          } catch (reportError) {
-            console.error(
-              '[Payment Success] Affiliate report failed to send:',
-              {
-                transactionId: id,
-                error:
-                  reportError instanceof Error
-                    ? reportError.message
-                    : String(reportError),
-              },
-            );
-          }
-        }
-      } catch (error) {
-        console.error(
-          '[Payment Success] Failed to process coupon updates/reporting:',
-          {
-            couponId: transactionData.coupon,
-            transactionId: id,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        );
-        // Don't throw error, just log it - coupon tracking/reporting is secondary to payment
-      }
-    }
-
-    // Send transaction success email (Non-blocking & Isolated)
-    if (transactionData.email) {
-      sendPaymentNotificationEmail('success', transactionData, packagePlan);
-    }
-
-    return transactionData;
-  }
-
-  // For non-success status updates, use regular update
   const transaction = await PaymentTransaction.findById(id)
     .session(session || null)
     .lean();
@@ -395,31 +65,119 @@ export const updatePaymentTransactionStatus = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
 
-  const updateData: any = { status };
+  // 1. Validate State Transition
+  // This prevents invalid updates like Success -> Failed
+  PaymentStateMachine.validate(transaction.status, status);
 
-  if (status === 'refunded' && transaction.status !== 'refunded') {
+  // If status is already same, return immediately (Idempotency)
+  // UNLESS there are additional updates (e.g. customer info)
+  if (
+    transaction.status === status &&
+    (!additionalUpdates || Object.keys(additionalUpdates).length === 0)
+  ) {
+    return transaction;
+  }
+
+  const updateData: any = {
+    status,
+    ...additionalUpdates,
+  };
+
+  if (status === 'success') {
+    updateData.paid_at = new Date();
+  } else if (status === 'failed') {
+    updateData.failed_at = new Date();
+  } else if (status === 'refunded') {
     updateData.refunded_at = new Date();
   }
 
-  if (status === 'failed' && transaction.status !== 'failed') {
-    updateData.failed_at = new Date();
+  // 2. Perform Atomic Update
+  const updatedTransaction = await PaymentTransaction.findByIdAndUpdate(
+    id,
+    updateData,
+    {
+      new: true,
+      session,
+      runValidators: true,
+    },
+  ).lean();
+
+  if (!updatedTransaction) {
+    throw new AppError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      'Failed to update transaction status',
+    );
   }
 
-  const result = await PaymentTransaction.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  }).session(session || null);
-
-  if (!result) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  // 3. Create Audit Log (Best effort, non-blocking)
+  try {
+    PaymentAuditLog.create([
+      {
+        transactionId: id,
+        previousStatus: transaction.status,
+        newStatus: status,
+        source: auditMetadata?.source || 'SYSTEM',
+        metadata: auditMetadata,
+        reason: auditMetadata?.reason,
+      },
+    ]);
+  } catch (auditError) {
+    console.error('Failed to create audit log', auditError);
   }
 
-  // Refactored to use sendPaymentNotificationEmail
-  if (status === 'failed' && result.email) {
-    sendPaymentNotificationEmail('failed', result);
+  // 4. Trigger Side Effects (Event Driven)
+  if (status === 'success') {
+    const payload: PaymentEventPayload = {
+      transactionId: id,
+      userId: updatedTransaction.user.toString(),
+      amount: updatedTransaction.amount,
+      currency: updatedTransaction.currency,
+      paymentMethodId: updatedTransaction.payment_method.toString(),
+      packageId: updatedTransaction.package.toString(),
+      planId: updatedTransaction.plan.toString(),
+      timestamp: new Date(),
+    };
+
+    // If session is active, we should trigger events AFTER commit.
+    // However, since we don't control the commit here (it might be passed in),
+    // we rely on the event handling mechanism to be robust.
+    // Ideally, we'd use `session.on('commit')` but that's complex since session is optional.
+
+    // Using RabbitMQ if enabled, else direct call
+    // Direct call for now to ensure reliability
+    try {
+      await handlePaymentCompleted(payload, session);
+    } catch (directError) {
+      console.error(
+        '[PaymentService] Direct handlePaymentCompleted failed:',
+        directError,
+      );
+      // We continue to publish to RabbitMQ so the consumer can retry later
+    }
+
+    // Also publish event for other services (Analytics, Notifications) or as backup
+    if (config.rabbitmq_enabled) {
+      try {
+        await RabbitMQ.publishToQueue('payment.completed', payload);
+      } catch (mqError) {
+        console.error(
+          '[PaymentService] Failed to publish to RabbitMQ:',
+          mqError,
+        );
+      }
+    }
+  } else if (status === 'failed') {
+    // Handle failure side effects (e.g. Email)
+    if (updatedTransaction.email) {
+      try {
+        sendPaymentNotificationEmail('failed', updatedTransaction);
+      } catch (e) {
+        console.error('Failed to send failure email', e);
+      }
+    }
   }
 
-  return result;
+  return updatedTransaction;
 };
 
 export const getPaymentTransactions = async (
@@ -703,7 +461,11 @@ export const verifyPayment = async (
       transaction.status !== 'success' &&
       transaction.status !== 'refunded'
     ) {
-      await updatePaymentTransactionStatus(id, 'success', session);
+      await updatePaymentTransactionStatus(id, 'success', session, {
+        source: 'MANUAL_VERIFICATION',
+        reason: 'Payment verified successfully at gateway',
+        metadata: verificationResult,
+      });
       const updatedTransaction = await PaymentTransaction.findById(id)
         .session(session || null)
         .lean();
@@ -720,15 +482,19 @@ export const verifyPayment = async (
       transaction.status !== 'failed' &&
       transaction.status !== 'refunded'
     ) {
-      await PaymentTransaction.findByIdAndUpdate(
+      await updatePaymentTransactionStatus(
         id,
+        'failed',
+        session,
         {
-          status: 'failed',
+          source: 'MANUAL_VERIFICATION',
+          reason: 'Payment verification failed at gateway',
+          metadata: verificationResult,
+        },
+        {
           gateway_status: verificationResult.status,
           failure_reason: 'Payment verification failed',
-          failed_at: new Date(),
         },
-        { session },
       );
       const updatedTransaction = await PaymentTransaction.findById(id)
         .session(session || null)
@@ -1090,7 +856,7 @@ export const handlePaymentRedirect = async (params: {
   error?: string | string[];
   [key: string]: any;
 }): Promise<{ redirectUrl: string; statusUpdated: boolean }> => {
-  // Get transaction_id from various possible params
+  // 1. Resolve Transaction ID
   const transactionId =
     (typeof params.transaction_id === 'string'
       ? params.transaction_id
@@ -1107,161 +873,54 @@ export const handlePaymentRedirect = async (params: {
     );
   }
 
-  // Get transaction to retrieve stored frontend URLs and payment_method_id
+  // 2. Fetch Transaction
   const transaction = await PaymentTransaction.findById(transactionId)
-    .select(
-      'return_url cancel_url status payment_method gateway_transaction_id',
-    )
-    .populate('payment_method') // Populate to get payment method details
+    .populate('payment_method')
     .lean();
-
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
 
-  // Extract payment method
   const paymentMethod = transaction.payment_method as any;
-
-  // **bKash Execute Payment Logic**
-  // bKash requires explicit payment execution after user authorization
-  if (paymentMethod && paymentMethod.value === 'bkash') {
-    console.log(
-      '[bKash Redirect] Processing bKash callback, executing payment...',
-    );
-
-    // Extract paymentID from params (bKash sends this in callback)
-    const paymentID =
-      (typeof params.paymentID === 'string'
-        ? params.paymentID
-        : params.paymentID?.[0]) ||
-      (typeof params.payment_id === 'string'
-        ? params.payment_id
-        : params.payment_id?.[0]) ||
-      transaction.gateway_transaction_id;
-
-    if (!paymentID) {
-      console.error('[bKash Redirect] No paymentID found in callback');
-      // Redirect to cancel URL
-      const redirectUrl =
-        transaction.cancel_url || transaction.return_url || '/';
-      return { redirectUrl, statusUpdated: false };
-    }
-
-    try {
-      // Create gateway instance
-      const gateway = PaymentGatewayFactory.create(paymentMethod);
-
-      // Check if gateway supports executePayment
-      if (gateway.executePayment) {
-        console.log('[bKash Redirect] Executing payment:', paymentID);
-
-        // Execute payment
-        const executeResult = await gateway.executePayment(paymentID);
-
-        console.log('[bKash Redirect] Payment execution result:', {
-          statusCode: executeResult.statusCode,
-          transactionStatus: executeResult.transactionStatus,
-          trxID: executeResult.trxID,
-        });
-
-        // Check if payment was successful
-        if (
-          executeResult.statusCode === '0000' &&
-          executeResult.transactionStatus === 'Completed'
-        ) {
-          console.log(
-            '[bKash Redirect] Payment successful, updating transaction...',
-          );
-
-          // Update transaction to success (this will also update wallet)
-          await updatePaymentTransactionStatus(transactionId, 'success');
-
-          // Update with bKash transaction ID and response
-          await PaymentTransaction.findByIdAndUpdate(transactionId, {
-            gateway_status: 'Completed',
-            gateway_response: executeResult,
-          });
-
-          console.log('[bKash Redirect] Transaction updated to success');
-
-          // Update local transaction object for redirect URL determination
-          transaction.status = 'success';
-        } else {
-          console.log('[bKash Redirect] Payment failed or incomplete');
-
-          // Update transaction to failed
-          await PaymentTransaction.findByIdAndUpdate(transactionId, {
-            status: 'failed',
-            gateway_status: executeResult.transactionStatus,
-            failure_reason:
-              executeResult.statusMessage || 'Payment execution failed',
-            failed_at: new Date(),
-            gateway_response: executeResult,
-          });
-
-          // Update local transaction object for redirect URL determination
-          transaction.status = 'failed';
-        }
-      }
-    } catch (error: any) {
-      console.error('[bKash Redirect] Payment execution error:', error.message);
-
-      // Mark transaction as failed
-      await PaymentTransaction.findByIdAndUpdate(transactionId, {
-        status: 'failed',
-        failure_reason: `bKash execution failed: ${error.message}`,
-        failed_at: new Date(),
-      });
-
-      // Update local transaction object for redirect URL determination
-      transaction.status = 'failed';
-    }
-  }
-
-  // Log redirect parameters for debugging
-  console.log(
-    '[Redirect] Processing redirect (webhook will handle status update):',
-    {
-      transactionId,
-      currentStatus: transaction.status,
-      hasValId: !!params.val_id,
-      statusParam:
-        typeof params.status === 'string' ? params.status : params.status?.[0],
-      hasError: !!params.error,
-    },
-  );
-
-  // Determine redirect URL based on params (for user experience only)
-  // Webhook will handle actual status update and wallet processing
   let redirectUrl = transaction.return_url || '/';
+  let statusUpdated = false;
 
-  // Check if params suggest failure/cancel
-  const statusParam =
-    typeof params.status === 'string' ? params.status : params.status?.[0];
-  const hasError =
-    params.error &&
-    (typeof params.error === 'string'
-      ? params.error
-      : params.error?.[0] || ''
-    ).trim() !== '';
+  try {
+    // 3. Process via Gateway
+    const gateway = PaymentGatewayFactory.create(paymentMethod);
+    const result = await gateway.processRedirect(params);
 
-  // Use cancel_url if params suggest failure/cancel OR if transaction status is failed
-  if (
-    hasError ||
-    statusParam === 'FAILED' ||
-    statusParam === 'failed' ||
-    statusParam === 'cancel' ||
-    transaction.status === 'failed'
-  ) {
+    // 4. Update Status based on result
+    if (result.status === 'success') {
+      await updatePaymentTransactionStatus(
+        transactionId,
+        'success',
+        undefined,
+        {
+          source: 'REDIRECT',
+          reason: 'Gateway redirect verified success',
+          metadata: result.gatewayResponse,
+        },
+      );
+      statusUpdated = true;
+    } else if (result.status === 'failed') {
+      await updatePaymentTransactionStatus(transactionId, 'failed', undefined, {
+        source: 'REDIRECT',
+        reason: result.message || 'Gateway redirect reported failure',
+        metadata: result.gatewayResponse,
+      });
+      redirectUrl = transaction.cancel_url || transaction.return_url || '/';
+      statusUpdated = true;
+    } else if (result.status === 'pending') {
+      // Gateway says pending, handled by webhook
+      // We still redirect to return_url (success page usually checks status)
+    }
+  } catch (err: any) {
+    console.error('[PaymentRedirect] Processing Failed:', err);
     redirectUrl = transaction.cancel_url || transaction.return_url || '/';
-    console.log('[Redirect] Redirecting to cancel URL based on params');
-  } else {
-    console.log(
-      '[Redirect] Redirecting to success URL (webhook will confirm payment)',
-    );
   }
 
-  // Use transaction document _id for frontend polling
+  // 5. Appending Frontend Params (Keep existing logic)
   const transactionDocumentId = transactionId;
   const paymentMethodId =
     transaction.payment_method &&
@@ -1272,143 +931,34 @@ export const handlePaymentRedirect = async (params: {
         ? (transaction.payment_method as mongoose.Types.ObjectId).toString()
         : undefined;
 
-  // Append transaction_id and payment_method_id to redirect URL for frontend polling
-  try {
-    const url = new URL(redirectUrl);
-    if (!url.searchParams.has('transaction_id')) {
-      url.searchParams.set('transaction_id', transactionDocumentId);
-    }
-    if (paymentMethodId && !url.searchParams.has('payment_method_id')) {
-      url.searchParams.set('payment_method_id', paymentMethodId);
-    }
-    redirectUrl = url.toString();
-  } catch {
-    // If redirectUrl is not a valid URL, append query params manually
-    const separator = redirectUrl.includes('?') ? '&' : '?';
-    const params = [`transaction_id=${transactionDocumentId}`];
-    if (paymentMethodId) {
-      params.push(`payment_method_id=${paymentMethodId}`);
-    }
-    redirectUrl = `${redirectUrl}${separator}${params.join('&')}`;
-  }
-
-  // Update return_url and cancel_url in transaction document with proper transaction_id and payment_method_id
-  // This ensures the URLs always have the correct params for frontend polling
-  // Only update if URLs don't already have these params to avoid unnecessary writes
-  const updateData: any = {};
-
-  const updateUrlWithParams = (url: string): string | null => {
-    if (!url) return null;
+  const updateUrlWithParams = (url: string): string => {
     try {
       const urlObj = new URL(url);
-      let updated = false;
       if (!urlObj.searchParams.has('transaction_id')) {
         urlObj.searchParams.set('transaction_id', transactionDocumentId);
-        updated = true;
       }
       if (paymentMethodId && !urlObj.searchParams.has('payment_method_id')) {
         urlObj.searchParams.set('payment_method_id', paymentMethodId);
-        updated = true;
       }
-      return updated ? urlObj.toString() : null;
+      return urlObj.toString();
     } catch {
-      // If URL is not valid, append query params manually
-      const params: string[] = [];
+      const separator = url.includes('?') ? '&' : '?';
+      const paramsList: string[] = [];
       if (!url.includes('transaction_id=')) {
-        params.push(`transaction_id=${transactionDocumentId}`);
+        paramsList.push(`transaction_id=${transactionDocumentId}`);
       }
       if (paymentMethodId && !url.includes('payment_method_id=')) {
-        params.push(`payment_method_id=${paymentMethodId}`);
+        paramsList.push(`payment_method_id=${paymentMethodId}`);
       }
-      if (params.length > 0) {
-        const separator = url.includes('?') ? '&' : '?';
-        return `${url}${separator}${params.join('&')}`;
-      }
-      return null; // Already has all params
+      return paramsList.length > 0
+        ? `${url}${separator}${paramsList.join('&')}`
+        : url;
     }
   };
 
-  if (transaction.return_url) {
-    const updatedReturnUrl = updateUrlWithParams(transaction.return_url);
-    if (updatedReturnUrl) {
-      updateData.return_url = updatedReturnUrl;
-    }
-  }
+  redirectUrl = updateUrlWithParams(redirectUrl);
 
-  if (transaction.cancel_url) {
-    const updatedCancelUrl = updateUrlWithParams(transaction.cancel_url);
-    if (updatedCancelUrl) {
-      updateData.cancel_url = updatedCancelUrl;
-    }
-  }
-
-  // Update transaction document with updated URLs (only if needed)
-  // Use atomic update to ensure consistency
-  if (Object.keys(updateData).length > 0) {
-    await PaymentTransaction.findByIdAndUpdate(
-      transactionId,
-      { $set: updateData },
-      { new: true },
-    );
-  }
-
-  // NO STATUS UPDATE - Webhook will handle all processing
-  console.log(
-    '[Redirect] Redirecting user to frontend (status update will be handled by webhook)',
-  );
-
-  return { redirectUrl, statusUpdated: false };
-};
-
-const prepareWebhookUpdateData = (
-  transaction: TPaymentTransaction,
-  webhookResult: { status?: string; metadata?: any },
-  payload: any,
-): { updateData: any; shouldTriggerSuccess: boolean } => {
-  const updateData: any = {
-    gateway_status: webhookResult.status,
-    gateway_response: payload,
-  };
-
-  let shouldTriggerSuccess = false;
-
-  // Handle success status
-  if (transaction.status !== 'success' && webhookResult.status === 'success') {
-    updateData.status = 'success';
-    updateData.paid_at = new Date();
-    shouldTriggerSuccess = true;
-
-    // Update customer info if available in payload
-    // Stripe: customer_email and customer_details.name
-    // SSL Commerz: cus_email and cus_name
-    if (payload.customer_email || payload.cus_email) {
-      updateData.customer_email = (payload.customer_email || payload.cus_email)
-        .toLowerCase()
-        .trim();
-    }
-    if (
-      payload.customer_details?.name ||
-      payload.cus_name ||
-      payload.customer_name
-    ) {
-      updateData.customer_name = (
-        payload.customer_details?.name ||
-        payload.cus_name ||
-        payload.customer_name
-      ).trim();
-    }
-  }
-  // Handle failed status
-  else if (
-    webhookResult.status === 'failed' &&
-    transaction.status !== 'failed'
-  ) {
-    updateData.status = 'failed';
-    updateData.failure_reason = 'Payment failed at gateway';
-    updateData.failed_at = new Date();
-  }
-
-  return { updateData, shouldTriggerSuccess };
+  return { redirectUrl, statusUpdated };
 };
 
 const findTransactionByGatewayId = async (
@@ -1436,7 +986,6 @@ export const handlePaymentWebhook = async (
     .lean();
 
   if (!paymentMethod) {
-    console.error(`[Webhook] Payment method not found: ${paymentMethodId}`);
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
 
@@ -1446,7 +995,7 @@ export const handlePaymentWebhook = async (
     webhookResult = await gateway.handleWebhook(payload, signature);
   } catch (error: any) {
     console.error(
-      `[Webhook] Gateway webhook processing failed for ${paymentMethod.name}:`,
+      `[Webhook] Gateway processing failed for ${paymentMethod.name}:`,
       error.message,
     );
     throw new AppError(
@@ -1474,92 +1023,60 @@ export const handlePaymentWebhook = async (
   console.log('[Webhook] Processing webhook result...', {
     transactionId: transaction._id.toString(),
     gatewayTransactionId: webhookResult.transactionId,
-    webhookResultSuccess: webhookResult.success,
-    webhookResultStatus: webhookResult.status,
-    currentTransactionStatus: transaction.status,
+    status: webhookResult.status,
   });
 
-  const { updateData, shouldTriggerSuccess } = prepareWebhookUpdateData(
-    transaction,
-    webhookResult,
-    payload,
-  );
-
-  console.log('[Webhook] Prepared update data:', {
-    shouldTriggerSuccess,
-    updateDataKeys: Object.keys(updateData),
-    updateDataStatus: updateData.status,
-  });
-
-  // Use atomic update to prevent double processing
-  // Only update if status is not already success
-  const updateResult = await PaymentTransaction.findOneAndUpdate(
-    {
-      _id: transaction._id,
-      status: { $ne: 'success' }, // Only update if not already success
-    },
-    updateData,
-    {
-      new: true,
-      session,
-    },
-  );
-
-  if (!updateResult) {
-    console.log('[Webhook] Transaction already processed or update failed', {
-      transactionId: transaction._id.toString(),
-      gatewayTransactionId: webhookResult.transactionId,
-    });
-    return;
+  // Extract customer info from payload if available
+  const additionalUpdates: any = {};
+  if (payload.customer_email || payload.cus_email) {
+    additionalUpdates.customer_email = (
+      payload.customer_email || payload.cus_email
+    )
+      .toLowerCase()
+      .trim();
+  }
+  if (
+    payload.customer_details?.name ||
+    payload.cus_name ||
+    payload.customer_name
+  ) {
+    additionalUpdates.customer_name = (
+      payload.customer_details?.name ||
+      payload.cus_name ||
+      payload.customer_name
+    ).trim();
   }
 
-  console.log(
-    '[Webhook] Transaction updated, checking if wallet update needed...',
-    {
-      transactionId: transaction._id.toString(),
-      shouldTriggerSuccess,
-      updateResultStatus: updateResult.status,
-      webhookResultStatus: webhookResult.status,
-    },
-  );
-
-  // Only trigger success if update was successful and status changed to success
-  if (
-    shouldTriggerSuccess &&
-    updateResult &&
-    updateResult.status === 'success'
-  ) {
-    console.log(
-      '[Webhook] Triggering wallet update for successful payment...',
+  // Use the central status update logic which handles idempotency, events, and audit logs
+  if (webhookResult.status === 'success') {
+    await updatePaymentTransactionStatus(
+      transaction._id.toString(),
+      'success',
+      session,
       {
-        transactionId: transaction._id.toString(),
-        gatewayTransactionId: webhookResult.transactionId,
-        paymentMethod: paymentMethod.name,
+        source: 'WEBHOOK',
+        reason: 'Webhook confirmed success',
+        metadata: {
+          gatewayResponse: payload,
+          webhookResult,
+        },
       },
+      additionalUpdates,
     );
-    try {
-      await updatePaymentTransactionStatus(
-        transaction._id.toString(),
-        'success',
-        session,
-      );
-      console.log(
-        '[Webhook] Successfully updated wallet and created credits transaction',
-      );
-    } catch (error) {
-      console.error('[Webhook] Failed to update wallet:', {
-        transactionId: transaction._id.toString(),
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      throw error;
-    }
-  } else {
-    console.log('[Webhook] Skipping wallet update:', {
-      shouldTriggerSuccess,
-      updateResultStatus: updateResult?.status,
-      webhookResultStatus: webhookResult.status,
-      transactionId: transaction._id.toString(),
-    });
+  } else if (webhookResult.status === 'failed') {
+    await updatePaymentTransactionStatus(
+      transaction._id.toString(),
+      'failed',
+      session,
+      {
+        source: 'WEBHOOK',
+        reason: 'Webhook confirmed failure',
+        metadata: {
+          gatewayResponse: payload,
+          webhookResult,
+        },
+      },
+      additionalUpdates,
+    );
   }
 };

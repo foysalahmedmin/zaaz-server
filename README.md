@@ -51,12 +51,15 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 
 ### Payment Gateway Infrastructure
 
-- Omni-Channel Payment Support:
+- **Omni-Channel Payment Support**:
   - Stripe: High-availability international USD processing.
   - SSL Commerz: Leading localized BDT transaction engine.
   - bKash: Seamless mobile financial service integration.
-- Webhook Reliability: Signature-verified webhook handlers with secondary asynchronous status reconciliation.
-- Atomic Settlement: Guaranteed single-settlement logic using MongoDB atomic operators across all gateways.
+- **Robust State Management**: Implemented a **Strict State Machine** (`PaymentStateMachine`) to govern transaction lifecycles, preventing invalid transitions (e.g., Failed → Success).
+- **Automated Reconciliation Engine**: A sophisticated background service that automatically identifies "stuck" pending transactions and verifies them against gateway APIs to ensure order fulfillment without manual intervention.
+- **Event-Driven Side Effects**: Payment completions trigger asynchronous events via **RabbitMQ** for decoupled wallet updates, emails, and downstream service notifications.
+- **Comprehensive Auditing**: Every status change is tracked in `PaymentAuditLog` with detailed metadata (`source`, `reason`, `metadata`), providing full financial traceability.
+- **Atomic Settlement**: Guaranteed single-settlement logic using MongoDB atomic operators across all gateways.
 
 ### AI Capabilities and Operational Billing
 
@@ -680,22 +683,29 @@ sequenceDiagram
     participant Gateway as External Gateway
     participant DB as MongoDB Cluster
     participant MQ as RabbitMQ
-    participant UI as Client UI
+    participant Cron as Reconciliation Job
 
     User->>API: POST /initiate (Plan ID)
-    API->>DB: Verify Plan Availability & Price
+    API->>DB: Verify Plan Availability
     API->>Gateway: Create Transaction Session
     Gateway-->>API: Session ID & Redirect URL
     API-->>User: 302 Redirect to Secure Gateway
 
-    Note over User,Gateway: Transactional Interaction on Gateway
+    Note over User,Gateway: User completes payment on Gateway UI
 
-    Gateway->>API: Webhook / Redirect Callback
-    API->>DB: Atomic Lock & Transaction Verification
-    API->>MQ: Dispatch 'Credits Increase' Job
-    MQ->>API: Consumer Process Acknowledgement
-    API->>DB: Commit Wallet Balance Update
-    API-->>UI: Signal Payment Success
+    alt Normal Flow (Webhook/Redirect)
+        Gateway->>API: Webhook / Redirect Callback
+        API->>API: State Machine Validation
+    else Self-Healing Flow
+        Cron->>API: Trigger /reconcile
+        API->>Gateway: Check Transaction Status (API)
+        Gateway-->>API: Status: COMPLETED
+    end
+
+    API->>DB: Atomic Update & Audit Log
+    API->>MQ: Dispatch 'PAYMENT.COMPLETED' Event
+    MQ->>API: Consumer: Update Wallet & Credits
+    API-->>User: Signal Fulfillment success
 ```
 
 </div>
@@ -770,8 +780,9 @@ This asynchronous workflow decouples high-frequency AI feature requests from dat
 - Cluster Engine: Coordinated process clustering enabled by default for single-node scaling.
 - MQ Resilience: Dead Letter Queues (DLQ) configured for all critical consumers to prevent message loss.
 - Atomic Integrity: All financial state changes utilize MongoDB atomic increments and concurrency locks.
+- **Payment Safety**: Automated reconciliation verifies transaction outcomes directly with gateway APIs, backed by a formal State Machine.
 - Security Posture: Full Zod runtime validation and JWT lifecycle rotation enforced.
-- Observability: Intensive telemetry logging through asynchronous RabbitMQ workers.
+- Observability: Intensive telemetry logging through asynchronous RabbitMQ workers and deep Transaction Auditing.
 
 ---
 

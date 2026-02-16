@@ -3,6 +3,7 @@ import { TPaymentMethod } from '../../modules/payment-method/payment-method.type
 import {
   IPaymentGateway,
   InitiatePaymentData,
+  PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
   WebhookResponse,
@@ -149,5 +150,23 @@ export class StripeService implements IPaymentGateway {
     } catch (error: any) {
       throw new Error(`Stripe webhook handling failed: ${error.message}`);
     }
+  }
+  async processRedirect(params: any): Promise<PaymentRedirectResult> {
+    // Check if session_id is available in params
+    const sessionId = params.session_id;
+    if (sessionId) {
+      const verification = await this.verifyPayment(sessionId);
+      if (verification.success) {
+        return {
+          status: 'success',
+          gatewayTransactionId: sessionId,
+        };
+      }
+    }
+    // Default to pending - Stripe relies on webhooks
+    return {
+      status: 'pending',
+      message: 'Processing via webhook',
+    };
   }
 }

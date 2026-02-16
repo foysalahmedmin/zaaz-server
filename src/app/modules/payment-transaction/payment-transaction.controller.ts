@@ -1,6 +1,7 @@
 import httpStatus from 'http-status';
 import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
+import * as ReconciliationService from './payment-reconciliation.service';
 import * as PaymentTransactionServices from './payment-transaction.service';
 
 export const createPaymentTransaction = catchAsync(async (req, res) => {
@@ -281,7 +282,15 @@ export const getPaymentTransactionStatus = catchAsync(async (req, res) => {
 
 export const verifyPayment = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const result = await PaymentTransactionServices.verifyPayment(id);
+  // Security: If not admin, pass userId to enforce ownership check
+  const userId = req.user.role === 'admin' ? undefined : req.user._id;
+
+  const result = await PaymentTransactionServices.verifyPayment(
+    id,
+    undefined,
+    userId,
+  );
+
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -315,4 +324,14 @@ export const handleRedirect = catchAsync(async (req, res) => {
     // For other errors, redirect to home
     return res.redirect('/');
   }
+});
+
+export const reconcileTransactions = catchAsync(async (_req, res) => {
+  const result = await ReconciliationService.reconcilePendingTransactions();
+  sendResponse(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment reconciliation job completed',
+    data: result,
+  });
 });

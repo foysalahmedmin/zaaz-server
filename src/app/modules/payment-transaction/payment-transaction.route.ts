@@ -35,6 +35,13 @@ router.post(
   PaymentTransactionControllers.handleRedirect,
 );
 
+// POST - Reconcile pending transactions (admin only)
+router.post(
+  '/reconcile',
+  auth('admin'),
+  PaymentTransactionControllers.reconcileTransactions,
+);
+
 router.get(
   '/:id/status',
   auth('user', 'admin'),

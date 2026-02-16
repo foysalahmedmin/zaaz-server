@@ -3,6 +3,7 @@ import { TPaymentMethod } from '../../modules/payment-method/payment-method.type
 import {
   IPaymentGateway,
   InitiatePaymentData,
+  PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
   WebhookResponse,
@@ -183,10 +184,20 @@ export class BkashService implements IPaymentGateway {
   /**
    * Execute Payment - Complete payment after user authorization
    */
-  async executePayment(
-    paymentID: string,
-  ): Promise<BkashExecutePaymentResponse> {
+  /**
+   * Process Redirect - Execute payment after user authorization
+   */
+  async processRedirect(params: any): Promise<PaymentRedirectResult> {
     try {
+      const paymentID = params.paymentID || params.payment_id;
+
+      if (!paymentID) {
+        return {
+          status: 'failed',
+          message: 'No paymentID found in redirect parameters',
+        };
+      }
+
       const token = await this.grantToken();
 
       const executeRequest: BkashExecutePaymentRequest = {
@@ -205,17 +216,32 @@ export class BkashService implements IPaymentGateway {
           },
         );
 
-      if (response.data && response.data.statusCode === '0000') {
-        return response.data;
+      if (
+        response.data &&
+        response.data.statusCode === '0000' &&
+        response.data.transactionStatus === 'Completed'
+      ) {
+        return {
+          status: 'success',
+          gatewayTransactionId: response.data.trxID,
+          gatewayResponse: response.data,
+        };
       }
 
-      throw new Error(
-        `bKash payment execution failed: ${response.data?.statusMessage || 'Unknown error'}`,
-      );
+      return {
+        status: 'failed',
+        message: response.data?.statusMessage || 'Payment execution failed',
+        gatewayResponse: response.data,
+      };
     } catch (error: any) {
-      throw new Error(
-        `bKash payment execution failed: ${error.response?.data?.statusMessage || error.message}`,
-      );
+      return {
+        status: 'failed',
+        message:
+          error.response?.data?.statusMessage ||
+          error.message ||
+          'Payment execution error',
+        gatewayResponse: error.response?.data,
+      };
     }
   }
 

@@ -4,6 +4,7 @@ import { TPaymentMethod } from '../../modules/payment-method/payment-method.type
 import {
   IPaymentGateway,
   InitiatePaymentData,
+  PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
   WebhookResponse,
@@ -259,5 +260,48 @@ export class SSLCommerzService implements IPaymentGateway {
       console.error(`[SSLCommerz Webhook] Error: ${error.message}`);
       throw new Error(`SSL Commerz webhook handling failed: ${error.message}`);
     }
+  }
+  async processRedirect(params: any): Promise<PaymentRedirectResult> {
+    const { status, tran_id } = params;
+
+    if (!tran_id) {
+      return {
+        status: 'failed',
+        message: 'No transaction ID found in redirect params',
+      };
+    }
+
+    if (status === 'VALID' || status === 'VALIDATED') {
+      return {
+        status: 'success',
+        gatewayTransactionId: tran_id,
+        gatewayResponse: params,
+      };
+    }
+
+    if (status === 'FAILED') {
+      return {
+        status: 'failed',
+        message: 'Payment failed at gateway',
+        gatewayTransactionId: tran_id,
+        gatewayResponse: params,
+      };
+    }
+
+    if (status === 'CANCELLED') {
+      return {
+        status: 'failed',
+        message: 'Payment cancelled by user',
+        gatewayTransactionId: tran_id,
+        gatewayResponse: params,
+      };
+    }
+
+    return {
+      status: 'pending',
+      message: 'Payment status unknown, pending verification',
+      gatewayTransactionId: tran_id,
+      gatewayResponse: params,
+    };
   }
 }
