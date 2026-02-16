@@ -65,31 +65,5 @@ export type TCreditsProcessEndResponse = {
     rounding_price: number;
     credit_price: number;
     cost_price: number;
-  };
-};
-
-export type TCreditsProcessEndMultimodelResponse = {
-  user_id: string;
-  usage_key?: string;
-  credits: number;
-  status: 'returnable';
-  message: string;
-  details: {
-    ai_model?: string;
-    input_tokens: number;
-    output_tokens: number;
-    input_credits: number;
-    output_credits: number;
-    input_token_price: number;
-    output_token_price: number;
-    profit_credits_percentage: number;
-    profit_credits: number;
-    cost_credits: number;
-    credits: number;
-    price: number;
-    rounding_credits: number;
-    rounding_price: number;
-    credit_price: number;
-    cost_price: number;
   }[];
 };

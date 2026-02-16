@@ -22,16 +22,6 @@ router.post(
   CreditsProcessControllers.creditsProcessEnd,
 );
 
-// POST - Credits Process End Multimodel
-router.post(
-  '/end-multimodel',
-  serverAuth(),
-  validation(
-    CreditsProcessValidations.creditsProcessEndMultimodelValidationSchema,
-  ),
-  CreditsProcessControllers.creditsProcessEndMultimodel,
-);
-
 const CreditsProcessRoutes = router;
 
 export default CreditsProcessRoutes;

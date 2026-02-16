@@ -1,9 +1,6 @@
 import amqp, { ConfirmChannel, Connection, ConsumeMessage } from 'amqplib';
 import config from '../config';
-import {
-  setupCreditsProcessEndConsumer,
-  setupCreditsProcessEndMultimodelConsumer,
-} from '../modules/credits-process/credits-process.consumer';
+import { setupCreditsProcessEndConsumer } from '../modules/credits-process/credits-process.consumer';
 import { setupFeatureUsageLogConsumer } from '../modules/feature-usage-log/feature-usage-log.consumer';
 
 class RabbitMQService {
@@ -248,7 +245,7 @@ export const initializeRabbitMQ = async () => {
     await RabbitMQ.connect();
     await setupFeatureUsageLogConsumer();
     await setupCreditsProcessEndConsumer();
-    await setupCreditsProcessEndMultimodelConsumer();
+    await setupCreditsProcessEndConsumer();
   } catch (error) {
     console.warn('⚠️ RabbitMQ setup failed', error);
   }

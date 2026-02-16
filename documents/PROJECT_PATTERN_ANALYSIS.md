@@ -1,6 +1,7 @@
 # Project Pattern Analysis
 
 ## Overview
+
 This is a **Node.js/Express.js** backend server built with **TypeScript**, using **MongoDB** (Mongoose) as the database, **Redis** for caching, and **Socket.io** for real-time communication. The project follows a **modular architecture pattern** with clear separation of concerns.
 
 ---
@@ -30,6 +31,7 @@ src/
 ## Module Pattern (Core Architecture)
 
 ### Module Structure
+
 Each module in `src/app/modules/` follows a **consistent file-based separation pattern**:
 
 ```
@@ -46,12 +48,14 @@ module-name/
 ### Module File Responsibilities
 
 #### 1. **`module-name.route.ts`** - Route Layer
+
 - Defines all HTTP routes for the module
 - Applies middlewares (auth, validation, file upload)
 - Maps routes to controller functions
 - Uses Express Router
 
 **Pattern:**
+
 ```typescript
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
@@ -63,12 +67,18 @@ const router = express.Router();
 
 // Route definitions with middlewares
 router.get('/', auth('admin'), ModuleControllers.getItems);
-router.post('/', auth('admin'), validation(ModuleValidations.createSchema), ModuleControllers.createItem);
+router.post(
+  '/',
+  auth('admin'),
+  validation(ModuleValidations.createSchema),
+  ModuleControllers.createItem,
+);
 
 export default router;
 ```
 
 #### 2. **`module-name.controller.ts`** - Controller Layer
+
 - Handles HTTP requests/responses
 - Extracts data from `req` (params, query, body)
 - Calls service functions
@@ -76,6 +86,7 @@ export default router;
 - Uses `sendResponse` utility for consistent responses
 
 **Pattern:**
+
 ```typescript
 import httpStatus from 'http-status';
 import catchAsync from '../../utils/catchAsync';
@@ -95,6 +106,7 @@ export const getItem = catchAsync(async (req, res) => {
 ```
 
 #### 3. **`module-name.service.ts`** - Service Layer (Business Logic)
+
 - Contains all business logic
 - Interacts with database models
 - Uses `AppQuery` builder for complex queries
@@ -102,6 +114,7 @@ export const getItem = catchAsync(async (req, res) => {
 - Returns data (not HTTP responses)
 
 **Pattern:**
+
 ```typescript
 import AppError from '../../builder/AppError';
 import AppQuery from '../../builder/AppQuery';
@@ -122,6 +135,7 @@ export const getItems = async (query: Record<string, unknown>) => {
 ```
 
 #### 4. **`module-name.model.ts`** - Data Model Layer
+
 - Defines Mongoose schema
 - Includes validation rules
 - Defines virtual fields
@@ -129,17 +143,21 @@ export const getItems = async (query: Record<string, unknown>) => {
 - Defines static and instance methods
 
 **Pattern:**
+
 ```typescript
 import mongoose, { Schema } from 'mongoose';
 import { TDocument, TModel } from './module.type';
 
-const schema = new Schema<TDocument>({
-  // Field definitions with validation
-}, {
-  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true },
-});
+const schema = new Schema<TDocument>(
+  {
+    // Field definitions with validation
+  },
+  {
+    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  },
+);
 
 // Soft delete pre-hook
 schema.pre(/^find/, function (next) {
@@ -160,11 +178,13 @@ export const Model = mongoose.model<TDocument, TModel>('Model', schema);
 ```
 
 #### 5. **`module-name.type.ts`** - Type Definitions
+
 - Defines TypeScript types/interfaces
 - Separates document types from model types
 - Exports types for use across the module
 
 **Pattern:**
+
 ```typescript
 import mongoose, { Document, Model, Types } from 'mongoose';
 
@@ -186,11 +206,13 @@ export type TModel = Model<TDocument> & {
 ```
 
 #### 6. **`module-name.validation.ts`** - Validation Layer
+
 - Uses Zod for schema validation
 - Defines separate schemas for different operations (create, update, etc.)
 - Validates params, body, query, cookies, session
 
 **Pattern:**
+
 ```typescript
 import { z } from 'zod';
 
@@ -215,6 +237,7 @@ export const updateValidationSchema = z.object({
 ```
 
 #### 7. **`module-name.utils.ts`** - Utility Functions (Optional)
+
 - Module-specific helper functions
 - Not always present (only when needed)
 
@@ -241,6 +264,7 @@ export default router;
 ```
 
 Then registered in `app.ts`:
+
 ```typescript
 app.use('/api', router);
 ```
@@ -250,24 +274,28 @@ app.use('/api', router);
 ## Key Architectural Patterns
 
 ### 1. **Soft Delete Pattern**
+
 - All models use `is_deleted: boolean` field
 - Pre-hooks automatically filter deleted documents
 - `bypassDeleted` option available for admin operations
 - Supports restore functionality
 
 ### 2. **Query Builder Pattern (AppQuery)**
+
 - Fluent API for building MongoDB queries
 - Supports: search, filter, sort, paginate, fields
 - Handles statistics queries
 - Automatic soft delete filtering
 
 ### 3. **Error Handling Pattern**
+
 - Custom `AppError` class
 - Centralized error middleware
 - Specific handlers for Zod, Validation, Cast, Duplicate errors
 - Consistent error response format
 
 ### 4. **Authentication Pattern**
+
 - JWT-based authentication
 - Role-based access control (RBAC)
 - Redis caching for user data
@@ -275,17 +303,20 @@ app.use('/api', router);
 - Guest access support
 
 ### 5. **Validation Pattern**
+
 - Zod schemas for all inputs
 - Middleware-based validation
 - Validates params, query, body, cookies, session
 - Automatic error formatting
 
 ### 6. **Response Pattern**
+
 - Consistent response format via `sendResponse`
 - Standard structure: `{ success, status, message, data, meta }`
 - Meta includes pagination and statistics
 
 ### 7. **Async Error Handling**
+
 - `catchAsync` wrapper for all async controllers
 - Automatic error propagation to error middleware
 
@@ -294,10 +325,12 @@ app.use('/api', router);
 ## Supporting Infrastructure
 
 ### Builders
+
 - **AppError**: Custom error class with status codes
 - **AppQuery**: Fluent query builder for MongoDB
 
 ### Middlewares
+
 - **auth.middleware**: JWT authentication & authorization
 - **validation.middleware**: Zod schema validation
 - **error.middleware**: Centralized error handling
@@ -305,6 +338,7 @@ app.use('/api', router);
 - **not-found.middleware**: 404 handler
 
 ### Utils
+
 - **catchAsync**: Async error wrapper
 - **sendResponse**: Consistent response formatter
 - **slugify**: String slugification
@@ -312,6 +346,7 @@ app.use('/api', router);
 - **deleteFiles**: File cleanup utility
 
 ### Configuration
+
 - Environment-based configuration
 - Type-safe config object
 - Supports development/production modes
@@ -321,6 +356,7 @@ app.use('/api', router);
 ## Database Patterns
 
 ### Mongoose Schema Patterns
+
 - Timestamps: `created_at`, `updated_at`
 - Soft delete: `is_deleted` field
 - Virtual fields for relationships
@@ -329,6 +365,7 @@ app.use('/api', router);
 - Static methods (e.g., `isExist()`)
 
 ### Query Patterns
+
 - Use `AppQuery` builder for complex queries
 - Support for search, filter, sort, pagination
 - Field selection support
@@ -390,4 +427,3 @@ When creating a new module, follow this structure:
 - Graceful shutdown handling for all connections
 - Docker support for development and production
 - ESLint and Prettier for code quality
-

@@ -22,15 +22,3 @@ export const creditsProcessEnd = catchAsync(async (req, res) => {
     data: result,
   });
 });
-
-export const creditsProcessEndMultimodel = catchAsync(async (req, res) => {
-  const result = await CreditsProcessServices.creditsProcessEndMultimodel(
-    req.body,
-  );
-  sendResponse(res, {
-    status: httpStatus.OK,
-    success: true,
-    message: 'Multi-model credits process ended successfully',
-    data: result,
-  });
-});

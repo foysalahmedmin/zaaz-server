@@ -1,7 +1,5 @@
 import axios from 'axios';
 import {
-  TCreditsProcessEndMultimodelPayload,
-  TCreditsProcessEndMultimodelResponse,
   TCreditsProcessEndPayload,
   TCreditsProcessEndResponse,
   TCreditsProcessStartPayload,
@@ -32,32 +30,13 @@ export const creditsProcessStart = async (
 };
 
 /**
- * End credit process (Single-model)
+ * End credit process
  */
 export const creditsProcessEnd = async (
   payload: TCreditsProcessEndPayload,
 ): Promise<TCreditsProcessEndResponse> => {
   const res = await axios.post<TCreditsProcessEndResponse>(
     `${TOKEN_SERVER_URL}/api/credits-process/end`,
-    payload,
-    {
-      headers: {
-        'x-server-api-key': SERVER_API_KEY,
-        'Content-Type': 'application/json',
-      },
-    },
-  );
-  return res.data;
-};
-
-/**
- * End credit process (Multi-model)
- */
-export const creditsProcessEndMultimodel = async (
-  payload: TCreditsProcessEndMultimodelPayload,
-): Promise<TCreditsProcessEndMultimodelResponse> => {
-  const res = await axios.post<TCreditsProcessEndMultimodelResponse>(
-    `${TOKEN_SERVER_URL}/api/credits-process/end-multimodel`,
     payload,
     {
       headers: {

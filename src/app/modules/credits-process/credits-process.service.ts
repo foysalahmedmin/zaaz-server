@@ -5,15 +5,12 @@ import AppError from '../../builder/AppError';
 import { emitToUser } from '../../socket';
 import * as CreditsProfitServices from '../credits-profit/credits-profit.service';
 import * as CreditsTransactionServices from '../credits-transaction/credits-transaction.service';
-import * as CreditsUsageServices from '../credits-usage/credits-usage.service';
 import * as FeatureEndpointServices from '../feature-endpoint/feature-endpoint.service';
 import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
 import * as PackageServices from '../package/package.service';
 import * as UserWalletServices from '../user-wallet/user-wallet.service';
 import {
   TCreditsProcessEndMultimodelPayload,
-  TCreditsProcessEndMultimodelResponse,
-  TCreditsProcessEndPayload,
   TCreditsProcessEndResponse,
   TCreditsProcessStartPayload,
   TCreditsProcessStartResponse,
@@ -195,168 +192,8 @@ export const creditsProcessStart = async (
  * Deduct credits from user wallet after AI feature usage
  */
 export const creditsProcessEnd = async (
-  payload: TCreditsProcessEndPayload,
-): Promise<TCreditsProcessEndResponse> => {
-  const {
-    user_id,
-    feature_endpoint_id,
-    feature_endpoint_value,
-    input_tokens,
-    input_token,
-    output_tokens,
-    output_token,
-    usage_key,
-    ai_model,
-  } = payload;
-
-  const inputTokens = input_tokens || input_token || 0;
-  const outputTokens = output_tokens || output_token || 0;
-
-  // 1. Fetch feature endpoint (Cached)
-  const featureEndpoint =
-    await FeatureEndpointServices.getPublicFeatureEndpointByIdOrValue({
-      _id: feature_endpoint_id,
-      value: feature_endpoint_value,
-    });
-
-  if (!featureEndpoint || !featureEndpoint?._id) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
-  }
-
-  const endpointId = featureEndpoint._id.toString();
-
-  // 2. Calculate usage costs based on AI model and billing settings
-  // Uses configured pricing or fallbacks to system defaults
-  const usageInfo = await getFeatureUsageInfo({
-    input_token: inputTokens,
-    output_token: outputTokens,
-    ai_model,
-  });
-
-  if (!ai_model) {
-    console.warn(
-      `[Credits Process] No ai_model provided for usage_key: ${usage_key}. Using initial model settings.`,
-    );
-  }
-
-  // 3. Fetch collective profit margin (Cached)
-  const totalProfitPercentage =
-    await CreditsProfitServices.getTotalProfitPercentage();
-
-  // 4. Calculate final cost in credits using utility
-  const audit = CreditsProcessUtils.calculateAuditCredits(
-    usageInfo.base_cost_credits,
-    totalProfitPercentage,
-    usageInfo.credit_price,
-  );
-
-  const finalCostCredits = audit.final_total_credits;
-
-  // 5. Atomic Update Execution
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    // A. Deduct credits from wallet
-    const updatedWallet = await UserWalletServices.decrementWalletCredits(
-      user_id,
-      finalCostCredits,
-      session,
-    );
-
-    const userWalletId = updatedWallet._id?.toString();
-    if (!userWalletId) {
-      throw new AppError(
-        httpStatus.INTERNAL_SERVER_ERROR,
-        'User wallet ID not found after update',
-      );
-    }
-    const userEmail = updatedWallet.email;
-    const updatedCredits = updatedWallet.credits || 0;
-
-    // B. Create an audit-ready transaction record
-    const transaction =
-      await CreditsTransactionServices.createCreditsTransaction(
-        {
-          user: new mongoose.Types.ObjectId(user_id),
-          user_wallet: new mongoose.Types.ObjectId(userWalletId),
-          email: userEmail,
-          type: 'decrease',
-          credits: finalCostCredits,
-          decrease_source: new mongoose.Types.ObjectId(endpointId),
-          usage_key,
-          is_active: true,
-        },
-        session,
-      );
-
-    // C. Create a detailed usage log
-    const usageAuditDetails = CreditsProcessUtils.mapUsageAuditDetails(
-      {
-        ...usageInfo,
-        ai_model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        profit_credits_percentage: totalProfitPercentage,
-      },
-      audit,
-    );
-
-    await CreditsUsageServices.createCreditsUsage(
-      {
-        user: new mongoose.Types.ObjectId(user_id),
-        user_wallet: new mongoose.Types.ObjectId(userWalletId),
-        email: userEmail,
-        usage_key,
-        feature_endpoint: new mongoose.Types.ObjectId(endpointId),
-        credits_transaction: transaction._id!,
-        ...usageAuditDetails,
-      },
-      session,
-    );
-
-    await session.commitTransaction();
-
-    // 6. Real-time Synchronization (Non-blocking)
-    try {
-      emitToUser(String(user_id), 'wallet:credits-updated', {
-        credits: updatedCredits,
-        cost_credits: finalCostCredits,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (socketError) {
-      console.error('[Credits Process] Socket Sync Failed:', socketError);
-    }
-
-    return {
-      user_id,
-      usage_key,
-      credits: updatedCredits,
-      status: 'returnable',
-      message: 'Credits processed successfully',
-      details: usageAuditDetails,
-    };
-  } catch (error: any) {
-    // Rollback all changes if any part of the transaction fails
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
-    console.error('[Credits Process End] Error:', error);
-    throw new AppError(
-      httpStatus.INTERNAL_SERVER_ERROR,
-      `Credits process failed: ${error.message || 'Unknown error'}`,
-    );
-  } finally {
-    session.endSession();
-  }
-};
-
-/**
- * Deduct credits from user wallet after multi-model AI feature usage
- */
-export const creditsProcessEndMultimodel = async (
   payload: TCreditsProcessEndMultimodelPayload,
-): Promise<TCreditsProcessEndMultimodelResponse> => {
+): Promise<TCreditsProcessEndResponse> => {
   const {
     user_id,
     feature_endpoint_id,
@@ -390,7 +227,7 @@ export const creditsProcessEndMultimodel = async (
     );
   }
 
-  const usesInfos = await getFeatureUsageInfoMultimodel(usages);
+  const usesInfos = await getFeatureUsageInfo(usages);
 
   const processedItems = usesInfos.map((info: any) => {
     const audit = CreditsProcessUtils.calculateAuditCredits(
@@ -509,60 +346,9 @@ export const creditsProcessEndMultimodel = async (
 };
 
 /**
- * Calculate usage information including token prices and equivalent credits
+ * Optimized batch calculation for usage
  */
-const getFeatureUsageInfo = async (payload: {
-  input_token: number;
-  output_token: number;
-  ai_model?: string;
-}) => {
-  const { input_token = 0, output_token = 0, ai_model } = payload;
-
-  // 1. Fetch Configuration (Dynamic imports to prevent circular dependencies)
-  const [{ getInitialBillingSetting }, { getAiModelByValueOrInitial }] =
-    await Promise.all([
-      import('../billing-setting/billing-setting.service'),
-      import('../ai-model/ai-model.service'),
-    ]);
-
-  const [billingSetting, aiModelData] = await Promise.all([
-    getInitialBillingSetting(),
-    getAiModelByValueOrInitial(ai_model),
-  ]);
-
-  if (ai_model && aiModelData.value !== ai_model) {
-    console.warn(
-      `[Credits Process] AI Model "${ai_model}" not found. Falling back to initial model: "${aiModelData.value}".`,
-    );
-  }
-
-  const credit_price = billingSetting?.credit_price || DEFAULT_CREDIT_PRICE;
-  const input_token_price =
-    aiModelData?.input_token_price ?? DEFAULT_INPUT_TOKEN_PRICE;
-  const output_token_price =
-    aiModelData?.output_token_price ?? DEFAULT_OUTPUT_TOKEN_PRICE;
-
-  // 2. Calculate Costs & Credits using utility
-  const costs = CreditsProcessUtils.calculateTokenCosts(
-    input_token,
-    output_token,
-    input_token_price,
-    output_token_price,
-    credit_price,
-  );
-
-  return {
-    ...costs,
-    credit_price,
-    input_token_price,
-    output_token_price,
-  };
-};
-
-/**
- * Optimized batch calculation for multi-model usage
- */
-const getFeatureUsageInfoMultimodel = async (
+const getFeatureUsageInfo = async (
   usages: {
     input_tokens?: number;
     output_tokens?: number;
