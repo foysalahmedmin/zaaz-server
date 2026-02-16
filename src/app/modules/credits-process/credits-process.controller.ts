@@ -4,7 +4,12 @@ import sendResponse from '../../utils/sendResponse';
 import * as CreditsProcessServices from './credits-process.service';
 
 export const creditsProcessStart = catchAsync(async (req, res) => {
-  const result = await CreditsProcessServices.creditsProcessStart(req.body);
+  const payload = {
+    ...req.body,
+    user_id: (req as any).user?._id?.toString(),
+    user_email: (req as any).user?.email,
+  };
+  const result = await CreditsProcessServices.creditsProcessStart(payload);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,
@@ -14,7 +19,11 @@ export const creditsProcessStart = catchAsync(async (req, res) => {
 });
 
 export const creditsProcessEnd = catchAsync(async (req, res) => {
-  const result = await CreditsProcessServices.creditsProcessEnd(req.body);
+  const payload = {
+    ...req.body,
+    user_id: (req as any).user?._id?.toString(),
+  };
+  const result = await CreditsProcessServices.creditsProcessEnd(payload);
   sendResponse(res, {
     status: httpStatus.OK,
     success: true,

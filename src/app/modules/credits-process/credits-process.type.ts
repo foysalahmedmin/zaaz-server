@@ -46,9 +46,9 @@ export type TCreditsProcessEndResponse = {
   user_id: string;
   usage_key?: string;
   credits: number;
-  status: 'returnable';
+  status: 'returnable' | 'processing';
   message: string;
-  details: {
+  details?: {
     ai_model?: string;
     input_tokens: number;
     output_tokens: number;

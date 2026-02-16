@@ -14,8 +14,49 @@ import { TUserWallet } from './user-wallet.type';
 
 const WALLET_CACHE_TTL = 43200; // 12 hours (Optimized for production with proper invalidation)
 
+/**
+ * Smart Cache Invalidator
+ * Batches invalidation requests to reduce Redis overhead
+ */
+class WalletCacheManager {
+  private invalidationQueue = new Set<string>();
+  private flushTimer: NodeJS.Timeout | null = null;
+  private readonly FLUSH_INTERVAL_MS = 500;
+
+  scheduleInvalidation(userId: string) {
+    this.invalidationQueue.add(userId);
+
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => this.flush(), this.FLUSH_INTERVAL_MS);
+    }
+  }
+
+  private async flush() {
+    if (this.invalidationQueue.size === 0) return;
+
+    const userIds = Array.from(this.invalidationQueue);
+    this.invalidationQueue.clear();
+    this.flushTimer = null;
+
+    try {
+      // Perform batch invalidation if the cache utility supports it,
+      // otherwise loop through (still reduces frequency of calls)
+      await Promise.all(
+        userIds.map((id) => invalidateCache(`user-wallet:${id}`)),
+      );
+      console.log(
+        `[Cache Manager] Invalidated ${userIds.length} wallet caches`,
+      );
+    } catch (error) {
+      console.error('[Cache Manager] Batch invalidation failed:', error);
+    }
+  }
+}
+
+const walletCacheManager = new WalletCacheManager();
+
 export const clearUserWalletCache = async (userId: string) => {
-  await invalidateCache(`user-wallet:${userId}`);
+  walletCacheManager.scheduleInvalidation(userId);
 };
 
 export const getFreshWallet = async (
