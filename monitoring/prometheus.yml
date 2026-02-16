@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'zaaz-server'
+    static_configs:
+      - targets: ['app:5000']
+    metrics_path: '/metrics' # Ensure your app exposes metrics here
+
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka-ui:8080'] # Scraping metrics via Kafka UI or exporter

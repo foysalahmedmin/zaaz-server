@@ -72,7 +72,7 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 
 ### Asynchronous Communication and Observability
 
-- Distributed Messaging: RabbitMQ-driven architecture featuring Dead Letter Queues (DLQ) and Publisher Confirms for usage telemetry.
+- Distributed Messaging: Dual message broker support with RabbitMQ (DLQ) and Kafka (DLT) for flexible event-driven architecture and usage telemetry.
 - Real-time Signaling: Socket.io with Redis backplane for horizontally scalable real-time event broadcasting.
 - Enhanced Notification Engine: Multi-path delivery (Web, Push, Email) with priority tiers, delivery tracking, and rich metadata support (URLs, images, custom action payloads).
 
@@ -86,7 +86,7 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 | Core Framework       | Express.js (v5.x - Next Generation)               |
 | Programming Language | TypeScript (v5.x)                                 |
 | Persistent Storage   | MongoDB with Mongoose (v8.x)                      |
-| Message Broker       | RabbitMQ (amqplib) with DLQ support               |
+| Message Broker       | RabbitMQ (amqplib) / Kafka (kafkajs) with DLQ/DLT |
 | Distributed Caching  | Redis (ioredis) for Lookups and Socket.io         |
 | Optimized Querying   | AppAggregationQuery (Deep lookup and aggregation) |
 | Runtime Validation   | Zod (End-to-end schema safety)                    |
@@ -169,7 +169,8 @@ src/
 │   ├── interface/      # Global Type Definitions and Interface Contracts
 │   ├── middlewares/    # Auth, RBAC, Rate-Limiting, and Data Sanitization
 │   ├── modules/        # Feature-specific Domain Modules (30 production-grade modules)
-│   ├── rabbitmq/       # Message Broker Connections and Consumer Registry
+│   ├── rabbitmq/       # RabbitMQ Message Broker Connections and Consumer Registry
+│   ├── kafka/          # Kafka Message Broker with Producer/Consumer and DLT support
 │   ├── redis/          # Distributed Cache configuration and Pub/Sub logic
 │   ├── socket/         # Real-time Event Orchestration and Redis backplane
 │   ├── utils/          # Core Utilities (catchAsync, sendResponse, Credit Process Wrappers)

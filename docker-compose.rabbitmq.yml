@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: zaaz-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"           # AMQP port
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"  # Management UI
+      - "${RABBITMQ_PROMETHEUS_PORT:-15692}:15692"  # Prometheus metrics
+    environment:
+      # Authentication
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-admin123}
+      
+      # Virtual Host
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      
+      # Memory Configuration
+      RABBITMQ_VM_MEMORY_HIGH_WATERMARK: 512MB
+      RABBITMQ_VM_MEMORY_HIGH_WATERMARK_PAGING_RATIO: 0.75
+      
+      # Disk Space Configuration
+      RABBITMQ_DISK_FREE_LIMIT: 2GB
+      
+      # Logging
+      RABBITMQ_LOGS: -
+      RABBITMQ_LOG_LEVEL: info
+      
+      # Plugins
+      RABBITMQ_ENABLED_PLUGINS_FILE: /etc/rabbitmq/enabled_plugins
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    networks:
+      - rabbitmq-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # RabbitMQ Management Plugin Configuration
+  rabbitmq-init:
+    image: rabbitmq:3.12-management-alpine
+    container_name: zaaz-rabbitmq-init
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-admin123}
+    networks:
+      - rabbitmq-network
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      echo 'Waiting for RabbitMQ to be ready...';
+      sleep 10;
+      echo 'RabbitMQ is ready!';
+      echo 'Setup complete!';
+      "
+    profiles:
+      - init
+
+networks:
+  rabbitmq-network:
+    driver: bridge
+    name: zaaz-rabbitmq-network
+
+volumes:
+  rabbitmq_data:
+    driver: local
+    name: zaaz-rabbitmq-data
+  rabbitmq_logs:
+    driver: local
+    name: zaaz-rabbitmq-logs

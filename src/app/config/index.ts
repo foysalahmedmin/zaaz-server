@@ -57,6 +57,12 @@ export default {
     process.env.RABBITMQ_ENABLED === 'true' && !!process.env.RABBITMQ_URL,
   rabbitmq_url: process.env.RABBITMQ_URL as string,
 
+  // 📨 Kafka Configuration
+  kafka_enabled:
+    process.env.KAFKA_ENABLED === 'true' && !!process.env.KAFKA_BROKERS,
+  kafka_brokers: process.env.KAFKA_BROKERS as string,
+  kafka_client_id: process.env.KAFKA_CLIENT_ID as string,
+
   // 🌍 CORS Configuration
   cors_origins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',')
