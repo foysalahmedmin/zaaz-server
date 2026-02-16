@@ -46,9 +46,13 @@ export const withCreditsProcess = <
         await creditsProcessEnd({
           user_id: userId,
           feature_endpoint_id,
-          input_token: inputToken,
-          output_token: outputToken,
-          ai_model: (result as any).ai_model || (result as any).model,
+          usages: [
+            {
+              input_tokens: inputToken,
+              output_tokens: outputToken,
+              ai_model: (result as any).ai_model || (result as any).model,
+            },
+          ],
         });
       } catch (error) {
         console.error('[Credits Process] End error:', error);
