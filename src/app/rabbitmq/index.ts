@@ -1,5 +1,6 @@
 import amqp, { ConfirmChannel, Connection, ConsumeMessage } from 'amqplib';
 import config from '../config';
+import { setupCreditsBatchConsumer } from '../modules/credits-process/credits-process-batch.consumer';
 import { setupCreditsProcessEndConsumer } from '../modules/credits-process/credits-process.consumer';
 import { setupFeatureUsageLogConsumer } from '../modules/feature-usage-log/feature-usage-log.consumer';
 
@@ -8,7 +9,10 @@ class RabbitMQService {
   private channel: ConfirmChannel | null = null;
   private isConnecting: boolean = false;
   private reconnectTimeout: NodeJS.Timeout | null = null;
-  private consumers: Map<string, (data: any) => Promise<void>> = new Map();
+  private consumers: Map<
+    string,
+    { handler: (data: any) => Promise<void>; options?: { prefetch?: number } }
+  > = new Map();
 
   // Configuration Constants
   private readonly DLX_NAME = 'dlx_exchange';
@@ -134,33 +138,45 @@ class RabbitMQService {
   /**
    * Publish with confirmation (Publisher Confirms)
    */
-  public async publishToQueue(queue: string, message: any): Promise<void> {
+  public async publishToQueue(
+    queue: string,
+    message: any,
+    options?: { priority?: number },
+  ): Promise<void> {
     try {
       if (!this.connection) {
         console.warn(`⚠️ Cannot publish to ${queue}: RabbitMQ not connected.`);
-        // In highly critical systems, you might cache this in Redis/Memory to retry later
         return;
       }
 
       const ch = await this.getChannel();
+      // Ensure queue exists with priority support
       await ch.assertQueue(queue, {
         durable: true,
         deadLetterExchange: this.DLX_NAME,
         deadLetterRoutingKey: `${queue}${this.DLQ_SUFFIX}`,
+        arguments: { 'x-max-priority': 10 },
       });
 
       const content = Buffer.from(JSON.stringify(message));
 
       return new Promise((resolve, reject) => {
-        ch.sendToQueue(queue, content, { persistent: true }, (err, _ok) => {
-          if (err) {
-            console.error(`❌ Message NACKed by broker for ${queue}:`, err);
-            reject(err);
-          } else {
-            console.log(`📤 Message confirmed to queue '${queue}'`);
-            resolve();
-          }
-        });
+        ch.sendToQueue(
+          queue,
+          content,
+          { persistent: true, priority: options?.priority },
+          (err, _ok) => {
+            if (err) {
+              console.error(`❌ Message NACKed by broker for ${queue}:`, err);
+              reject(err);
+            } else {
+              console.log(
+                `📤 Message confirmed to queue '${queue}'${options?.priority ? ` with priority ${options.priority}` : ''}`,
+              );
+              resolve();
+            }
+          },
+        );
       });
     } catch (error) {
       console.error(`❌ Failed to publish to queue '${queue}':`, error);
@@ -170,10 +186,11 @@ class RabbitMQService {
   public async consumeFromQueue(
     queue: string,
     onMessage: (data: any) => Promise<void>,
+    options?: { prefetch?: number },
   ): Promise<void> {
-    this.consumers.set(queue, onMessage);
+    this.consumers.set(queue, { handler: onMessage, options });
     if (this.connection) {
-      await this.startConsumer(queue, onMessage);
+      await this.startConsumer(queue, onMessage, options);
     } else {
       console.log(
         `⏳ Consumer for '${queue}' registered, waiting for connection...`,
@@ -184,6 +201,7 @@ class RabbitMQService {
   private async startConsumer(
     queue: string,
     onMessage: (data: any) => Promise<void>,
+    options?: { prefetch?: number },
   ): Promise<void> {
     try {
       const ch = await this.getChannel();
@@ -199,10 +217,14 @@ class RabbitMQService {
         durable: true,
         deadLetterExchange: this.DLX_NAME,
         deadLetterRoutingKey: dlqName, // Send rejected msgs here
+        arguments: { 'x-max-priority': 10 }, // Consistently enable priority support
       });
 
-      await ch.prefetch(1); // Fair dispatch
-      console.log(`📥 Waiting for messages in '${queue}' (DLQ enabled)...`);
+      const prefetch = options?.prefetch ?? 1;
+      await ch.prefetch(prefetch);
+      console.log(
+        `📥 Waiting for messages in '${queue}' (DLQ enabled, prefetch: ${prefetch})...`,
+      );
 
       await ch.consume(
         queue,
@@ -230,8 +252,8 @@ class RabbitMQService {
   private async recoverConsumers(): Promise<void> {
     if (this.consumers.size === 0) return;
     console.log('🔄 Connected. Recovering consumers...');
-    for (const [queue, handler] of this.consumers.entries()) {
-      await this.startConsumer(queue, handler);
+    for (const [queue, { handler, options }] of this.consumers.entries()) {
+      await this.startConsumer(queue, handler, options);
     }
   }
 }
@@ -245,7 +267,7 @@ export const initializeRabbitMQ = async () => {
     await RabbitMQ.connect();
     await setupFeatureUsageLogConsumer();
     await setupCreditsProcessEndConsumer();
-    await setupCreditsProcessEndConsumer();
+    await setupCreditsBatchConsumer(); // Batch processing consumer
   } catch (error) {
     console.warn('⚠️ RabbitMQ setup failed', error);
   }

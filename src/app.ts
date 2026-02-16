@@ -90,6 +90,17 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Metrics endpoint for Prometheus
+app.get('/metrics', async (_req, res) => {
+  try {
+    const { register } = await import('prom-client');
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).send(err);
+  }
+});
+
 // Static file serving for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
