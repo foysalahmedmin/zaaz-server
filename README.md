@@ -32,6 +32,8 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 
 - Atomic Wallet Engine: Real-time credit balance tracking using high-performance concurrency controls.
 - Diverse Credit Sourcing: Multi-channel credit acquisition via direct payments, promotional coupons, or administrative bonus provisions.
+- **High-Throughput Batch Processing**: Optimized credit deduction engine using a **Batch Aggregator** and RabbitMQ to handle thousands of concurrent requests with minimal database IO.
+- **Multi-Level Intelligence Caching**: Integrated L1 (In-Memory LRU) and L2 (Redis) caching for sub-millisecond lookups of billing settings and AI model configurations.
 - Dynamic Consumption Logic: Internal service-to-service validation APIs specifically designed for feature-rich environments and word-limit enforcement.
 - Expiration Engine: Automated duration-based expiration logic for both credits and tiered packages.
 
@@ -76,6 +78,8 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 ### Asynchronous Communication and Observability
 
 - Distributed Messaging: Dual message broker support with RabbitMQ (DLQ) and Kafka (DLT) for flexible event-driven architecture and usage telemetry.
+- **Circuit Breaker Resilience**: Integrated **Opossum** circuit breakers to protect the system from cascading failures in message brokers, with automatic fallback to direct processing.
+- **Prometheus Monitoring**: Full instrumentation for key performance indicators including latency, batch efficiency, cache hits/misses, and circuit breaker status exposed via `/metrics`.
 - Real-time Signaling: Socket.io with Redis backplane for horizontally scalable real-time event broadcasting.
 - Enhanced Notification Engine: Multi-path delivery (Web, Push, Email) with priority tiers, delivery tracking, and rich metadata support (URLs, images, custom action payloads).
 
@@ -83,17 +87,19 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 
 ## Tech Stack
 
-| Category             | Technology                                        |
-| :------------------- | :------------------------------------------------ |
-| Runtime Environment  | Node.js (v18+)                                    |
-| Core Framework       | Express.js (v5.x - Next Generation)               |
-| Programming Language | TypeScript (v5.x)                                 |
-| Persistent Storage   | MongoDB with Mongoose (v8.x)                      |
-| Message Broker       | RabbitMQ (amqplib) / Kafka (kafkajs) with DLQ/DLT |
-| Distributed Caching  | Redis (ioredis) for Lookups and Socket.io         |
-| Optimized Querying   | AppAggregationQuery (Deep lookup and aggregation) |
-| Runtime Validation   | Zod (End-to-end schema safety)                    |
-| Information Security | bcrypt, jsonwebtoken, helmet, express-rate-limit  |
+| Category                    | Technology                                        |
+| :-------------------------- | :------------------------------------------------ |
+| Runtime Environment         | Node.js (v18+)                                    |
+| Core Framework              | Express.js (v5.x - Next Generation)               |
+| Programming Language        | TypeScript (v5.x)                                 |
+| Persistent Storage          | MongoDB with Mongoose (v8.x)                      |
+| Message Broker              | RabbitMQ (amqplib) / Kafka (kafkajs) with DLQ/DLT |
+| Redis / Distributed Caching | Redis (ioredis) / multi-level strategy (L1/L2)    |
+| Reliability / Resilience    | Opossum (Circuit Breakers)                        |
+| Monitoring / Metrics        | prom-client (Prometheus Instrumentation)          |
+| Optimized Querying          | AppAggregationQuery (Deep lookup and aggregation) |
+| Runtime Validation          | Zod (End-to-end schema safety)                    |
+| Information Security        | bcrypt, jsonwebtoken, helmet, rate-limiter-flex   |
 
 ---
 
@@ -778,11 +784,14 @@ This asynchronous workflow decouples high-frequency AI feature requests from dat
 ## Production Readiness Checklist
 
 - Cluster Engine: Coordinated process clustering enabled by default for single-node scaling.
+- **Resilience Engine**: Opossum circuit breakers and automatic fallbacks for critical infrastructure (RabbitMQ/Redis).
+- **Intelligent Caching**: Batched invalidation and L1/L2 strategy to reduce external dependency overhead.
 - MQ Resilience: Dead Letter Queues (DLQ) configured for all critical consumers to prevent message loss.
 - Atomic Integrity: All financial state changes utilize MongoDB atomic increments and concurrency locks.
-- **Payment Safety**: Automated reconciliation verifies transaction outcomes directly with gateway APIs, backed by a formal State Machine.
+- Payment Safety: Automated reconciliation verifies transaction outcomes directly with gateway APIs, backed by a formal State Machine.
 - Security Posture: Full Zod runtime validation and JWT lifecycle rotation enforced.
-- Observability: Intensive telemetry logging through asynchronous RabbitMQ workers and deep Transaction Auditing.
+- **Observability**: Real-time Prometheus metrics for system health, latency, and throughput tracking.
+- **Deduplication**: Multi-key request deduplication to prevent double-billing during network retries.
 
 ---
 
