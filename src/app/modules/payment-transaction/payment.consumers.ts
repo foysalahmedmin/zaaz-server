@@ -1,8 +1,6 @@
 import mongoose from 'mongoose';
 import { Coupon } from '../coupon/coupon.model';
-import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
-import { PackageTransaction } from '../package-transaction/package-transaction.model';
-import { UserWallet } from '../user-wallet/user-wallet.model';
+import { assignPackage } from '../user-wallet/user-wallet.service';
 import { PaymentTransaction } from './payment-transaction.model';
 import { sendPaymentNotificationEmail } from './payment-transaction.utils';
 import { PaymentEventPayload } from './payment.events';
@@ -50,88 +48,17 @@ export const handlePaymentCompleted = async (
       return;
     }
 
-    // Check if CreditsTransaction already exists (Idempotency)
-    const existingCreditsTransaction = await CreditsTransaction.findOne({
-      payment_transaction: transactionId,
-      type: 'increase',
-      increase_source: 'payment',
-    }).session(session);
-
-    if (existingCreditsTransaction) {
-      console.log(
-        `[PaymentConsumer] Credits already added for transaction: ${transactionId}`,
-      );
-      if (!externalSession) await session.commitTransaction();
-      return;
-    }
-
-    // Prepare data
-    const packagePlan = transaction.price as any; // Populated
-    const plan = transaction.plan as any; // Populated
-
-    if (!packagePlan || !plan) {
-      console.error(
-        `[PaymentConsumer] Package/Plan data missing for transaction: ${transactionId}`,
-      );
-      if (!externalSession) await session.abortTransaction();
-      return;
-    }
-
-    // Update Wallet
-    const updateWalletData: any = {
-      $inc: { credits: packagePlan.credits },
-      package: transaction.package,
-      plan: transaction.plan,
-      type: 'paid',
-    };
-
-    if (plan.duration) {
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + plan.duration);
-      updateWalletData.expires_at = expiresAt;
-    }
-
-    await UserWallet.findByIdAndUpdate(
-      transaction.user_wallet,
-      updateWalletData,
+    // Use centralized assignPackage logic for wallet update and transaction logging
+    await assignPackage(
       {
-        session,
-        new: true,
+        user_id: transaction.user.toString(),
+        package_id: transaction.package.toString(),
+        plan_id: transaction.plan.toString(),
+        increase_source: 'payment',
+        payment_transaction_id: transactionId,
+        email: transaction.email,
       },
-    );
-
-    // Create Credits Transaction Log
-    await CreditsTransaction.create(
-      [
-        {
-          user: transaction.user,
-          user_wallet: transaction.user_wallet,
-          email: transaction.email,
-          type: 'increase',
-          credits: packagePlan.credits,
-          increase_source: 'payment',
-          payment_transaction: transactionId,
-          plan: transaction.plan,
-        },
-      ],
-      { session },
-    );
-
-    // Create Package Transaction Log
-    await PackageTransaction.create(
-      [
-        {
-          user: transaction.user,
-          user_wallet: transaction.user_wallet,
-          email: transaction.email,
-          package: transaction.package,
-          plan: transaction.plan,
-          credits: packagePlan.credits,
-          increase_source: 'payment',
-          payment_transaction: transactionId,
-        },
-      ],
-      { session },
+      session,
     );
 
     // Update Coupon Usage
@@ -150,10 +77,9 @@ export const handlePaymentCompleted = async (
       `[PaymentConsumer] Successfully processed payment completion for ${transactionId}`,
     );
 
+    const packagePlan = transaction.price as any;
+
     // Non-transactional side effects (Email)
-    // We execute this even if external session is passed, assuming successful completion flow
-    // But be careful: if external session aborts later, email is sent erroneously?
-    // We can't help it easily. Email is side effect.
     try {
       sendPaymentNotificationEmail(
         'success',

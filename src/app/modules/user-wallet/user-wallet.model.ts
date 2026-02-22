@@ -87,29 +87,14 @@ userWalletSchema.pre(/^find/, function (next) {
     newQuery.is_deleted = { $ne: true };
   }
 
-  // Check if wallet is expired
-  // Merge expiration condition with existing $or if present
-  if (!opts?.bypassExpired) {
-    const expirationCondition = {
-      $or: [
-        { expires_at: { $exists: false } },
-        { expires_at: { $gte: new Date() } },
-      ],
-    };
-
-    if (currentQuery.$or) {
-      // If query already has $or, combine using $and to preserve both conditions
-      newQuery.$and = [{ $or: currentQuery.$or }, expirationCondition];
-      // Remove the original $or since we've moved it to $and
-      delete newQuery.$or;
-    } else {
-      // No existing $or, safe to set directly
-      newQuery.$or = expirationCondition.$or;
-    }
-  }
-
   query.setQuery(newQuery);
   next();
+});
+
+// Virtual property to check if the wallet is expired
+userWalletSchema.virtual('is_expired').get(function () {
+  if (!this.expires_at) return false;
+  return new Date() > this.expires_at;
 });
 
 // Aggregation pipeline

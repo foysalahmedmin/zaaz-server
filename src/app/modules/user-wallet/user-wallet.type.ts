@@ -12,6 +12,7 @@ export type TUserWallet = {
   initial_package_given?: boolean;
   type: 'free' | 'paid';
   is_deleted?: boolean;
+  is_expired?: boolean;
 };
 
 export interface TUserWalletDocument extends TUserWallet, Document {

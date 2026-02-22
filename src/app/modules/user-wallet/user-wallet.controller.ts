@@ -213,12 +213,14 @@ export const assignPackage = catchAsync(async (req, res) => {
   const { user_id, package_id, plan_id, increase_source, email } = req.body;
 
   const result = await UserWalletServices.assignPackage(
-    user_id,
-    package_id,
-    plan_id,
-    increase_source,
+    {
+      user_id,
+      package_id,
+      plan_id,
+      increase_source,
+      email,
+    },
     undefined, // session
-    email,
   );
 
   sendResponse(res, {

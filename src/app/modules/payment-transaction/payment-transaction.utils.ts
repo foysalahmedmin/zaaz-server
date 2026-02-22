@@ -25,9 +25,13 @@ export const sendPaymentNotificationEmail = async (
     amount: transaction.amount,
     currency: transaction.currency,
     failureReason: transaction.failure_reason,
-    packageName: packagePlan?.package?.name || 'Package',
-    planName: packagePlan?.plan?.name || 'Plan',
-    credits: packagePlan?.credits || 0,
+    packageName:
+      (transaction as any).package?.name ||
+      packagePlan?.package?.name ||
+      'Package',
+    planName:
+      (transaction as any).plan?.name || packagePlan?.plan?.name || 'Plan',
+    credits: packagePlan?.credits || (transaction as any).price?.credits || 0,
   };
 
   // Define logo paths (from root assets folder)
