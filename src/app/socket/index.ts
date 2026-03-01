@@ -13,29 +13,24 @@ export const initializeSocket = async (
   server: http.Server,
 ): Promise<IOServer> => {
   try {
+    // Extract socket path from URL pathname
+    const url = new URL(config.url || 'http://localhost:5000');
+    const path =
+      url.pathname === '/' || !url.pathname ? '/socket.io' : url.pathname;
+
     // Create Socket.io server
     io = new IOServer(server, {
       cors: {
         origin: [
-          'https://zaaz.vercel.app',
-          'https://www.zaaz.vercel.app',
-          'https://zaaz-website.vercel.app',
-          'https://www.zaaz-website.vercel.app',
-          'https://zaaz-server.vercel.app',
-          'https://www.zaaz-server.vercel.app',
-          'http://localhost:3000',
-          'http://localhost:3008',
-          'http://localhost:8080',
-          'http://localhost:8081',
-          'http://localhost:5000',
-          'http://localhost:5005',
-          process.env.URL as string,
-          process.env.ADMINPANEL_URL as string,
-          process.env.WEBSITE_URL as string,
+          config.url,
+          config.adminpanel_url,
+          config.website_url,
+          ...config.cors_origins,
         ]?.filter(Boolean),
         methods: ['GET', 'POST'],
         credentials: true,
       },
+      path: path,
       pingTimeout: 60000,
       pingInterval: 25000,
     });
