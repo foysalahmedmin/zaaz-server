@@ -1,11 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import mongoose from 'mongoose';
+import app from './app';
 import {
   initializeRedis,
-} from './app/redis';
-import { initializeSocket } from './app/socket';
-import app from './app';
-import config from './app/config';
+} from './config/redis';
+import { initializeSocket } from './config/socket';
+import { initializeDB } from './config/db';
 
 let isDbConnected = false;
 let isRedisInitialized = false;
@@ -13,11 +12,7 @@ let isRedisInitialized = false;
 // Connect MongoDB once per serverless instance
 const connectDB = async () => {
   if (!isDbConnected) {
-    if (!config.database_url) {
-      throw new Error('DATABASE_URL is missing in config/env');
-    }
-    await mongoose.connect(config.database_url);
-    console.log('✅ MongoDB connected (Serverless)');
+    await initializeDB();
     isDbConnected = true;
   }
 };
@@ -56,3 +51,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ status: 'error', message: (err as Error).message });
   }
 }
+
+

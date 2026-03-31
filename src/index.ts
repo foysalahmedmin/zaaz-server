@@ -1,18 +1,18 @@
-import cluster from 'cluster';
 import http from 'http';
-import mongoose from 'mongoose';
 import os from 'os';
 import app from './app';
-import config from './app/config';
-import { KafkaClient, initializeKafka } from './app/kafka';
-import { RabbitMQ, initializeRabbitMQ } from './app/rabbitmq';
+import config from './config/env';
+import { KafkaClient, initializeKafka } from './config/kafka';
+import { RabbitMQ, initializeRabbitMQ } from './config/rabbitmq';
 import {
   cacheClient,
   initializeRedis,
   pubClient,
   subClient,
-} from './app/redis';
-import { initializeSocket } from './app/socket';
+} from './config/redis';
+import { initializeSocket } from './config/socket';
+import { initializeDB, disconnectDB } from './config/db';
+import cluster from 'cluster';
 
 let server: http.Server | null = null;
 
@@ -20,13 +20,8 @@ let server: http.Server | null = null;
 const main = async (): Promise<void> => {
   try {
     try {
-      await mongoose.connect(config.database_url);
-      console.log(`✅ MongoDB connected - PID: ${process.pid}`);
+      await initializeDB();
     } catch (mongoErr) {
-      console.error(
-        `❌ MongoDB connection failed - PID: ${process.pid}`,
-        mongoErr,
-      );
       throw mongoErr;
     }
 
@@ -76,8 +71,7 @@ const shutdown = async (reason: string): Promise<void> => {
   console.log(`🛑 Shutdown initiated: ${reason}`);
   try {
     // Disconnect MongoDB
-    await mongoose.disconnect();
-    console.log('✅ MongoDB disconnected');
+    await disconnectDB();
 
     // Disconnect Redis cache
     if (cacheClient.isOpen) {
@@ -175,3 +169,5 @@ if (config.cluster_enabled && cluster.isPrimary) {
 } else {
   main();
 }
+
+
