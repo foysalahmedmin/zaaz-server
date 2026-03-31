@@ -1,6 +1,7 @@
 import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
+import { getPriceInCurrency } from '../../utils/currency.utils';
 import { PackagePlan } from '../package-plan/package-plan.model';
 import { Coupon } from './coupon.model';
 import { TCoupon } from './coupon.type';
@@ -139,8 +140,8 @@ const validateCoupon = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Package plan not found');
   }
 
-  const originalPrice = packagePlan.price[currency];
-  const minPurchase = coupon.min_purchase_amount[currency];
+  const originalPrice = getPriceInCurrency(packagePlan.price, currency);
+  const minPurchase = getPriceInCurrency(coupon.min_purchase_amount, currency);
 
   if (originalPrice < minPurchase) {
     throw new AppError(
@@ -153,12 +154,15 @@ const validateCoupon = async (
   let discountAmount = 0;
   if (coupon.discount_type === 'percentage') {
     discountAmount = (originalPrice * coupon.discount_value) / 100;
-    const maxDiscount = coupon.max_discount_amount[currency];
+    const maxDiscount = getPriceInCurrency(
+      coupon.max_discount_amount,
+      currency,
+    );
     if (maxDiscount > 0 && discountAmount > maxDiscount) {
       discountAmount = maxDiscount;
     }
   } else {
-    discountAmount = coupon.fixed_amount[currency];
+    discountAmount = getPriceInCurrency(coupon.fixed_amount, currency);
   }
 
   // Ensure discount doesn't exceed original price

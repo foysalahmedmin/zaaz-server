@@ -123,6 +123,12 @@ const config = {
   sslcommerz_store_id_test: process.env.SSLCOMMERZ_STORE_ID_TEST as string,
   sslcommerz_store_password_test: process.env.SSLCOMMERZ_STORE_PASSWORD_TEST as string,
   sslcommerz_base_url_test: process.env.SSLCOMMERZ_BASE_URL_TEST as string,
+
+  // 🪙 Currency Configuration
+  base_currency: (process.env.BASE_CURRENCY as string) || 'USD',
+  exchange_rates: {
+    BDT: Number(process.env.EXCHANGE_RATE_BDT || '120'),
+  },
 };
 
 export default config;

@@ -11,6 +11,7 @@ import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
 import { Plan } from '../plan/plan.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
+import { getPriceInCurrency } from '../../utils/currency.utils';
 import { PaymentAuditLog } from './payment-audit.model';
 import { PaymentStateMachine } from './payment-state-machine';
 import { PaymentTransaction } from './payment-transaction.model';
@@ -219,7 +220,7 @@ export const getPaymentTransactions = async (
   paymentTransactionQuery
     .populate([
       { path: 'user_wallet', select: '_id credits', justOne: true },
-      { path: 'payment_method', select: '_id name currency', justOne: true },
+      { path: 'payment_method', select: '_id name currencies', justOne: true },
       { path: 'package', select: '_id name', justOne: true },
       { path: 'plan', select: '_id name duration', justOne: true },
       { path: 'price', select: '_id price credits', justOne: true }, // package-plan
@@ -273,7 +274,7 @@ export const getPaymentTransaction = async (
   const result = await PaymentTransaction.findById(id)
     .populate([
       { path: 'user_wallet', select: '_id credits' },
-      { path: 'payment_method', select: '_id name currency' },
+      { path: 'payment_method', select: '_id name currencies' },
       { path: 'package', select: '_id name' },
       { path: 'plan', select: '_id name duration' },
       { path: 'price', select: '_id price credits' }, // package-plan
@@ -644,6 +645,7 @@ export const initiatePayment = async (options: {
   customerEmail?: string;
   customerName?: string;
   customerPhone?: string;
+  currency: 'USD' | 'BDT';
   coupon_code?: string;
   session?: mongoose.ClientSession;
 }): Promise<{
@@ -661,6 +663,7 @@ export const initiatePayment = async (options: {
     customerEmail,
     customerName,
     customerPhone,
+    currency,
     coupon_code,
     session,
   } = options;
@@ -671,6 +674,14 @@ export const initiatePayment = async (options: {
 
   if (!paymentMethod || !paymentMethod.is_active) {
     throw new AppError(httpStatus.BAD_REQUEST, 'Payment method not available');
+  }
+
+  // Check if requested currency is supported by the payment method
+  if (!paymentMethod.currencies.includes(currency)) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Payment method ${paymentMethod.name} does not support ${currency}`,
+    );
   }
 
   // Get package
@@ -727,10 +738,8 @@ export const initiatePayment = async (options: {
     wallet = newWallet[0].toObject() as NonNullable<typeof wallet>;
   }
 
-  const gatewayAmount =
-    paymentMethod.currency === 'USD'
-      ? packagePlan.price.USD
-      : packagePlan.price.BDT;
+  // Get gateway amount in the requested currency
+  const gatewayAmount = getPriceInCurrency(packagePlan.price, currency);
 
   // Coupon handling
   let discountAmount = 0;
@@ -741,7 +750,7 @@ export const initiatePayment = async (options: {
       coupon_code,
       packageId,
       planId,
-      paymentMethod.currency as 'USD' | 'BDT',
+      currency,
     );
     discountAmount = discount_amount;
     couponId = coupon._id;
@@ -773,7 +782,7 @@ export const initiatePayment = async (options: {
         coupon: couponId,
         discount_amount: discountAmount,
         amount: finalAmount,
-        currency: paymentMethod.currency,
+        currency: currency,
         return_url: returnUrl, // Store frontend return URL
         cancel_url: cancelUrl, // Store frontend cancel URL
         is_test: paymentMethod.is_test || false,
@@ -794,7 +803,7 @@ export const initiatePayment = async (options: {
     const gateway = PaymentGatewayFactory.create(paymentMethod);
     const paymentResponse = await gateway.initiatePayment({
       amount: finalAmount,
-      currency: paymentMethod.currency,
+      currency: currency,
       packageId,
       userId,
       userWalletId: wallet._id.toString(),

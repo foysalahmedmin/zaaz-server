@@ -3,9 +3,8 @@ import { Document, Model, Types } from 'mongoose';
 export type TPaymentMethod = {
   name: string;
   value: string;
-  currency: string;
+  currencies: string[];
   description?: string;
-  currencies?: string[];
   config?: Record<string, any>;
   sequence?: number;
   is_test?: boolean;

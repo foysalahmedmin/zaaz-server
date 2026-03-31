@@ -2,11 +2,6 @@ import { Document, Model, Types } from 'mongoose';
 
 export type TCurrency = 'USD' | 'BDT';
 
-export type TPackagePrice = {
-  USD: number;
-  BDT: number;
-};
-
 export type TPackage = {
   value: string;
   name: string;

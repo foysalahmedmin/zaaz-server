@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { invalidateCacheByPattern, withCache } from '../../utils/cache.util';
+import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
 import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
 import {
   createPackageFeatures,
@@ -16,6 +16,7 @@ import {
   getPackagePlansByPackage,
 } from '../package-plan/package-plan.service';
 import { Plan } from '../plan/plan.model';
+import { getPriceInCurrency } from '../../utils/currency.utils';
 import { Package } from './package.model';
 import { TPackage } from './package.type';
 
@@ -24,6 +25,20 @@ const CACHE_TTL = 86400; // 24 hours (Optimized for production with proper inval
 export const clearPackageCache = async () => {
   await invalidateCacheByPattern('package:*');
   await invalidateCacheByPattern('packages:public:*');
+};
+
+const transformPackageWithCurrency = (pkg: any) => {
+  if (!pkg) return pkg;
+  
+  const transformedPlans = (pkg.plans || []).map((plan: any) => ({
+    ...plan,
+    price_bdt: getPriceInCurrency(plan.price, 'BDT'),
+  }));
+
+  return {
+    ...pkg,
+    plans: transformedPlans,
+  };
 };
 
 const getPlansLookupStage = () => [
@@ -113,7 +128,7 @@ export const createPackage = async (
   data: TPackage & {
     plans?: Array<{
       plan: mongoose.Types.ObjectId | string;
-      price: { USD: number; BDT: number };
+      price: number;
       credits: number;
       is_initial?: boolean;
       is_active?: boolean;
@@ -246,7 +261,7 @@ export const getPublicPackage = async (id: string): Promise<any> => {
       throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
     }
 
-    return results[0];
+    return transformPackageWithCurrency(results[0]);
   });
 };
 
@@ -335,7 +350,7 @@ export const getPublicPackages = async (
 
       return {
         ...result,
-        data: result.data,
+        data: result.data.map((pkg: any) => transformPackageWithCurrency(pkg)),
       };
     },
   );
@@ -403,7 +418,7 @@ export const updatePackage = async (
   payload: Partial<TPackage> & {
     plans?: Array<{
       plan: mongoose.Types.ObjectId | string;
-      price: { USD: number; BDT: number };
+      price: number;
       credits: number;
       is_initial?: boolean;
       is_active?: boolean;
@@ -472,7 +487,7 @@ export const updatePackage = async (
 
     type UpdatePlanInput = {
       plan: mongoose.Types.ObjectId | string;
-      price: { USD: number; BDT: number };
+      price: number;
       credits: number;
       is_initial?: boolean;
       is_active?: boolean;
@@ -645,7 +660,7 @@ export const updatePackages = async (
   payload: Partial<TPackage> & {
     plans?: Array<{
       plan: mongoose.Types.ObjectId | string;
-      price: { USD: number; BDT: number };
+      price: number;
       credits: number;
       is_initial?: boolean;
       is_active?: boolean;

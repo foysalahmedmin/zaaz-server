@@ -1,15 +1,10 @@
 import mongoose, { Document, Model, Types } from 'mongoose';
 
-export type TPackagePrice = {
-  USD: number;
-  BDT: number;
-};
-
 export type TPackagePlan = {
   plan: mongoose.Types.ObjectId;
   package: mongoose.Types.ObjectId;
-  previous_price?: TPackagePrice;
-  price: TPackagePrice;
+  previous_price?: number;
+  price: number;
   credits: number;
   is_initial: boolean;
   is_active: boolean;

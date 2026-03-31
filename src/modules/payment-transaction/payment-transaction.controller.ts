@@ -158,6 +158,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
     customer_email: customerEmail,
     customer_name: customerName,
     customer_phone: customerPhone,
+    currency,
     coupon: couponCode,
   } = req.body;
 
@@ -176,6 +177,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
     customerEmail: finalCustomerEmail,
     customerName: finalCustomerName,
     customerPhone: finalCustomerPhone,
+    currency,
     coupon_code: couponCode,
   });
 

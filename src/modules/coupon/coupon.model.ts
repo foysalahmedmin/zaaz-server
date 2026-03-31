@@ -19,16 +19,16 @@ const couponSchema = new Schema<TCouponDocument>(
       default: 0,
     },
     fixed_amount: {
-      USD: { type: Number, default: 0 },
-      BDT: { type: Number, default: 0 },
+      type: Number,
+      default: 0,
     },
     min_purchase_amount: {
-      USD: { type: Number, default: 0 },
-      BDT: { type: Number, default: 0 },
+      type: Number,
+      default: 0,
     },
     max_discount_amount: {
-      USD: { type: Number, default: 0 },
-      BDT: { type: Number, default: 0 },
+      type: Number,
+      default: 0,
     },
     valid_from: {
       type: Date,

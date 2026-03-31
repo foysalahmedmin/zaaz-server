@@ -20,26 +20,13 @@ const packagePlanSchema = new Schema<TPackagePlanDocument>(
       index: true,
     },
     previous_price: {
-      USD: {
-        type: Number,
-        min: [0, 'Previous price USD must be 0 or greater'],
-      },
-      BDT: {
-        type: Number,
-        min: [0, 'Previous price BDT must be 0 or greater'],
-      },
+      type: Number,
+      min: [0, 'Previous price must be 0 or greater'],
     },
     price: {
-      USD: {
-        type: Number,
-        required: [true, 'Price USD is required'],
-        min: [0, 'Price USD must be 0 or greater'],
-      },
-      BDT: {
-        type: Number,
-        required: [true, 'Price BDT is required'],
-        min: [0, 'Price BDT must be 0 or greater'],
-      },
+      type: Number,
+      required: [true, 'Price is required'],
+      min: [0, 'Price must be 0 or greater'],
     },
     credits: {
       type: Number,

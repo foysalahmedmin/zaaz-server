@@ -13,17 +13,19 @@ export const createPaymentMethodValidationSchema = z.object({
       .trim()
       .min(2, 'Value must be at least 2 characters')
       .toLowerCase(),
-    currency: z
-      .string()
-      .trim()
-      .length(3, 'Currency must be a 3-letter ISO code')
-      .toUpperCase(),
+    currencies: z
+      .array(
+        z
+          .string()
+          .length(3, 'Currency must be a 3-letter ISO code')
+          .toUpperCase(),
+      )
+      .min(1, 'At least one supported currency is required'),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),
     sequence: z
@@ -51,18 +53,19 @@ export const updatePaymentMethodValidationSchema = z.object({
       .min(2, 'Value must be at least 2 characters')
       .toLowerCase()
       .optional(),
-    currency: z
-      .string()
-      .trim()
-      .length(3, 'Currency must be a 3-letter ISO code')
-      .toUpperCase()
+    currencies: z
+      .array(
+        z
+          .string()
+          .length(3, 'Currency must be a 3-letter ISO code')
+          .toUpperCase(),
+      )
       .optional(),
     description: z
       .string()
       .trim()
       .max(500, 'Description cannot exceed 500 characters')
       .optional(),
-    currencies: z.array(z.string().length(3)).optional(),
     config: z.record(z.any()).optional(),
     is_test: z.boolean().optional(),
     sequence: z

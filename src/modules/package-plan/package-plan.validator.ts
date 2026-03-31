@@ -5,14 +5,9 @@ const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
   message: 'Invalid ID format',
 });
 
-const priceSchema = z.object({
-  USD: z
-    .number({ invalid_type_error: 'Price USD must be a number' })
-    .nonnegative('Price USD must be 0 or greater'),
-  BDT: z
-    .number({ invalid_type_error: 'Price BDT must be a number' })
-    .nonnegative('Price BDT must be 0 or greater'),
-});
+const priceSchema = z
+  .number({ invalid_type_error: 'Price must be a number' })
+  .nonnegative('Price must be 0 or greater');
 
 export const createPackagePlanValidationSchema = z.object({
   body: z.object({

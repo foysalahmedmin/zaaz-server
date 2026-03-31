@@ -47,7 +47,7 @@ export const getPublicPaymentMethods = async (
   };
 
   if (currency) {
-    filter.currency = currency;
+    filter.currencies = currency;
   }
 
   const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(
@@ -62,7 +62,7 @@ export const getPublicPaymentMethods = async (
       'name',
       'value',
       'description',
-      'currency',
+      'currencies',
       'is_test',
       'is_active',
       'is_deleted',
@@ -84,7 +84,7 @@ export const getPaymentMethods = async (
   const filter: Record<string, unknown> = {};
 
   if (currency) {
-    filter.currency = currency;
+    filter.currencies = currency;
   }
 
   const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(

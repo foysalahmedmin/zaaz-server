@@ -22,13 +22,6 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       minlength: [2, 'Name must be at least 2 characters'],
       maxlength: [100, 'Name cannot exceed 100 characters'],
     },
-    currency: {
-      type: String,
-      required: [true, 'Currency is required'],
-      trim: true,
-      uppercase: true,
-      length: [3, 'Currency must be a 3-letter ISO code'],
-    },
     description: {
       type: String,
       trim: true,
@@ -41,6 +34,7 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
     },
     currencies: {
       type: [String],
+      required: [true, 'Supported currencies are required'],
       default: [],
     },
     config: {
@@ -70,7 +64,6 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
 // Indexes
 paymentMethodSchema.index({ is_active: 1 });
 paymentMethodSchema.index({ is_deleted: 1 });
-paymentMethodSchema.index({ currency: 1 });
 paymentMethodSchema.index({ created_at: -1 });
 
 // Compound unique index

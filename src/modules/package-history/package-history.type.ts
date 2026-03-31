@@ -1,10 +1,5 @@
 import mongoose, { Document, Model, Types } from 'mongoose';
 
-export type TPackagePrice = {
-  USD: number;
-  BDT: number;
-};
-
 // Embedded feature data structure for history
 export type TFeatureHistory = {
   _id: mongoose.Types.ObjectId;
@@ -35,8 +30,8 @@ export type TPlanHistory = {
 export type TPackagePlanHistory = {
   _id: mongoose.Types.ObjectId;
   plan: TPlanHistory;
-  price: TPackagePrice;
-  previous_price?: TPackagePrice;
+  price: number;
+  previous_price?: number;
   credits: number;
   is_initial: boolean;
   is_active: boolean;

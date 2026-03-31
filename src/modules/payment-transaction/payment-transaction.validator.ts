@@ -84,6 +84,7 @@ export const initiatePaymentValidationSchema = z.object({
     customer_email: z.string().email('Invalid email format').optional(),
     customer_name: z.string().trim().optional(),
     customer_phone: z.string().trim().optional(),
+    currency: currencyEnum,
     coupon: z.string().trim().optional(),
   }),
 });

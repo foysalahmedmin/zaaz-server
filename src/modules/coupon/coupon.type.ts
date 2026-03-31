@@ -6,18 +6,9 @@ export type TCoupon = {
   code: string;
   discount_type: TDiscountType;
   discount_value: number; // For percentage: e.g. 10 for 10%. For fixed: optional or unused if using fixed_amount
-  fixed_amount: {
-    USD: number;
-    BDT: number;
-  };
-  min_purchase_amount: {
-    USD: number;
-    BDT: number;
-  };
-  max_discount_amount: {
-    USD: number;
-    BDT: number;
-  }; // Used for percentage discounts
+  fixed_amount: number;
+  min_purchase_amount: number;
+  max_discount_amount: number; // Used for percentage discounts
   valid_from?: Date;
   valid_until?: Date;
   usage_limit?: number;

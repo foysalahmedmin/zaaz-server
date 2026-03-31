@@ -4,10 +4,7 @@ const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
   message: 'Invalid ID format',
 });
 
-const priceSchema = z.object({
-  USD: z.number().nonnegative().default(0),
-  BDT: z.number().nonnegative().default(0),
-});
+const priceSchema = z.number().nonnegative().default(0);
 
 export const createCouponValidationSchema = z.object({
   body: z.object({
