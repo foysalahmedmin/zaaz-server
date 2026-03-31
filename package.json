@@ -97,6 +97,7 @@
     "@types/node": "^24.0.8",
     "@types/nodemailer": "^6.4.17",
     "@types/opossum": "^8.1.9",
+    "@types/supertest": "^7.2.0",
     "@types/yargs": "^17.0.24",
     "@typescript-eslint/eslint-plugin": "^8.35.1",
     "@typescript-eslint/parser": "^8.35.1",
@@ -105,6 +106,8 @@
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "prettier": "^3.6.2",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.6",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
   }
