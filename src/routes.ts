@@ -22,7 +22,6 @@ import PackageRoutes from './modules/package/package.route';
 import PaymentMethodRoutes from './modules/payment-method/payment-method.route';
 import PaymentTransactionRoutes from './modules/payment-transaction/payment-transaction.route';
 import PlanRoutes from './modules/plan/plan.route';
-import { StorageRoutes } from './modules/storage/storage.route';
 import UserWalletRoutes from './modules/user-wallet/user-wallet.route';
 import UserRoutes from './modules/user/user.route';
 
@@ -32,6 +31,7 @@ import AiModelHistoryRoutes from './modules/ai-model-history/ai-model-history.ro
 import { AiModelRoutes } from './modules/ai-model/ai-model.route';
 import { BillingSettingHistoryRoutes } from './modules/billing-setting-history/billing-setting-history.route';
 import { BillingSettingRoutes } from './modules/billing-setting/billing-setting.route';
+import fileRoutes from './modules/file/file.route';
 import { PackageFeatureConfigRoutes } from './modules/package-feature-config/package-feature-config.route';
 
 const router = express.Router();
@@ -143,8 +143,8 @@ const moduleRoutes = [
     route: CreditsProcessRoutes,
   },
   {
-    path: '/storage',
-    route: StorageRoutes,
+    path: '/files',
+    route: fileRoutes,
   },
   {
     path: '/package-transactions',

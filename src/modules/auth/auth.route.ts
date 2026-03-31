@@ -1,17 +1,17 @@
 import express from 'express';
 import auth from '../../middlewares/auth.middleware';
 import file from '../../middlewares/file.middleware';
-import { rateLimiter } from '../../middlewares/rate-limit.middleware';
+import { createCustomRateLimiter } from '../../middlewares/rate-limit.middleware';
 import validation from '../../middlewares/validation.middleware';
 import * as AuthControllers from './auth.controller';
 import * as AuthValidations from './auth.validator';
 
-const authRateLimiter = rateLimiter({
+const authRateLimiter = createCustomRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
 });
 
-const sensitiveRateLimiter = rateLimiter({
+const sensitiveRateLimiter = createCustomRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
   message: 'Too many attempts, please try again after 15 minutes',
