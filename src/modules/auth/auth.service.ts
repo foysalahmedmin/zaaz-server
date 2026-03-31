@@ -2,10 +2,10 @@ import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import httpStatus from 'http-status';
 import { JwtPayload } from 'jsonwebtoken';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import config from '../../config/env';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
-import { sendEmail } from '../../utils/sendEmail';
+import { sendEmail } from '../../utils/send-email';
 import { User } from '../user/user.model';
 import {
     TChangePassword,
@@ -474,5 +474,7 @@ export const emailVerification = async (token: string) => {
 
   return result;
 };
+
+
 
 

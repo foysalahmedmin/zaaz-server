@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import { ExpiresIn } from '../../config/env';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 
@@ -22,5 +22,6 @@ export const verifyToken = (token: string, secret: string) => {
     throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid token');
   }
 };
+
 
 

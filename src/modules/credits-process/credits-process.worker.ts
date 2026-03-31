@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import { emitToUser } from '../../config/rabbitmq';
 import * as CreditsProfitServices from '../credits-profit/credits-profit.service';
 import * as CreditsTransactionServices from '../credits-transaction/credits-transaction.service';
@@ -297,5 +297,6 @@ const getFeatureUsageInfo = async (
     };
   });
 };
+
 
 

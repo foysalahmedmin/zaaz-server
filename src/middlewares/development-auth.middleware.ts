@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
-import AppError from '../builder/AppError';
+import AppError from '../builder/app-error';
 import catchAsync from '/catch-async';
 
 /**
@@ -34,5 +34,6 @@ const developmentAuth = () => {
 };
 
 export default developmentAuth;
+
 
 

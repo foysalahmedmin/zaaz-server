@@ -3,7 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import httpStatus from 'http-status';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'node:path';
-import AppError from '../builder/AppError';
+import AppError from '../builder/app-error';
 import catchAsync from '/catch-async';
 
 export type TStorageResult = {
@@ -298,5 +298,6 @@ const storage = (...files: TStorageFile[]) => {
 };
 
 export default storage;
+
 
 

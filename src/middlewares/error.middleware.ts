@@ -1,12 +1,12 @@
 import { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
-import AppError from '../builder/AppError';
+import AppError from '../builder/app-error';
 import config from '../config/env';
 import { TErrorSources } from '../types/error-response.type';
-import handleCastError from '../utils/errors/handleCastError';
-import handleDuplicateError from '../utils/errors/handleDuplicateError';
-import handleValidationError from '../utils/errors/handleValidationError';
-import handleZodError from '../utils/errors/handleZodError';
+import handleCastError from '../utils/errors/handle-cast-error';
+import handleDuplicateError from '../utils/errors/handle-duplicate-error';
+import handleValidationError from '../utils/errors/handle-validation-error';
+import handleZodError from '../utils/errors/handle-zod-error';
 
 const error: ErrorRequestHandler = (error, _req, res, _next) => {
   let status = 500;
@@ -69,5 +69,10 @@ const error: ErrorRequestHandler = (error, _req, res, _next) => {
 };
 
 export default error;
+
+
+
+
+
 
 

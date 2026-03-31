@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import * as FeatureEndpointServices from '../feature-endpoint/feature-endpoint.service';
 import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
 import * as PackageServices from '../package/package.service';
@@ -226,5 +226,6 @@ export const creditsProcessEnd = async (
     );
   }
 };
+
 
 

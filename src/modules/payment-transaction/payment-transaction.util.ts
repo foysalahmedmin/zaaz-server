@@ -5,7 +5,7 @@ import {
     getTransactionFailedTemplate,
     getTransactionSuccessTemplate,
 } from '../../templates/payment-transaction.temlate';
-import { sendEmail } from '../../utils/sendEmail';
+import { sendEmail } from '../../utils/send-email';
 import { TPaymentTransaction } from './payment-transaction.type';
 
 export const sendPaymentNotificationEmail = async (
@@ -115,5 +115,6 @@ export const sendPaymentNotificationEmail = async (
     }
   })();
 };
+
 
 

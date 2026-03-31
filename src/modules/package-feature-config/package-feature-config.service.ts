@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import { invalidateCacheByPattern, withCache } from '../../utils/cache.util';
 import { FeatureEndpoint } from '../feature-endpoint/feature-endpoint.model';
 import { Feature } from '../feature/feature.model';
@@ -373,5 +373,6 @@ export const deletePackageFeatureConfigPermanent = async (
   // Clear cache
   await clearPackageFeatureConfigCache();
 };
+
 
 

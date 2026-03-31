@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { TErrorResponse, TErrorSources } from '../types/error-response.type';
+import { TErrorResponse, TErrorSources } from '../../types/error-response.type';
 
 const handleCastError = (err: mongoose.Error.CastError): TErrorResponse => {
   const sources: TErrorSources = [

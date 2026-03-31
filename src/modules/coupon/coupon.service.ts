@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import AppAggregationQuery from '../../builder/AppAggregationQuery';
-import AppError from '../../builder/AppError';
+import AppAggregationQuery from '../../builder/app-aggregation-query';
+import AppError from '../../builder/app-error';
 import { PackagePlan } from '../package-plan/package-plan.model';
 import { Coupon } from './coupon.model';
 import { TCoupon } from './coupon.type';
@@ -184,5 +184,7 @@ export const CouponServices = {
   validateCoupon,
   isCouponExist: Coupon.isCouponExist.bind(Coupon),
 };
+
+
 
 

@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
-import AppAggregationQuery from '../../builder/AppAggregationQuery';
-import AppError from '../../builder/AppError';
+import AppAggregationQuery from '../../builder/app-aggregation-query';
+import AppError from '../../builder/app-error';
 import { emitToUser } from '../../config/rabbitmq';
 import { NotificationRecipient } from '../notification-recipient/notification-recipient.model';
 import { TNotificationMetadata } from '../notification-recipient/notification-recipient.type';
@@ -287,5 +287,7 @@ export const notifyUser = async (
 
   emitToUser(userId, 'notification-recipient-created', populatedRecipient);
 };
+
+
 
 

@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
-import { TErrorResponse, TErrorSources } from '../types/error-response.type';
+import { TErrorResponse, TErrorSources } from '../../types/error-response.type';
 
 const handleValidationError = (
-  err: mongoose.Error.validatorError,
+  err: mongoose.Error.ValidationError,
 ): TErrorResponse => {
   const sources: TErrorSources = Object.values(err.errors).map(
     (val: mongoose.Error.ValidatorError | mongoose.Error.CastError) => {

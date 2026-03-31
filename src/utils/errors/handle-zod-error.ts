@@ -1,5 +1,5 @@
 import { ZodError, ZodIssue } from 'zod';
-import { TErrorResponse, TErrorSources } from '../types/error-response.type';
+import { TErrorResponse, TErrorSources } from '../../types/error-response.type';
 
 const handleZodError = (err: ZodError): TErrorResponse => {
   const sources: TErrorSources = err.issues.map((issue: ZodIssue) => {

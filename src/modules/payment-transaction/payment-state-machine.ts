@@ -1,5 +1,5 @@
 import httpStatus from 'http-status';
-import AppError from '../../builder/AppError';
+import AppError from '../../builder/app-error';
 import { TPaymentTransactionStatus } from './payment-transaction.type';
 
 export class PaymentStateMachine {
@@ -46,5 +46,6 @@ export class PaymentStateMachine {
     );
   }
 }
+
 
 
