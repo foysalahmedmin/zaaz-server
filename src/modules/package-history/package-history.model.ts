@@ -122,26 +122,13 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
           updated_at: Date,
         },
         price: {
-          USD: {
-            type: Number,
-            required: true,
-            min: 0,
-          },
-          BDT: {
-            type: Number,
-            required: true,
-            min: 0,
-          },
+          type: Number,
+          required: true,
+          min: [0, 'Price must be 0 or greater'],
         },
         previous_price: {
-          USD: {
-            type: Number,
-            min: 0,
-          },
-          BDT: {
-            type: Number,
-            min: 0,
-          },
+          type: Number,
+          min: [0, 'Previous price must be 0 or greater'],
         },
         credits: {
           type: Number,
