@@ -13,6 +13,7 @@ export type TPackage = {
   sequence?: number;
   is_active: boolean;
   is_initial?: boolean;
+  version?: number;
   is_deleted?: boolean;
 };
 

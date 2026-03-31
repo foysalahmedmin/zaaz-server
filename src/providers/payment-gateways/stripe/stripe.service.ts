@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { TPaymentMethod } from '../../modules/payment-method/payment-method.type';
+import { TPaymentMethod } from '../../../modules/payment-method/payment-method.type';
 import {
   IPaymentGateway,
   InitiatePaymentData,

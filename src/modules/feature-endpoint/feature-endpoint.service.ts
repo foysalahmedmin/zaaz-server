@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { withCache } from '../../utils/cache.util';
+import { withCache } from '../../utils/cache.utils';
 import { clearFeatureCache } from '../feature/feature.service';
 import { FeatureEndpoint } from './feature-endpoint.model';
 import { TFeatureEndpoint } from './feature-endpoint.type';

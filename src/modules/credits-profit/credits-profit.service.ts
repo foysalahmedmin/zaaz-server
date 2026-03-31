@@ -6,7 +6,7 @@ import {
   invalidateCache,
   invalidateCacheByPattern,
   withCache,
-} from '../../utils/cache.util';
+} from '../../utils/cache.utils';
 import { CreditsProfitHistory } from '../credits-profit-history/credits-profit-history.model';
 import { CreditsProfit } from './credits-profit.model';
 import { TCreditsProfit } from './credits-profit.type';

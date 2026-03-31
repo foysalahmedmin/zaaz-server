@@ -5,9 +5,9 @@ import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import AppError from '../builder/app-error';
 import config from '../config/env';
-import { cacheClient } from '../config/broken_was_here_2';
+import { cacheClient } from '../config/redis';
 import { TJwtPayload, TRole } from '../types/jsonwebtoken.type';
-import catchAsync from '/catch-async';
+import catchAsync from '../utils/catch-async';
 
 const DEFAULT_ROLE = 'user';
 

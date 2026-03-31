@@ -15,13 +15,10 @@ export const createUserWalletValidationSchema = z.object({
   body: z.object({
     user: idSchema,
     email: z.string().email('Invalid email format').optional(),
-    package: idSchema.optional(),
     credits: z
       .number({ invalid_type_error: 'Credits must be a number' })
       .int('Credits must be an integer')
       .nonnegative('Credits must be 0 or greater'),
-    expires_at: z.string().datetime().optional(),
-    type: z.enum(['free', 'paid']).optional(),
   }),
 });
 
@@ -35,8 +32,6 @@ export const updateUserWalletValidationSchema = z.object({
       .int('Credits must be an integer')
       .nonnegative('Credits must be 0 or greater')
       .optional(),
-    expires_at: z.string().datetime().optional(),
-    type: z.enum(['free', 'paid']).optional(),
   }),
 });
 
@@ -62,13 +57,6 @@ export const giveInitialCreditsValidationSchema = z.object({
       })
       .int('Credits must be an integer')
       .nonnegative('Credits must be 0 or greater')
-      .optional(),
-    duration: z
-      .number({
-        invalid_type_error: 'Duration must be a number',
-      })
-      .int('Duration must be an integer')
-      .positive('Duration must be greater than 0')
       .optional(),
   }),
 });

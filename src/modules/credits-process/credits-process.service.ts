@@ -4,8 +4,8 @@ import mongoose from 'mongoose';
 import AppError from '../../builder/app-error';
 import * as FeatureEndpointServices from '../feature-endpoint/feature-endpoint.service';
 import * as PackageFeatureConfigServices from '../package-feature-config/package-feature-config.service';
-import * as PackageServices from '../package/package.service';
 import * as UserWalletServices from '../user-wallet/user-wallet.service';
+import * as UserSubscriptionServices from '../user-subscription/user-subscription.service';
 import {
   creditsProcessDuration,
   creditsProcessErrors,
@@ -29,15 +29,16 @@ export const clearCreditsProcessCache = async (
   type: 'billing' | 'ai-model',
   idOrValue?: string,
 ) => {
-  const { invalidateCache } = await import('../../utils/cache.util');
   if (type === 'billing') {
+    const { invalidateCache } = await import('../../utils/cache.utils');
     await invalidateCache('billing-setting:initial');
   } else if (type === 'ai-model') {
     if (idOrValue) {
+      const { invalidateCache } = await import('../../utils/cache.utils');
       await invalidateCache([`ai-model:${idOrValue}`, 'ai-model:initial']);
     } else {
       const { invalidateCacheByPattern } =
-        await import('../../utils/cache.util');
+        await import('../../utils/cache.utils');
       await invalidateCacheByPattern('ai-model:*');
     }
   }
@@ -57,12 +58,13 @@ export const creditsProcessStart = async (
   try {
     // 1. Fetch frequently changing user wallet data directly from DB & frequently accessed endpoint from cache
     // We fetch them in parallel to minimize latency during the "start" phase
-    const [freshWallet, featureEndpoint] = await Promise.all([
+    const [freshWallet, featureEndpoint, activeSubscription] = await Promise.all([
       UserWalletServices.getFreshWallet(user_id),
       FeatureEndpointServices.getPublicFeatureEndpointByIdOrValue({
         _id: feature_endpoint_id,
         value: feature_endpoint_value,
       }),
+      UserSubscriptionServices.getActiveSubscription(user_id)
     ]);
 
     // Validate feature endpoint existence and status
@@ -95,7 +97,6 @@ export const creditsProcessStart = async (
           user: new mongoose.Types.ObjectId(user_id),
           email: user_email,
           credits: 0,
-          type: 'free',
         });
         userCredits = newWallet.credits || 0;
       } catch (walletError: any) {
@@ -110,29 +111,34 @@ export const creditsProcessStart = async (
     } else {
       userCredits = freshWallet.credits || 0;
 
-      // 3. Load package features from cache (to check permissions)
-      if (freshWallet.package) {
-        packageFeatures = await PackageServices.getPackageFeatures(
-          freshWallet.package.toString(),
-        );
+      // 3. Load package features from active subscription (to check permissions)
+      if (activeSubscription?.package_snapshot) {
+        // The package_snapshot (PackageHistory) already embeds its features array
+        packageFeatures = (activeSubscription.package_snapshot as any).features || [];
+      } else {
+        // FALLBACK: If no active subscription, try loading features from the "Initial" package
+        const { Package } = await import('../package/package.model');
+        const initialPackage = (await Package.findOne({ is_initial: true, is_active: true, is_deleted: { $ne: true } }).populate('features').lean()) as any;
+        if (initialPackage) {
+           packageFeatures = initialPackage.features || [];
+        }
       }
     }
 
     // 4. Validate package-restricted features
-    // If a user has a package, we check if the requested feature is explicitly included
+    // If a user has a subscription, we check if the requested feature is explicitly included
     let effectiveConfig: any = null;
-    if (freshWallet?.package && packageFeatures.length > 0) {
+    if (activeSubscription && packageFeatures.length > 0) {
       const featureEndpointFeatureId =
         (featureEndpoint.feature as any)?._id?.toString() ||
         featureEndpoint.feature?.toString();
 
       if (featureEndpointFeatureId) {
         const hasFeatureInPackage = packageFeatures.some((feature: any) => {
-          // Normalize feature ID (could be a string, an ObjectId, or a populated object)
-          const featureId =
-            typeof feature === 'string'
+          // In packageHistory, features are embedded objects with _id referring to the Feature
+          const featureId = typeof feature === 'string'
               ? feature
-              : (feature?._id || feature)?.toString();
+              : (feature?.feature || feature?._id || feature)?.toString();
           return featureId === featureEndpointFeatureId;
         });
 
@@ -141,13 +147,13 @@ export const creditsProcessStart = async (
             user_id,
             credits: userCredits,
             status: 'not-accessible',
-            message: 'Your current package does not include this feature.',
+            message: 'Your current subscription does not include this feature.',
           };
         }
 
         // 4.1 Fetch package-specific configuration if accessible
         effectiveConfig = await PackageFeatureConfigServices.getEffectiveConfig(
-          freshWallet.package.toString(),
+          activeSubscription.package?.toString() || '', // Configs are normally mapped to the root package
           featureEndpointFeatureId,
           featureEndpoint._id!.toString(),
         );

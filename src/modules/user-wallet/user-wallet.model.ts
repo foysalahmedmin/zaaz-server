@@ -19,24 +19,10 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
       lowercase: true,
       index: true,
     },
-    package: {
-      type: Schema.Types.ObjectId,
-      ref: 'Package',
-      default: null,
-    },
-    plan: {
-      type: Schema.Types.ObjectId,
-      ref: 'Plan',
-      default: null,
-      index: true,
-    },
     credits: {
       type: Number,
       required: [true, 'Credits is required'],
       min: [0, 'Credits must be 0 or greater'],
-    },
-    expires_at: {
-      type: Date,
     },
     initial_credits_given: {
       type: Boolean,
@@ -45,11 +31,6 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
     initial_package_given: {
       type: Boolean,
       default: false,
-    },
-    type: {
-      type: String,
-      enum: ['free', 'paid'],
-      default: 'free',
     },
     is_deleted: { type: Boolean, default: false, select: false },
   },
@@ -64,9 +45,6 @@ const userWalletSchema = new Schema<TUserWalletDocument>(
 );
 
 userWalletSchema.index({ created_at: -1 });
-userWalletSchema.index({ package: 1 });
-userWalletSchema.index({ expires_at: 1 });
-userWalletSchema.index({ type: 1 });
 
 // toJSON override to remove sensitive fields from output
 userWalletSchema.methods.toJSON = function () {
@@ -91,11 +69,6 @@ userWalletSchema.pre(/^find/, function (next) {
   next();
 });
 
-// Virtual property to check if the wallet is expired
-userWalletSchema.virtual('is_expired').get(function () {
-  if (!this.expires_at) return false;
-  return new Date() > this.expires_at;
-});
 
 // Aggregation pipeline
 userWalletSchema.pre('aggregate', function (next) {

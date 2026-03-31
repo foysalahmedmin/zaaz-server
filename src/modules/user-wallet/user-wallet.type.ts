@@ -4,15 +4,10 @@ export type TUserWallet = {
   _id?: mongoose.Types.ObjectId;
   user: mongoose.Types.ObjectId;
   email?: string;
-  package?: mongoose.Types.ObjectId | null;
-  plan?: mongoose.Types.ObjectId | null;
   credits: number;
-  expires_at?: Date;
   initial_credits_given?: boolean;
   initial_package_given?: boolean;
-  type: 'free' | 'paid';
   is_deleted?: boolean;
-  is_expired?: boolean;
 };
 
 export interface TUserWalletDocument extends TUserWallet, Document {

@@ -12,6 +12,7 @@ import {
 } from './config/redis';
 import { initializeSocket } from './config/socket';
 import { initializeDB, disconnectDB } from './config/db';
+import { initializeJobs } from './jobs';
 import cluster from 'cluster';
 
 let server: http.Server | null = null;
@@ -60,6 +61,9 @@ const main = async (): Promise<void> => {
     server.listen(config.port, () => {
       console.log(`🚀 Worker ${process.pid} listening on port ${config.port}`);
     });
+
+    // Initialize background jobs
+    initializeJobs();
   } catch (error) {
     console.error('❌ Error starting server:', error);
     process.exit(1);

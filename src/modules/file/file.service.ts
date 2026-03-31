@@ -4,7 +4,7 @@ import httpStatus from 'http-status';
 import { Types } from 'mongoose';
 import path from 'node:path';
 import AppError from '../../builder/app-error';
-import config from '../../config';
+import env from '../../config/env';
 import { TStorageResult } from '../../middlewares/storage.middleware';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { deleteFiles as deleteFilesFromDisk } from '../../utils/delete-files';
@@ -14,11 +14,11 @@ import { getExtensionFromFilename, getFileTypeFromMime } from './file.utils';
 
 // Initialize GCS client
 const storageClient = new Storage({
-  ...(config.gcp.credentials_path && {
-    keyFilename: path.resolve(process.cwd(), config.gcp.credentials_path),
+  ...(env.google_application_credentials && {
+    keyFilename: path.resolve(process.cwd(), env.google_application_credentials),
   }),
-  ...(config.gcp.project_id && {
-    projectId: config.gcp.project_id,
+  ...(env.google_cloud_project_id && {
+    projectId: env.google_cloud_project_id,
   }),
 });
 

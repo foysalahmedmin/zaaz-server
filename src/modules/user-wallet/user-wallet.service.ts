@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { invalidateCache, withCache } from '../../utils/cache.util';
+import { invalidateCache, withCache } from '../../utils/cache.utils';
 import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
 import { PackagePlan } from '../package-plan/package-plan.model';
 import { getPackagePlansByPackage } from '../package-plan/package-plan.service';
@@ -42,28 +42,9 @@ export const createUserWallet = async (
     );
   }
 
-  // Get plan to calculate expires_at if duration exists (if plan is provided and not already in data)
-  let expiresAt: Date | undefined = data.expires_at;
-
-  if (!expiresAt && data.plan) {
-    const planData = await Plan.findById(data.plan)
-      .session(session || null)
-      .lean();
-
-    if (!planData) {
-      throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
-    }
-
-    if (planData.duration) {
-      expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + (planData.duration as number));
-    }
-  }
-
   const walletData = {
     ...data,
     credits: data.credits || 0,
-    expires_at: expiresAt,
   };
 
   const result = await UserWallet.create([walletData], { session });
@@ -83,21 +64,7 @@ export const getSelfUserWallet = async (
     WALLET_CACHE_TTL,
     async () => {
       const wallet = await UserWallet.findOne({ user: userId })
-        .populate({
-          path: 'package',
-          populate: {
-            path: 'features',
-            select: '_id name description type max_word',
-            populate: {
-              path: 'feature_endpoints',
-            },
-          },
-        })
-        .populate({
-          path: 'plan',
-          select: '_id name duration',
-        })
-        .lean({ virtuals: true });
+        .lean();
       return wallet;
     },
   );
@@ -118,29 +85,14 @@ export const getUserWallet = async (
 ): Promise<TUserWallet | null> => {
   return withCache(`user-wallet:${userId}`, WALLET_CACHE_TTL, async () => {
     const result = await UserWallet.findOne({ user: userId })
-      .populate({
-        path: 'package',
-        populate: {
-          path: 'features',
-          select: '_id name description type max_word',
-          populate: {
-            path: 'feature_endpoints',
-          },
-        },
-      })
-      .populate({
-        path: 'plan',
-        select: '_id name duration',
-      })
-      .lean({ virtuals: true }); // Added virtuals: true
+      .lean();
     return result;
   });
 };
 
 export const getUserWalletById = async (id: string): Promise<TUserWallet> => {
   const result = await UserWallet.findById(id)
-    .populate(['package', 'plan'])
-    .lean({ virtuals: true }); // Added .lean({ virtuals: true })
+    .lean();
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
@@ -149,7 +101,7 @@ export const getUserWalletById = async (id: string): Promise<TUserWallet> => {
 
 export const updateUserWallet = async (
   id: string,
-  payload: Partial<Pick<TUserWallet, 'credits' | 'expires_at'>>,
+  payload: Partial<Pick<TUserWallet, 'credits'>>,
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
   const wallet = await UserWallet.findById(id)
@@ -161,9 +113,6 @@ export const updateUserWallet = async (
   }
 
   const updateData: any = { ...payload };
-  if (payload.expires_at) {
-    updateData.expires_at = new Date(payload.expires_at);
-  }
 
   const result = await UserWallet.findByIdAndUpdate(id, updateData, {
     new: true,
@@ -179,13 +128,10 @@ export const updateUserWallet = async (
 
 export const updateUserWalletByUser = async (
   userId: string,
-  payload: Partial<Pick<TUserWallet, 'credits' | 'expires_at'>>,
+  payload: Partial<Pick<TUserWallet, 'credits'>>,
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
   const updateData: any = { ...payload };
-  if (payload.expires_at) {
-    updateData.expires_at = new Date(payload.expires_at);
-  }
 
   const result = await UserWallet.findOneAndUpdate(
     { user: userId },
@@ -252,33 +198,14 @@ export const getUserWallets = async (
     ])
     .search(['email'])
     .filter()
-    .sort(['credits', 'expires_at', 'created_at', 'updated_at'] as any)
+    .sort(['credits', 'created_at', 'updated_at'] as any)
     .paginate()
     .fields();
 
   const result = await appQuery.execute([
     {
-      key: 'active',
-      filter: {
-        $or: [
-          { expires_at: { $exists: false } },
-          { expires_at: { $gte: new Date() } },
-        ],
-      },
-    },
-    {
-      key: 'expired',
-      filter: {
-        expires_at: { $lt: new Date() },
-      },
-    },
-    {
-      key: 'free',
-      filter: { type: 'free' },
-    },
-    {
-      key: 'paid',
-      filter: { type: 'paid' },
+      key: 'all',
+      filter: {},
     },
   ]);
 
@@ -409,7 +336,6 @@ export const restoreUserWallets = async (
 export const giveInitialCredits = async (
   user_id: string,
   credits?: number,
-  duration?: number,
   session?: mongoose.ClientSession,
   email?: string,
 ): Promise<TUserWallet> => {
@@ -421,19 +347,6 @@ export const giveInitialCredits = async (
     .session(session || null)
     .lean();
 
-  // Calculate expires_at if duration is provided (duration in days)
-  let expiresAt: Date | undefined;
-  if (duration && duration > 0) {
-    const now = new Date();
-    const baseDate =
-      existingWallet?.expires_at && existingWallet.expires_at > now
-        ? new Date(existingWallet.expires_at)
-        : now;
-
-    expiresAt = new Date(baseDate);
-    expiresAt.setDate(expiresAt.getDate() + duration);
-  }
-
   // If wallet doesn't exist, create it
   if (!existingWallet) {
     await createUserWallet(
@@ -441,10 +354,7 @@ export const giveInitialCredits = async (
         user: new mongoose.Types.ObjectId(user_id),
         email: email,
         credits: 0,
-        package: null,
         initial_credits_given: false,
-        type: 'free',
-        ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
     );
@@ -459,7 +369,6 @@ export const giveInitialCredits = async (
     {
       $inc: { credits: amount },
       $set: { initial_credits_given: true },
-      ...(expiresAt ? { expires_at: expiresAt } : {}),
     },
     {
       new: true,
@@ -537,9 +446,7 @@ export const giveBonusCredits = async (
         user: new mongoose.Types.ObjectId(user_id),
         email: email,
         credits: 0,
-        package: null,
         initial_credits_given: false,
-        type: 'free',
       },
       session,
     );
@@ -642,19 +549,6 @@ export const giveInitialPackage = async (
     .session(session || null)
     .lean();
 
-  // Calculate expires_at if plan has duration
-  let expiresAt: Date | undefined;
-  if (planData.duration && planData.duration > 0) {
-    const now = new Date();
-    const baseDate =
-      existingWallet?.expires_at && existingWallet.expires_at > now
-        ? new Date(existingWallet.expires_at)
-        : now;
-
-    expiresAt = new Date(baseDate);
-    expiresAt.setDate(expiresAt.getDate() + planData.duration);
-  }
-
   // If wallet doesn't exist, create it
   if (!existingWallet) {
     await createUserWallet(
@@ -662,12 +556,8 @@ export const giveInitialPackage = async (
         user: new mongoose.Types.ObjectId(user_id),
         email: email,
         credits: 0,
-        package: null,
-        plan: null,
         initial_credits_given: false,
         initial_package_given: false,
-        type: 'free',
-        ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
     );
@@ -751,22 +641,10 @@ export const assignPackage = async (
   }
 
   // Check if wallet exists
+  // Check if wallet exists
   const existingWallet = await UserWallet.findOne({ user: user_id })
     .session(session || null)
     .lean();
-
-  // Calculate expires_at if plan has duration
-  let expiresAt: Date | undefined;
-  if (planData.duration && planData.duration > 0) {
-    const now = new Date();
-    const baseDate =
-      existingWallet?.expires_at && existingWallet.expires_at > now
-        ? new Date(existingWallet.expires_at)
-        : now;
-
-    expiresAt = new Date(baseDate);
-    expiresAt.setDate(expiresAt.getDate() + (planData.duration as number));
-  }
 
   // If wallet doesn't exist, create it
   if (!existingWallet) {
@@ -775,18 +653,14 @@ export const assignPackage = async (
         user: new mongoose.Types.ObjectId(user_id),
         email: email,
         credits: 0,
-        package: null,
-        plan: null,
         initial_credits_given: false,
         initial_package_given: false,
-        type: 'free',
-        ...(expiresAt ? { expires_at: expiresAt } : {}),
       },
       session,
     );
   }
 
-  // Update wallet: add credits and set package/plan
+  // Update wallet: add credits
   const filter: any = { user: user_id };
   if (is_initial) {
     filter.initial_package_given = { $ne: true };
@@ -795,11 +669,7 @@ export const assignPackage = async (
   const update: any = {
     $inc: { credits: packagePlan.credits },
     $set: {
-      package: package_id,
-      plan: plan_id,
-      ...(increase_source === 'payment' ? { type: 'paid' } : {}),
       ...(is_initial ? { initial_package_given: true } : {}),
-      ...(expiresAt ? { expires_at: expiresAt } : {}),
     },
   };
 
@@ -807,6 +677,50 @@ export const assignPackage = async (
     new: true,
     runValidators: true,
   }).session(session || null);
+
+  // Calculate subscription expires_at if plan has duration
+  let expiresAt: Date;
+  const now = new Date();
+  if (planData.duration && planData.duration > 0) {
+    expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + (planData.duration as number));
+  } else {
+    // Arbitrary long date for lifetime plans if any
+    expiresAt = new Date(now);
+    expiresAt.setFullYear(expiresAt.getFullYear() + 100);
+  }
+
+  // Fetch target package to get active version
+  const { Package } = await import('../package/package.model');
+  const targetPackage = await Package.findById(package_id).session(session || null).lean();
+  let snapshotId = null;
+
+  if (targetPackage) {
+    const { PackageHistory } = await import('../package-history/package-history.model');
+    const history = await PackageHistory.findOne({ package: package_id, version: targetPackage.version || 1 })
+      .session(session || null).sort({ created_at: -1 }).lean();
+    if (history) {
+      snapshotId = history._id;
+    } else {
+      // Fallback if versioning just booted up
+      const latestHistory = await PackageHistory.findOne({ package: package_id })
+        .session(session || null).sort({ created_at: -1 }).lean();
+      snapshotId = latestHistory?._id || package_id; // Using package_id as a very unsafe dummy if needed
+    }
+  }
+
+  const { createSubscription } = await import('../user-subscription/user-subscription.service');
+  await createSubscription({
+    user: new mongoose.Types.ObjectId(user_id),
+    package: new mongoose.Types.ObjectId(package_id),
+    package_snapshot: snapshotId,
+    plan: new mongoose.Types.ObjectId(plan_id),
+    status: 'active',
+    current_period_start: now,
+    current_period_end: expiresAt,
+    cancel_at_period_end: false,
+    auto_renew: true,
+  }, session);
 
   if (!updatedWallet) {
     if (is_initial) {

@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { withCache } from '../../utils/cache.util';
+import { withCache } from '../../utils/cache.utils';
 import { AiModelHistory } from '../ai-model-history/ai-model-history.model';
 import { clearCreditsProcessCache } from '../credits-process/credits-process.service';
 import { DEFAULT_AI_MODEL } from './ai-model.constant';

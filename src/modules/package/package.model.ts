@@ -55,6 +55,10 @@ const packageSchema = new Schema<TPackageDocument>(
       default: false,
       index: true,
     },
+    version: {
+      type: Number,
+      default: 1,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {

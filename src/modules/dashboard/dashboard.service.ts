@@ -1,4 +1,4 @@
-import { withCache } from '../../utils/cache.util';
+import { withCache } from '../../utils/cache.utils';
 import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
 import { Feature } from '../feature/feature.model';
 import { PaymentTransaction } from '../payment-transaction/payment-transaction.model';

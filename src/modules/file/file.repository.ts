@@ -4,7 +4,7 @@
  * Handles ALL direct database interactions for the File/Media module.
  */
 
-import AppQueryFind from '../../builder/app-query-find';
+import AppQueryAggregation from '../../builder/app-aggregation-query';
 import { File } from './file.model';
 import { TFile, TFileDocument } from './file.type';
 
@@ -62,14 +62,13 @@ export const findPaginated = async (
   data: TFile[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const fileQuery = new AppQueryFind(File, { ...query, ...filterOverride })
+  const fileQuery = new AppQueryAggregation(File, { ...query, ...filterOverride })
     .populate([{ path: 'author', select: '_id name email image' }])
     .search(['filename', 'originalname', 'name', 'description'])
     .filter()
     .sort()
     .paginate()
     .fields()
-    .tap((q) => q.lean());
 
   return await fileQuery.execute([
     { key: 'active', filter: { status: 'active' } },

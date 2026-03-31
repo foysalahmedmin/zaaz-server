@@ -1,6 +1,6 @@
 import axios from 'axios';
 import https from 'https';
-import { TPaymentMethod } from '../../modules/payment-method/payment-method.type';
+import { TPaymentMethod } from '../../../modules/payment-method/payment-method.type';
 import {
   IPaymentGateway,
   InitiatePaymentData,

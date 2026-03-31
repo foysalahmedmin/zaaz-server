@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/app-error';
-import { invalidateCacheByPattern, withCache } from '../../utils/cache.util';
+import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
 import { FeatureEndpoint } from '../feature-endpoint/feature-endpoint.model';
 import { Feature } from '../feature/feature.model';
 import { Package } from '../package/package.model';

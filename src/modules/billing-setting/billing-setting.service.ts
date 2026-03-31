@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { withCache } from '../../utils/cache.util';
+import { withCache } from '../../utils/cache.utils';
 import { BillingSettingHistory } from '../billing-setting-history/billing-setting-history.model';
 import { clearCreditsProcessCache } from '../credits-process/credits-process.service';
 import { DEFAULT_BILLING_SETTING } from './billing-setting.constant';

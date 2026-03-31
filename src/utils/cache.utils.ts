@@ -1,5 +1,5 @@
 import config from '../config/env';
-import { cacheClient } from '../config/broken_was_here_2';
+import { cacheClient } from '../config/redis';
 
 /**
  * Higher-order function to wrap a function with caching logic.

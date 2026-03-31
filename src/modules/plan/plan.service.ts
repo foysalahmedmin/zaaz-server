@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { invalidateCacheByPattern, withCache } from '../../utils/cache.util';
+import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
 import { Plan } from './plan.model';
 import { TPlan } from './plan.type';
 

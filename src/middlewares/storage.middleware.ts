@@ -4,7 +4,7 @@ import httpStatus from 'http-status';
 import multer, { FileFilterCallback } from 'multer';
 import path from 'node:path';
 import AppError from '../builder/app-error';
-import catchAsync from '/catch-async';
+import catchAsync from '../utils/catch-async';
 
 export type TStorageResult = {
   fieldName: string;

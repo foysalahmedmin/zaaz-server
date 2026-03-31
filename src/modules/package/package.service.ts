@@ -236,9 +236,38 @@ export const createPackage = async (
   // Clear cache after creation
   await clearPackageCache();
 
-  // Return populated package manually constructing the response would be best,
-  // OR fetch it again using getPackage
   const createdPackage = await getPackage(packageId);
+
+  const embeddedFeatures = (createdPackage.features || []).map((feature: any) => ({ ...feature }));
+  const embeddedPlans = (createdPackage.plans || []).map((pp: any) => ({
+    _id: pp._id,
+    plan: pp.plan,
+    price: pp.price,
+    previous_price: pp.previous_price,
+    credits: pp.credits,
+    is_initial: pp.is_initial,
+    is_active: pp.is_active,
+    created_at: pp.created_at,
+    updated_at: pp.updated_at,
+  }));
+
+  await PackageHistory.create([{
+    package: packageId,
+    value: createdPackage.value,
+    name: createdPackage.name,
+    description: createdPackage.description,
+    content: createdPackage.content,
+    type: createdPackage.type,
+    badge: createdPackage.badge,
+    points: createdPackage.points,
+    features: embeddedFeatures,
+    plans: embeddedPlans,
+    sequence: createdPackage.sequence,
+    is_active: createdPackage.is_active,
+    version: createdPackage.version || 1,
+    is_deleted: createdPackage.is_deleted,
+  }], { session });
+
   return createdPackage;
 };
 
@@ -432,51 +461,6 @@ export const updatePackage = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  // Get populated package data for history
-  const populatedPackage = await getPackage(id);
-
-  // Transform features (already populated arrays from getPackage)
-  // Ensure they are in the format expected for history (embedded objects)
-  const embeddedFeatures = (populatedPackage.features || []).map(
-    (feature: any) => ({
-      ...feature,
-      // If we need specific fields only, we can pick them, but full object is fine for history usually
-    }),
-  );
-
-  const embeddedPlans = (populatedPackage.plans || []).map((pp: any) => ({
-    _id: pp._id,
-    plan: pp.plan, // Should be full object
-    price: pp.price,
-    previous_price: pp.previous_price,
-    credits: pp.credits,
-    is_initial: pp.is_initial,
-    is_active: pp.is_active,
-    created_at: pp.created_at,
-    updated_at: pp.updated_at,
-  }));
-
-  // Create history
-  await PackageHistory.create(
-    [
-      {
-        package: id,
-        value: packageData.value,
-        name: packageData.name,
-        description: packageData.description,
-        content: packageData.content,
-        type: packageData.type,
-        badge: packageData.badge,
-        points: packageData.points,
-        features: embeddedFeatures,
-        plans: embeddedPlans,
-        sequence: packageData.sequence,
-        is_active: packageData.is_active,
-        is_deleted: packageData.is_deleted,
-      },
-    ],
-    { session },
-  );
 
   // Handle Plans Sync (Complex logic preserved)
   if (payload.plans !== undefined) {
@@ -644,7 +628,11 @@ export const updatePackage = async (
 
   // Update package fields
   const { plans, features, ...packageFieldsToUpdate } = payload;
-  await Package.findByIdAndUpdate(id, packageFieldsToUpdate, {
+  
+  const currentVersion = packageData.version || 1;
+  const nextVersion = currentVersion + 1;
+  
+  await Package.findByIdAndUpdate(id, { ...packageFieldsToUpdate, version: nextVersion }, {
     new: true,
     runValidators: true,
   }).session(session || null);
@@ -652,7 +640,40 @@ export const updatePackage = async (
   // Clear cache after update
   await clearPackageCache();
 
-  return await getPackage(id);
+  const finalPopulatedPackage = await getPackage(id);
+
+  const finalEmbeddedFeatures = (finalPopulatedPackage.features || []).map((feature: any) => ({ ...feature }));
+  const finalEmbeddedPlans = (finalPopulatedPackage.plans || []).map((pp: any) => ({
+    _id: pp._id,
+    plan: pp.plan,
+    price: pp.price,
+    previous_price: pp.previous_price,
+    credits: pp.credits,
+    is_initial: pp.is_initial,
+    is_active: pp.is_active,
+    created_at: pp.created_at,
+    updated_at: pp.updated_at,
+  }));
+
+  // Create history capturing the completely updated snapshot for version stability
+  await PackageHistory.create([{
+    package: id,
+    value: finalPopulatedPackage.value,
+    name: finalPopulatedPackage.name,
+    description: finalPopulatedPackage.description,
+    content: finalPopulatedPackage.content,
+    type: finalPopulatedPackage.type,
+    badge: finalPopulatedPackage.badge,
+    points: finalPopulatedPackage.points,
+    features: finalEmbeddedFeatures,
+    plans: finalEmbeddedPlans,
+    sequence: finalPopulatedPackage.sequence,
+    is_active: finalPopulatedPackage.is_active,
+    version: finalPopulatedPackage.version || nextVersion,
+    is_deleted: finalPopulatedPackage.is_deleted,
+  }], { session });
+
+  return finalPopulatedPackage;
 };
 
 export const updatePackages = async (

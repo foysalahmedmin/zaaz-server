@@ -1,4 +1,4 @@
-import { RabbitMQ } from '../config/broken_was_here_2';
+import { RabbitMQ } from '../config/rabbitmq';
 import { TFeatureUsageLogFromServer } from './feature-usage-log.type';
 
 const FEATURE_USAGE_QUEUE = 'feature_usage_queue';

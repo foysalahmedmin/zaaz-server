@@ -155,6 +155,10 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
     is_active: {
       type: Boolean,
     },
+    version: {
+      type: Number,
+      default: 1,
+    },
     is_deleted: { type: Boolean, default: false, select: false },
   },
   {

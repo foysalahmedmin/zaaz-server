@@ -52,6 +52,7 @@ export type TPackageHistory = {
   plans: TPackagePlanHistory[];
   sequence?: number;
   is_active?: boolean;
+  version?: number;
   is_deleted?: boolean;
 };
 

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { TPaymentMethod } from '../../modules/payment-method/payment-method.type';
+import { TPaymentMethod } from '../../../modules/payment-method/payment-method.type';
 import {
   IPaymentGateway,
   InitiatePaymentData,
