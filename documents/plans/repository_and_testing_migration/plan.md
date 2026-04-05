@@ -86,7 +86,10 @@ Currently, many services (except `File`) directly interact with Mongoose models.
 
 ### 4. Migration Plan (Iterative & Verified)
 
-**Crucial Rule:** One module at a time. After implementing the Repository and Tests for a module, the tests *MUST* be run and confirmed successful before starting the next module.
+**Crucial Rule:** One module at a time. After implementing the Repository and Tests for a module:
+1. **Run Tests:** Confirm successful execution (`npm test [module]`).
+2. **Mark Tasks:** Check off the corresponding box in `tasks.md`.
+3. **GIT COMMIT:** Commit the module-specific changes BEFORE starting the next module.
 
 ### Phase 1: Core Modules
 - **User Module** (Verified ✅)
