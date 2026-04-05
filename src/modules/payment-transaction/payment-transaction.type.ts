@@ -9,6 +9,7 @@ export type TPaymentTransactionStatus =
 export type TCurrency = 'USD' | 'BDT';
 
 export type TPaymentTransaction = {
+  _id?: mongoose.Types.ObjectId;
   user: mongoose.Types.ObjectId;
   email?: string;
   user_wallet: mongoose.Types.ObjectId;

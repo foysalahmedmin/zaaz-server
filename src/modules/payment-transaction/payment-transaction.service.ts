@@ -12,9 +12,8 @@ import { PaymentMethod } from '../payment-method/payment-method.model';
 import { Plan } from '../plan/plan.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { getPriceInCurrency } from '../../utils/currency.utils';
-import { PaymentAuditLog } from './payment-audit.model';
 import { PaymentStateMachine } from './payment-state-machine';
-import { PaymentTransaction } from './payment-transaction.model';
+import * as PaymentTransactionRepository from './payment-transaction.repository';
 import { TPaymentTransaction } from './payment-transaction.type';
 import { sendPaymentNotificationEmail } from './payment-transaction.util';
 import { handlePaymentCompleted } from './payment.consumers';
@@ -47,8 +46,8 @@ export const createPaymentTransaction = async (
     data.email = wallet.email;
   }
 
-  const result = await PaymentTransaction.create([data], { session });
-  return result[0].toObject();
+  const result = await PaymentTransactionRepository.create([data], { session });
+  return result[0];
 };
 
 export const updatePaymentTransactionStatus = async (
@@ -58,9 +57,10 @@ export const updatePaymentTransactionStatus = async (
   auditMetadata?: any,
   additionalUpdates?: Partial<TPaymentTransaction>,
 ): Promise<TPaymentTransaction> => {
-  const transaction = await PaymentTransaction.findById(id)
-    .session(session || null)
-    .lean();
+  const transaction = await PaymentTransactionRepository.findByIdWithSession(
+    id,
+    session || null,
+  );
 
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
@@ -93,15 +93,11 @@ export const updatePaymentTransactionStatus = async (
   }
 
   // 2. Perform Atomic Update
-  const updatedTransaction = await PaymentTransaction.findByIdAndUpdate(
+  const updatedTransaction = await PaymentTransactionRepository.updateByIdWithSession(
     id,
     updateData,
-    {
-      new: true,
-      session,
-      runValidators: true,
-    },
-  ).lean();
+    session || null,
+  );
 
   if (!updatedTransaction) {
     throw new AppError(
@@ -112,7 +108,7 @@ export const updatePaymentTransactionStatus = async (
 
   // 3. Create Audit Log (Best effort, non-blocking)
   try {
-    PaymentAuditLog.create([
+    PaymentTransactionRepository.createAuditLog([
       {
         transactionId: id,
         previousStatus: transaction.status,
@@ -171,7 +167,7 @@ export const updatePaymentTransactionStatus = async (
     // Handle failure side effects (e.g. Email)
     if (updatedTransaction.email) {
       try {
-        sendPaymentNotificationEmail('failed', updatedTransaction);
+        sendPaymentNotificationEmail('failed', updatedTransaction as any);
       } catch (e) {
         console.error('Failed to send failure email', e);
       }
@@ -213,7 +209,7 @@ export const getPaymentTransactions = async (
   }
 
   const paymentTransactionQuery = new AppAggregationQuery<TPaymentTransaction>(
-    PaymentTransaction,
+    PaymentTransactionRepository.PaymentTransaction,
     { ...rest, ...filter },
   );
 
@@ -271,7 +267,7 @@ export const getPaymentTransaction = async (
   id: string,
   userId?: string,
 ): Promise<TPaymentTransaction> => {
-  const result = await PaymentTransaction.findById(id)
+  const result = await PaymentTransactionRepository.PaymentTransaction.findById(id)
     .populate([
       { path: 'user_wallet', select: '_id credits' },
       { path: 'payment_method', select: '_id name currencies' },
@@ -320,7 +316,7 @@ export const getPaymentTransactionStatus = async (
   return_url?: string;
   cancel_url?: string;
 }> => {
-  const transaction = await PaymentTransaction.findById(id)
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findById(id)
     .select(
       'status gateway_status amount currency user payment_method return_url cancel_url',
     )
@@ -398,7 +394,7 @@ export const verifyPayment = async (
   status: string;
   transaction: TPaymentTransaction;
 }> => {
-  const transaction = await PaymentTransaction.findById(id)
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findById(id)
     .session(session || null)
     .populate('payment_method')
     // Note: user is NOT populated because user database is separate
@@ -447,12 +443,12 @@ export const verifyPayment = async (
 
     // Update transaction with latest gateway status
     if (verificationResult.status !== transaction.gateway_status) {
-      await PaymentTransaction.findByIdAndUpdate(
+      await PaymentTransactionRepository.updateByIdWithSession(
         id,
         {
           gateway_status: verificationResult.status,
         },
-        { session },
+        session || null,
       );
     }
 
@@ -467,9 +463,10 @@ export const verifyPayment = async (
         reason: 'Payment verified successfully at gateway',
         metadata: verificationResult,
       });
-      const updatedTransaction = await PaymentTransaction.findById(id)
-        .session(session || null)
-        .lean();
+      const updatedTransaction = await PaymentTransactionRepository.findByIdWithSession(
+        id,
+        session || null,
+      );
       return {
         verified: true,
         status: 'success',
@@ -497,9 +494,10 @@ export const verifyPayment = async (
           failure_reason: 'Payment verification failed',
         },
       );
-      const updatedTransaction = await PaymentTransaction.findById(id)
-        .session(session || null)
-        .lean();
+      const updatedTransaction = await PaymentTransactionRepository.findByIdWithSession(
+        id,
+        session || null,
+      );
       return {
         verified: false,
         status: 'failed',
@@ -521,25 +519,22 @@ export const verifyPayment = async (
 };
 
 export const deletePaymentTransaction = async (id: string): Promise<void> => {
-  const transaction = await PaymentTransaction.findById(id).lean();
-  if (!transaction) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
-  }
-
-  await PaymentTransaction.findByIdAndUpdate(id, { is_deleted: true });
+  await PaymentTransactionRepository.updateById(id, { is_deleted: true });
 };
 
 export const deletePaymentTransactionPermanent = async (
   id: string,
 ): Promise<void> => {
-  const transaction = await PaymentTransaction.findById(id).setOptions({
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findById(id).setOptions({
     bypassDeleted: true,
   });
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
   }
 
-  await PaymentTransaction.findByIdAndDelete(id);
+  await PaymentTransactionRepository.PaymentTransaction.findByIdAndDelete(id).setOptions({
+    bypassDeleted: true,
+  });
 };
 
 export const deletePaymentTransactions = async (
@@ -548,15 +543,13 @@ export const deletePaymentTransactions = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const transactions = await PaymentTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
+  const transactions = await PaymentTransactionRepository.findMany(ids);
+  const foundIds = transactions.map((transaction: any) =>
     transaction._id.toString(),
   );
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await PaymentTransaction.updateMany(
+  await PaymentTransactionRepository.PaymentTransaction.updateMany(
     { _id: { $in: foundIds } },
     { is_deleted: true },
   );
@@ -573,15 +566,13 @@ export const deletePaymentTransactionsPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const transactions = await PaymentTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
+  const transactions = await PaymentTransactionRepository.findMany(ids);
+  const foundIds = transactions.map((transaction: any) =>
     transaction._id.toString(),
   );
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await PaymentTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
+  await PaymentTransactionRepository.PaymentTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
     bypassDeleted: true,
   });
 
@@ -594,7 +585,7 @@ export const deletePaymentTransactionsPermanent = async (
 export const restorePaymentTransaction = async (
   id: string,
 ): Promise<TPaymentTransaction> => {
-  const transaction = await PaymentTransaction.findOneAndUpdate(
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findOneAndUpdate(
     { _id: id, is_deleted: true },
     { is_deleted: false },
     { new: true },
@@ -616,15 +607,13 @@ export const restorePaymentTransactions = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await PaymentTransaction.updateMany(
+  const result = await PaymentTransactionRepository.PaymentTransaction.updateMany(
     { _id: { $in: ids }, is_deleted: true },
     { is_deleted: false },
   );
 
-  const restoredTransactions = await PaymentTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredTransactions.map((transaction) =>
+  const restoredTransactions = await PaymentTransactionRepository.findMany(ids);
+  const restoredIds = restoredTransactions.map((transaction: any) =>
     transaction._id.toString(),
   );
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
@@ -767,17 +756,17 @@ export const initiatePayment = async (options: {
   }
 
   // Create payment transaction with frontend URLs stored
-  const paymentTransaction = await PaymentTransaction.create(
+  const paymentTransaction = await PaymentTransactionRepository.create(
     [
       {
-        user: userId,
+        user: new mongoose.Types.ObjectId(userId),
         email: customerEmail,
         user_wallet: wallet._id,
         status: 'pending',
-        payment_method: paymentMethodId,
+        payment_method: new mongoose.Types.ObjectId(paymentMethodId),
         gateway_transaction_id: '',
-        package: packageId,
-        plan: planId,
+        package: new mongoose.Types.ObjectId(packageId),
+        plan: new mongoose.Types.ObjectId(planId),
         price: packagePlan._id, // Store package-plan document _id
         coupon: couponId,
         discount_amount: discountAmount,
@@ -816,8 +805,8 @@ export const initiatePayment = async (options: {
     });
 
     // Update transaction with gateway ID and session ID
-    await PaymentTransaction.findByIdAndUpdate(
-      paymentTransaction[0]._id,
+    await PaymentTransactionRepository.updateByIdWithSession(
+      paymentTransaction[0]._id!,
       {
         gateway_transaction_id: paymentResponse.gatewayTransactionId,
         gateway_session_id: paymentResponse.gatewayTransactionId, // For Stripe, session ID is same as transaction ID
@@ -827,18 +816,18 @@ export const initiatePayment = async (options: {
           clientSecret: paymentResponse.clientSecret,
         },
       },
-      { session },
+      session || null,
     );
 
     return {
-      payment_transaction: paymentTransaction[0].toObject(),
+      payment_transaction: paymentTransaction[0],
       redirect_url: paymentResponse.redirectUrl,
       payment_url: paymentResponse.paymentUrl,
     };
   } catch (error: any) {
     // If gateway call fails, mark transaction as failed
-    await PaymentTransaction.findByIdAndUpdate(
-      paymentTransaction[0]._id,
+    await PaymentTransactionRepository.updateByIdWithSession(
+      paymentTransaction[0]._id!,
       {
         status: 'failed',
         failure_reason: `Gateway initiation failed: ${error.message}`,
@@ -847,7 +836,7 @@ export const initiatePayment = async (options: {
           error: error.message,
         },
       },
-      { session },
+      session || null,
     );
 
     throw new AppError(
@@ -883,7 +872,7 @@ export const handlePaymentRedirect = async (params: {
   }
 
   // 2. Fetch Transaction
-  const transaction = await PaymentTransaction.findById(transactionId)
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findById(transactionId)
     .populate('payment_method')
     .lean();
   if (!transaction) {
@@ -974,7 +963,7 @@ const findTransactionByGatewayId = async (
   transactionId: string,
   session?: mongoose.ClientSession,
 ): Promise<(TPaymentTransaction & { _id: mongoose.Types.ObjectId }) | null> => {
-  return await PaymentTransaction.findOne({
+  return await PaymentTransactionRepository.PaymentTransaction.findOne({
     $or: [
       { gateway_transaction_id: transactionId },
       { gateway_session_id: transactionId },

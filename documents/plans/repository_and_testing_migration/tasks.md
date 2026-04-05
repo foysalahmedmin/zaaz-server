@@ -27,11 +27,11 @@
 
 ### 💸 Payment Transaction Module
 **Migration Flow:** `payment-transaction.repository.ts` ➔ `payment-transaction.service.ts` ➔ `tests` ➔ `VERIFY` ➔ `GIT COMMIT` ✅
-- [ ] Create `payment-transaction.repository.ts`.
-- [ ] Refactor `payment-transaction.service.ts`.
-- [ ] Implement service and route tests.
-- [ ] **Run & Verify Tests** (`npm test src/modules/payment-transaction`).
-- [ ] **Mark Task & GIT COMMIT**.
+- [x] Create `payment-transaction.repository.ts`.
+- [x] Refactor `payment-transaction.service.ts`.
+- [x] Implement service and route tests.
+- [x] **Run & Verify Tests** (`npm test src/modules/payment-transaction`).
+- [x] **Mark Task & GIT COMMIT** ✅
 
 ---
 
