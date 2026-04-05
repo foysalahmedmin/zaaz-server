@@ -18,7 +18,7 @@ const config = {
 
   // 🔐 Security Configuration
   bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS as string,
-  session_secret: process.env.SESSION_SECRET as string,
+  session_secret: (process.env.SESSION_SECRET as string) || 'default_session_secret',
   server_api_key: process.env.SERVER_API_KEY as string,
   default_password: process.env.DEFAULT_PASSWORD as string,
 

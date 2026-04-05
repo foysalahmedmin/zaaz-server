@@ -6,7 +6,7 @@ import {
     RateLimiterRes,
 } from 'rate-limiter-flexible';
 import config from '../../config/env';
-import { cacheClient } from '../../config/rabbitmq';
+import { cacheClient } from '../../config/redis';
 
 /**
  * Create rate limiter based on Redis availability

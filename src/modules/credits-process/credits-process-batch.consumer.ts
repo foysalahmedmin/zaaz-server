@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { RabbitMQ } from '../../config/rabbitmq';
-import { emitToUser } from '../../config/rabbitmq';
+import { emitToUser } from '../../config/socket';
 import { TCreditsProcessEndMultimodelPayload } from './credits-process.type';
 import { creditsProcessEndValidationSchema } from './credits-process.validator';
 import * as CreditsProcessWorker from './credits-process.worker';

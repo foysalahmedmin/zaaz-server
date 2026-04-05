@@ -142,12 +142,11 @@ export const restoreUserWallets = catchAsync(async (req, res) => {
 });
 
 export const giveInitialCredits = catchAsync(async (req, res) => {
-  const { user_id, credits, duration, email } = req.body;
+  const { user_id, credits, email } = req.body;
 
   const result = await UserWalletServices.giveInitialCredits(
     user_id,
     credits,
-    duration,
     undefined, // session
     email,
   );

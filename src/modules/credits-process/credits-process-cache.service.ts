@@ -1,6 +1,6 @@
 import { LRUCache } from 'lru-cache';
 import config from '../../config/env';
-import { cacheClient } from '../../config/rabbitmq';
+import { cacheClient } from '../../config/redis';
 import {
     creditsCacheHits,
     creditsCacheMisses,

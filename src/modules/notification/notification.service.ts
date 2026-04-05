@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { emitToUser } from '../../config/rabbitmq';
+import { emitToUser } from '../../config/socket';
 import { NotificationRecipient } from '../notification-recipient/notification-recipient.model';
 import { TNotificationMetadata } from '../notification-recipient/notification-recipient.type';
 import { User } from '../user/user.model';

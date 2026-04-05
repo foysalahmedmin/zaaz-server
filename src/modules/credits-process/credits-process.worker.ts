@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
 import AppError from '../../builder/app-error';
-import { emitToUser } from '../../config/rabbitmq';
+import { emitToUser } from '../../config/socket';
 import * as CreditsProfitServices from '../credits-profit/credits-profit.service';
 import * as CreditsTransactionServices from '../credits-transaction/credits-transaction.service';
 import * as FeatureEndpointServices from '../feature-endpoint/feature-endpoint.service';

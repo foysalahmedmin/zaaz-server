@@ -5,6 +5,7 @@ export type TStatus = 'in-progress' | 'blocked';
 export type TAuthSource = 'email' | 'google';
 
 export type TUser = {
+  _id: string | any;
   image?: string;
   name: string;
   email: string;

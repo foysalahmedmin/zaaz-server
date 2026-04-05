@@ -1,13 +1,12 @@
 import httpStatus from 'http-status';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { deleteFiles } from '../../utils/delete-files';
-import { User } from './user.model';
+import * as UserRepository from './user.repository';
 import { TUser } from './user.type';
 
 export const getUser = async (id: string): Promise<TUser> => {
-  const result = await User.findById(id).lean();
+  const result = await UserRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
@@ -20,13 +19,7 @@ export const getWritersUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppAggregationQuery<TUser>(User, query);
-  userQuery.pipeline([{ $match: { role: { $in: ['admin', 'author'] } } }]);
-
-  userQuery.search(['name', 'email']).filter().sort().paginate().fields();
-
-  const result = await userQuery.execute();
-
+  const result = await UserRepository.findWritersPaginated(query);
   return result;
 };
 
@@ -36,35 +29,7 @@ export const getUsers = async (
   data: TUser[];
   meta: { total: number; page: number; limit: number };
 }> => {
-  const userQuery = new AppAggregationQuery<TUser>(User, query)
-    .search(['name', 'email', 'image'])
-    .filter()
-    .sort([
-      'name',
-      'email',
-      'role',
-      'status',
-      'created_at',
-      'updated_at',
-    ] as any)
-    .paginate()
-    .fields();
-
-  const result = await userQuery.execute([
-    {
-      key: 'in-progress',
-      filter: { status: 'in-progress' },
-    },
-    {
-      key: 'blocked',
-      filter: { status: 'blocked' },
-    },
-    {
-      key: 'admin',
-      filter: { role: 'admin' },
-    },
-  ]);
-
+  const result = await UserRepository.findPaginated(query);
   return result;
 };
 
@@ -72,13 +37,13 @@ export const updateSelf = async (
   user: TJwtPayload,
   payload: Partial<Pick<TUser, 'name' | 'email' | 'image'>>,
 ): Promise<TUser> => {
-  const data = await User.findById(user._id);
+  const data = await UserRepository.findById(user._id);
   if (!data) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
   if (payload.email && data.email !== payload.email) {
-    const emailExists = await User.findOne({ email: payload.email }).lean();
+    const emailExists = await UserRepository.findByEmail(payload.email);
     if (emailExists) {
       throw new AppError(httpStatus.CONFLICT, 'Email already exists');
     }
@@ -89,14 +54,10 @@ export const updateSelf = async (
     payload.image = payload.image || '';
   }
 
-  const result = await User.findByIdAndUpdate(
-    user._id,
-    { ...payload, $inc: { token_version: 1 } },
-    {
-      new: true,
-      runValidators: true,
-    },
-  );
+  const result = await UserRepository.updateById(user._id, {
+    ...payload,
+    $inc: { token_version: 1 },
+  });
 
   return result!;
 };
@@ -107,19 +68,15 @@ export const updateUser = async (
     Pick<TUser, 'name' | 'email' | 'role' | 'status' | 'is_verified'>
   >,
 ): Promise<TUser> => {
-  const data = await User.findById(id);
+  const data = await UserRepository.findById(id);
   if (!data) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  const updatedUser = await User.findByIdAndUpdate(
-    id,
-    { ...payload, $inc: { token_version: 1 } },
-    {
-      new: true,
-      runValidators: true,
-    },
-  );
+  const updatedUser = await UserRepository.updateById(id, {
+    ...payload,
+    $inc: { token_version: 1 },
+  });
 
   return updatedUser!;
 };
@@ -131,14 +88,14 @@ export const updateUsers = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const users = await User.find({ _id: { $in: ids } }).lean();
+  const users = await UserRepository.findMany(ids);
   const foundIds = users.map((user) => user._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  const result = await User.updateMany(
-    { _id: { $in: foundIds } },
-    { ...payload, $inc: { token_version: 1 } },
-  );
+  const result = await UserRepository.updateManyByIds(foundIds, {
+    ...payload,
+    $inc: { token_version: 1 },
+  });
 
   return {
     count: result.modifiedCount,
@@ -147,21 +104,21 @@ export const updateUsers = async (
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-  const user = await User.findById(id);
+  const user = await UserRepository.findById(id);
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  await user.softDelete();
+  await UserRepository.softDeleteById(id);
 };
 
 export const deleteUserPermanent = async (id: string): Promise<void> => {
-  const user = await User.findById(id).setOptions({ bypassDeleted: true });
+  const user = await UserRepository.findByIdWithDeleted(id);
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  await User.findByIdAndDelete(id);
+  await UserRepository.hardDeleteById(id);
 };
 
 export const deleteUsers = async (
@@ -170,11 +127,11 @@ export const deleteUsers = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const users = await User.find({ _id: { $in: ids } }).lean();
+  const users = await UserRepository.findMany(ids);
   const foundIds = users.map((user) => user._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await User.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  await UserRepository.softDeleteManyByIds(foundIds);
 
   return {
     count: foundIds.length,
@@ -188,13 +145,11 @@ export const deleteUsersPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const users = await User.find({ _id: { $in: ids } }).lean();
+  const users = await UserRepository.findManyWithDeleted(ids);
   const foundIds = users.map((user) => user._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await User.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
+  await UserRepository.hardDeleteManyByIds(foundIds);
 
   return {
     count: foundIds.length,
@@ -203,11 +158,7 @@ export const deleteUsersPermanent = async (
 };
 
 export const restoreUser = async (id: string): Promise<TUser> => {
-  const user = await User.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  );
+  const user = await UserRepository.restoreById(id);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found or not deleted');
@@ -222,12 +173,9 @@ export const restoreUsers = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await User.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+  const result = await UserRepository.restoreManyByIds(ids);
 
-  const restoredUsers = await User.find({ _id: { $in: ids } }).lean();
+  const restoredUsers = await UserRepository.findMany(ids);
   const restoredIds = restoredUsers.map((user) => user._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
@@ -236,8 +184,3 @@ export const restoreUsers = async (
     not_found_ids: notFoundIds,
   };
 };
-
-
-
-
-
