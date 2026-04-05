@@ -17,8 +17,8 @@
 
 ### 🔑 Auth Module
 **Migration Flow:** `auth.repository.ts` ➔ `auth.service.ts` (Refactor) ➔ `tests` ➔ `VERIFY` ➔ `GIT COMMIT` ✅
-- [ ] Create `auth.repository.ts`.
-- [ ] Refactor `auth.service.ts` and token logic.
-- [ ] Implement service and route tests.
-- [ ] **Run & Verify Tests** (`npm test src/modules/auth`).
-- [ ] **Mark Task & GIT COMMIT** (Confirm success before moving next).
+- [x] Create `auth.repository.ts`.
+- [x] Refactor `auth.service.ts` and token logic.
+- [x] Implement service and route tests.
+- [x] **Run & Verify Tests** (`npm test src/modules/auth').
+- [x] **Mark Task & GIT COMMIT** (Confirm success before moving next).

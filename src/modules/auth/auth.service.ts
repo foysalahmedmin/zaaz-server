@@ -7,7 +7,7 @@ import config from '../../config/env';
 import { cacheClient } from '../../config/redis';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { sendEmail } from '../../utils/send-email';
-import { User } from '../user/user.model';
+import * as AuthRepository from './auth.repository';
 import {
     TChangePassword,
     TForgetPassword,
@@ -46,11 +46,11 @@ export const googleSignin = async (payload: TGoogleSignin) => {
     throw new AppError(httpStatus.UNAUTHORIZED, 'Email not found in Google!');
   }
 
-  let user = await User.isUserExistByEmail(email);
+  let user = await AuthRepository.findByEmail(email);
 
   if (!user) {
     // Create new user
-    user = await User.create({
+    user = await AuthRepository.createUser({
       name: name || email.split('@')[0],
       email: email,
       image: image,
@@ -63,12 +63,11 @@ export const googleSignin = async (payload: TGoogleSignin) => {
   } else {
     // Update existing user if needed
     if (user.auth_source === 'email') {
-      user.auth_source = 'google';
-      user.google_id = google_id;
-      if (!user.is_verified) {
-        user.is_verified = email_verified || false;
-      }
-      await user.save();
+      user = await AuthRepository.updateById(user._id, {
+        auth_source: 'google',
+        google_id: google_id,
+        ...( !user.is_verified ? { is_verified: email_verified || false } : {} )
+      });
     }
   }
 
@@ -111,7 +110,7 @@ export const googleSignin = async (payload: TGoogleSignin) => {
 };
 
 export const signin = async (payload: TSignin) => {
-  const user = await User.isUserExistByEmail(payload.email);
+  const user = await AuthRepository.findByEmail(payload.email);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -164,12 +163,12 @@ export const signin = async (payload: TSignin) => {
 };
 
 export const signup = async (payload: TSignup) => {
-  const isExist = await User.isUserExistByEmail(payload.email);
+  const isExist = await AuthRepository.findByEmail(payload.email);
   if (isExist) {
     throw new AppError(httpStatus.CONFLICT, 'User already exists!');
   }
 
-  const user = await User.create(payload);
+  const user = await AuthRepository.createUser(payload);
 
   if (!user) {
     throw new AppError(
@@ -221,7 +220,7 @@ export const refreshToken = async (token: string) => {
     );
   }
 
-  const user = await User.isUserExistByEmail(email);
+  const user = await AuthRepository.findByEmail(email);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -284,7 +283,7 @@ export const changePassword = async (
   userToken: JwtPayload,
   payload: TChangePassword,
 ) => {
-  const user = await User.isUserExist(userToken._id);
+  const user = await AuthRepository.findById(userToken._id);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -308,19 +307,13 @@ export const changePassword = async (
     Number(config.bcrypt_salt_rounds),
   );
 
-  const result = await User.findOneAndUpdate(
-    {
-      email: user.email,
-      role: user.role,
-    },
+  const result = await AuthRepository.updateByEmailAndRole(
+    user.email,
+    user.role,
     {
       password: hashedNewPassword,
       password_changed_at: new Date(),
       $inc: { token_version: 1 },
-    },
-    {
-      new: true,
-      runValidators: true,
     },
   );
 
@@ -328,7 +321,7 @@ export const changePassword = async (
 };
 
 export const forgetPassword = async (payload: TForgetPassword) => {
-  const user = await User.isUserExistByEmail(payload.email);
+  const user = await AuthRepository.findByEmail(payload.email);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -389,7 +382,7 @@ export const resetPassword = async (payload: TResetPassword, token: string) => {
 
   const { email } = decoded;
 
-  const user = await User.isUserExistByEmail(email);
+  const user = await AuthRepository.findByEmail(email);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -410,16 +403,12 @@ export const resetPassword = async (payload: TResetPassword, token: string) => {
     Number(config.bcrypt_salt_rounds),
   );
 
-  const result = await User.findByIdAndUpdate(
+  const result = await AuthRepository.updateById(
     _id,
     {
       password: hashedPassword,
       password_changed_at: new Date(),
       $inc: { token_version: 1 },
-    },
-    {
-      new: true,
-      runValidators: true,
     },
   );
 
@@ -467,7 +456,7 @@ export const emailVerification = async (token: string) => {
 
   const { email } = decoded;
 
-  const user = await User.isUserExistByEmail(email);
+  const user = await AuthRepository.findByEmail(email);
 
   if (!user) {
     throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
@@ -483,14 +472,10 @@ export const emailVerification = async (token: string) => {
 
   const { _id } = user;
 
-  const result = await User.findByIdAndUpdate(
+  const result = await AuthRepository.updateById(
     _id,
     {
       is_verified: true,
-    },
-    {
-      new: true,
-      runValidators: true,
     },
   );
 
@@ -498,10 +483,9 @@ export const emailVerification = async (token: string) => {
 };
 
 export const logoutAllSessions = async (user: TJwtPayload) => {
-  const result = await User.findByIdAndUpdate(
+  const result = await AuthRepository.updateById(
     user._id,
     { $inc: { token_version: 1 } },
-    { new: true },
   );
 
   if (!result) {

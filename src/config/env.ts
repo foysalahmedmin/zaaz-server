@@ -23,10 +23,10 @@ const config = {
   default_password: process.env.DEFAULT_PASSWORD as string,
 
   // 🪪 JWT Configuration
-  jwt_access_secret: process.env.JWT_ACCESS_SECRET as string,
-  jwt_access_secret_expires_in: process.env.JWT_ACCESS_SECRET_EXPIRES_IN as ExpiresIn,
-  jwt_refresh_secret: process.env.JWT_REFRESH_SECRET as string,
-  jwt_refresh_secret_expires_in: process.env.JWT_REFRESH_SECRET_EXPIRES_IN as ExpiresIn,
+  jwt_access_secret: (process.env.JWT_ACCESS_SECRET as string) || 'access_secret',
+  jwt_access_secret_expires_in: (process.env.JWT_ACCESS_SECRET_EXPIRES_IN as ExpiresIn) || '1h',
+  jwt_refresh_secret: (process.env.JWT_REFRESH_SECRET as string) || 'refresh_secret',
+  jwt_refresh_secret_expires_in: (process.env.JWT_REFRESH_SECRET_EXPIRES_IN as ExpiresIn) || '7d',
   jwt_reset_password_secret: process.env.JWT_RESET_PASSWORD_SECRET as string,
   jwt_reset_password_secret_expires_in: process.env.JWT_RESET_PASSWORD_SECRET_EXPIRES_IN as ExpiresIn,
   jwt_email_verification_secret: process.env.JWT_EMAIL_VERIFICATION_SECRET as string,
