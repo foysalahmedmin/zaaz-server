@@ -12,10 +12,17 @@ This document outlines the core rules and standards for developing the ZaaZ proj
 
 ---
 
-## 2. Naming Conventions
+## 2. Naming & Casing Conventions
 
+### A. Files & Directories
 *   **Directories:** Always use `kebab-case` (e.g., `feature-endpoint/`).
-*   **Files:** Follow the pattern `module-name.file-type.ts` (e.g., `user.service.ts`, `user.model.ts`).
+*   **Code Files:** Use Dot Notation: `[module-name].[role].ts` (e.g., `auth.controller.ts`, `user.service.ts`). If the module name has multiple words, use `kebab-case` (e.g., `billing-setting.repository.ts`).
+*   **Documentation:** Always use `snake_case` for every `.md` file (e.g., `plan_overview.md`, `tasks_list.md`).
+
+### B. Data & Payloads
+*   **Database Models:** Fields in Mongoose schemas must be `snake_case` (e.g., `is_active`, `token_version`).
+*   **API Payloads:** All request bodies and response data must be `snake_case`.
+*   **Query Parameters:** URL parameters must use `snake_case` (e.g., `?page_size=10`).
 *   **Interfaces/Types:** Use PascalCase with a `T` prefix (e.g., `TUser`, `TPaymentPayload`).
 *   **Schemas:** Zod schemas should end with `Schema` (e.g., `userValidationSchema`).
 
