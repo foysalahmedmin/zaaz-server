@@ -70,23 +70,38 @@ const auth = (...roles: (TRole | 'guest')[]) => {
         throw new AppError(httpStatus.UNAUTHORIZED, 'Invalid token.');
       }
 
-      let user = decoded;
-
-      if (role === 'admin' || role === 'super-admin') {
-        user = await getUser(_id);
+      const user = await getUser(_id);
+      if (!user) {
+        throw new AppError(httpStatus.UNAUTHORIZED, 'User not found');
       }
 
-      if (user?.is_deleted) {
+      const userRole = user.role || DEFAULT_ROLE;
+
+      if (user.is_deleted) {
         throw new AppError(httpStatus.FORBIDDEN, 'User is deleted');
       }
 
-      if (user?.status === 'blocked') {
+      if (user.status === 'blocked') {
         throw new AppError(httpStatus.FORBIDDEN, 'User is blocked');
       }
 
-      if (user?.password_changed_at) {
+      // Token Versioning check
+      if (
+        user.token_version !== undefined &&
+        decoded.token_version !== undefined
+      ) {
+        if (user.token_version !== decoded.token_version) {
+          throw new AppError(
+            httpStatus.FORBIDDEN,
+            'Session expired due to security changes. Please login again.',
+          );
+        }
+      }
+
+      // Legacy Password Change check
+      if (user.password_changed_at) {
         const passwordChangedAt = new Date(user.password_changed_at).getTime();
-        const tokenIssuedAt = iat * 1000; // convert seconds → ms
+        const tokenIssuedAt = iat * 1000;
 
         if (passwordChangedAt > tokenIssuedAt) {
           throw new AppError(
@@ -96,10 +111,7 @@ const auth = (...roles: (TRole | 'guest')[]) => {
         }
       }
 
-      if (
-        !roles.includes(role || DEFAULT_ROLE) ||
-        !roles.includes(user?.role || DEFAULT_ROLE)
-      ) {
+      if (!roles.includes(role || DEFAULT_ROLE) || !roles.includes(userRole)) {
         throw new AppError(httpStatus.FORBIDDEN, 'Access denied');
       }
 

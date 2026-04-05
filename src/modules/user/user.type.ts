@@ -16,6 +16,7 @@ export type TUser = {
   google_id?: string;
   is_verified: boolean;
   is_deleted: boolean;
+  token_version: number;
 };
 
 export interface TUserDocument extends TUser, Document {

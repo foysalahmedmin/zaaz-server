@@ -4,6 +4,7 @@ import httpStatus from 'http-status';
 import { JwtPayload } from 'jsonwebtoken';
 import AppError from '../../builder/app-error';
 import config from '../../config/env';
+import { cacheClient } from '../../config/redis';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
 import { sendEmail } from '../../utils/send-email';
 import { User } from '../user/user.model';
@@ -86,6 +87,7 @@ export const googleSignin = async (payload: TGoogleSignin) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -138,6 +140,7 @@ export const signin = async (payload: TSignin) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -182,6 +185,7 @@ export const signup = async (payload: TSignup) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -205,7 +209,10 @@ export const signup = async (payload: TSignup) => {
 };
 
 export const refreshToken = async (token: string) => {
-  const { email, iat } = verifyToken(token, config.jwt_refresh_secret);
+  const { email, iat, token_version } = verifyToken(
+    token,
+    config.jwt_refresh_secret,
+  );
 
   if (!email || typeof iat !== 'number') {
     throw new AppError(
@@ -228,6 +235,16 @@ export const refreshToken = async (token: string) => {
     throw new AppError(httpStatus.FORBIDDEN, 'User is blocked!');
   }
 
+  // Token Versioning check
+  if (user.token_version !== undefined && token_version !== undefined) {
+    if (user.token_version !== token_version) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        'Session expired. Please login again.',
+      );
+    }
+  }
+
   if (user?.password_changed_at) {
     const passwordChangedAt = new Date(user.password_changed_at).getTime();
     const tokenIssuedAt = iat * 1000; // convert seconds → ms
@@ -247,6 +264,7 @@ export const refreshToken = async (token: string) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -298,6 +316,7 @@ export const changePassword = async (
     {
       password: hashedNewPassword,
       password_changed_at: new Date(),
+      $inc: { token_version: 1 },
     },
     {
       new: true,
@@ -337,6 +356,7 @@ export const forgetPassword = async (payload: TForgetPassword) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -395,6 +415,7 @@ export const resetPassword = async (payload: TResetPassword, token: string) => {
     {
       password: hashedPassword,
       password_changed_at: new Date(),
+      $inc: { token_version: 1 },
     },
     {
       new: true,
@@ -413,6 +434,7 @@ export const emailVerificationSource = async (user: TJwtPayload) => {
     role: user.role || 'user',
     is_verified: user?.is_verified || false,
     auth_source: user.auth_source,
+    token_version: user.token_version,
     ...(user.image && { image: user.image }),
   };
 
@@ -471,6 +493,28 @@ export const emailVerification = async (token: string) => {
       runValidators: true,
     },
   );
+
+  return result;
+};
+
+export const logoutAllSessions = async (user: TJwtPayload) => {
+  const result = await User.findByIdAndUpdate(
+    user._id,
+    { $inc: { token_version: 1 } },
+    { new: true },
+  );
+
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'User not found!');
+  }
+
+  // Clear Redis Cache
+  const redisKey = `auth:user:${user._id}`;
+  try {
+    await cacheClient.del(redisKey);
+  } catch (err) {
+    console.warn('Redis del failed:', err);
+  }
 
   return result;
 };

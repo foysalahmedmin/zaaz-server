@@ -60,6 +60,7 @@ const userSchema = new Schema<TUserDocument>(
     },
     is_verified: { type: Boolean, default: false },
     is_deleted: { type: Boolean, default: false, select: false },
+    token_version: { type: Number, default: 1 },
   },
   {
     timestamps: {
@@ -108,35 +109,49 @@ userSchema.methods.toJSON = function () {
 };
 
 // Post save middleware/ hook
-userSchema.post('save', function (document, next) {
-  document.password = '';
-  next();
-});
+userSchema.post<TUserDocument>(
+  'save',
+  { document: true, query: false },
+  function (document: TUserDocument) {
+    document.password = '';
+  },
+);
 
 // Pre save middleware/ hook
-userSchema.pre('save', async function (next) {
-  // Hash password
-  if (this.isModified('password') && this.password) {
-    this.password = await bcrypt.hash(
-      this.password,
-      Number(config.bcrypt_salt_rounds),
-    );
-    if (!this.isNew) {
-      this.password_changed_at = new Date();
+userSchema.pre<TUserDocument>(
+  'save',
+  { document: true, query: false },
+  async function (this: TUserDocument) {
+    // Hash password
+    if (this.isModified('password') && this.password) {
+      this.password = await bcrypt.hash(
+        this.password,
+        Number(config.bcrypt_salt_rounds),
+      );
+      if (!this.isNew) {
+        this.password_changed_at = new Date();
+      }
     }
-  }
 
-  // Reset is_verified on email change
-  if (this.isModified('email')) {
-    this.is_verified = false;
-  }
+    // Reset is_verified on email change
+    if (this.isModified('email')) {
+      this.is_verified = false;
+    }
 
-  next();
-});
+    // Increment token_version on sensitive field change
+    if (
+      this.isModified('password') ||
+      this.isModified('role') ||
+      this.isModified('status')
+    ) {
+      this.token_version = (this.token_version || 0) + 1;
+    }
+  },
+);
 
 // Query middleware to exclude deleted users
-userSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<TUser, TUser>;
+userSchema.pre(/^find/, function (this: Query<TUser, TUser>, next) {
+  const query = this;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -158,19 +173,21 @@ userSchema.pre(/^find/, function (next) {
 // });
 
 // Aggregation pipeline
-userSchema.pre('aggregate', function (next) {
+userSchema.pre('aggregate', function (this: any, next) {
   this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
   next();
 });
 
 // Static methods
 userSchema.statics.isUserExist = async function (_id: string) {
-  return await this.findById(_id).select('+password +password_changed_at');
+  return await this.findById(_id).select(
+    '+password +password_changed_at +token_version',
+  );
 };
 
 userSchema.statics.isUserExistByEmail = async function (email: string) {
   return await this.findOne({ email: email }).select(
-    '+password +password_changed_at',
+    '+password +password_changed_at +token_version',
   );
 };
 

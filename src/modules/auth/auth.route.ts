@@ -66,6 +66,21 @@ router.patch(
 );
 
 router.post(
+  '/logout-all',
+  authRateLimiter,
+  auth(
+    'super-admin',
+    'admin',
+    'editor',
+    'author',
+    'contributor',
+    'subscriber',
+    'user',
+  ),
+  AuthControllers.logoutAllSessions,
+);
+
+router.post(
   '/forget-password',
   authRateLimiter,
   sensitiveRateLimiter,

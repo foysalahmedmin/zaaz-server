@@ -89,10 +89,14 @@ export const updateSelf = async (
     payload.image = payload.image || '';
   }
 
-  const result = await User.findByIdAndUpdate(user._id, payload, {
-    new: true,
-    runValidators: true,
-  });
+  const result = await User.findByIdAndUpdate(
+    user._id,
+    { ...payload, $inc: { token_version: 1 } },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
 
   return result!;
 };
@@ -108,10 +112,14 @@ export const updateUser = async (
     throw new AppError(httpStatus.NOT_FOUND, 'User not found');
   }
 
-  const updatedUser = await User.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  });
+  const updatedUser = await User.findByIdAndUpdate(
+    id,
+    { ...payload, $inc: { token_version: 1 } },
+    {
+      new: true,
+      runValidators: true,
+    },
+  );
 
   return updatedUser!;
 };
@@ -129,7 +137,7 @@ export const updateUsers = async (
 
   const result = await User.updateMany(
     { _id: { $in: foundIds } },
-    { ...payload },
+    { ...payload, $inc: { token_version: 1 } },
   );
 
   return {

@@ -150,4 +150,15 @@ export const emailVerification = catchAsync(async (req, res) => {
   });
 });
 
+export const logoutAllSessions = catchAsync(async (req, res) => {
+  const result = await AuthServices.logoutAllSessions(req.user);
+
+  responseFormatter(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Logged out from all devices successfully!',
+    data: result,
+  });
+});
+
 

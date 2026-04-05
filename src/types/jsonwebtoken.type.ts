@@ -1,4 +1,11 @@
-export type TRole = 'super-admin' | 'admin' | 'user';
+export type TRole =
+  | 'super-admin'
+  | 'admin'
+  | 'editor'
+  | 'author'
+  | 'contributor'
+  | 'subscriber'
+  | 'user';
 
 export type TJwtPayload = {
   _id: string;
@@ -8,6 +15,7 @@ export type TJwtPayload = {
   role?: TRole;
   is_verified?: boolean;
   auth_source?: 'email' | 'google';
+  token_version?: number;
 };
 
 
