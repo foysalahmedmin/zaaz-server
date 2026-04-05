@@ -131,7 +131,6 @@ src/
 │  │  ├─ catalog.policy.ts
 │  │  ├─ catalog.event.ts
 │  │  └─ __tests__/          # Unit tests for catalog module
-│  │     ├─ catalog.controller.spec.ts
 │  │     ├─ catalog.service.spec.ts
 │  │     └─ catalog.repository.spec.ts
 │  │
