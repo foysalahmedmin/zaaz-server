@@ -7,18 +7,33 @@
 ## 🛠️ Phase 1: Core Infrastructure (High Priority)
 
 ### 👤 User Module
-**Migration Flow:** `user.repository.ts` ➔ `user.service.ts` (Refactor) ➔ `tests` ➔ `VERIFY` ➔ `GIT COMMIT` ✅
-- [x] Create `user.repository.ts` with standard CRUD (Model interaction).
-- [x] Refactor `user.service.ts` to call `UserRepository`.
-- [x] Implement `user.service.spec.ts` (Unit Tests) mocking repository.
-- [x] Implement `user.route.spec.ts` (Integration Tests).
-- [x] **Run & Verify Tests** (`npm test src/modules/user`).
-- [x] **Mark Task & GIT COMMIT** (Confirm success before moving next).
+- [x] Create `user.repository.ts`.
+- [x] Refactor `user.service.ts`.
+- [x] Implement & Verify Tests.
+- [x] **GIT COMMIT** ✅
 
 ### 🔑 Auth Module
-**Migration Flow:** `auth.repository.ts` ➔ `auth.service.ts` (Refactor) ➔ `tests` ➔ `VERIFY` ➔ `GIT COMMIT` ✅
 - [x] Create `auth.repository.ts`.
-- [x] Refactor `auth.service.ts` and token logic.
+- [x] Refactor `auth.service.ts`.
+- [x] Implement & Verify Tests.
+- [x] **GIT COMMIT** ✅
+
+### 💳 Payment Method Module
+- [x] Create `payment-method.repository.ts`.
+- [x] Refactor `payment-method.service.ts`.
 - [x] Implement service and route tests.
-- [x] **Run & Verify Tests** (`npm test src/modules/auth').
-- [x] **Mark Task & GIT COMMIT** (Confirm success before moving next).
+- [x] **Run & Verify Tests** (`npm test src/modules/payment-method`).
+- [x] **Mark Task & GIT COMMIT** ✅
+
+### 💸 Payment Transaction Module
+**Migration Flow:** `payment-transaction.repository.ts` ➔ `payment-transaction.service.ts` ➔ `tests` ➔ `VERIFY` ➔ `GIT COMMIT` ✅
+- [ ] Create `payment-transaction.repository.ts`.
+- [ ] Refactor `payment-transaction.service.ts`.
+- [ ] Implement service and route tests.
+- [ ] **Run & Verify Tests** (`npm test src/modules/payment-transaction`).
+- [ ] **Mark Task & GIT COMMIT**.
+
+---
+
+## 📦 Phase 2: Subscription & Packages
+...

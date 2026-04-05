@@ -1,25 +1,22 @@
 import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { PaymentMethod } from './payment-method.model';
+import * as PaymentMethodRepository from './payment-method.repository';
 import { TPaymentMethod } from './payment-method.type';
 
 export const createPaymentMethod = async (
   data: TPaymentMethod,
 ): Promise<TPaymentMethod> => {
   // Create payment method first
-  const result = await PaymentMethod.create(data);
+  const result = await PaymentMethodRepository.create(data);
 
-  return result.toObject();
+  return result;
 };
 
 export const getPublicPaymentMethod = async (
   id: string,
 ): Promise<TPaymentMethod> => {
-  const result = await PaymentMethod.findOne({
-    _id: id,
-    is_active: true,
-  }).select('-config');
+  const result = await PaymentMethodRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
@@ -27,7 +24,7 @@ export const getPublicPaymentMethod = async (
 };
 
 export const getPaymentMethod = async (id: string): Promise<TPaymentMethod> => {
-  const result = await PaymentMethod.findById(id);
+  const result = await PaymentMethodRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
@@ -51,7 +48,7 @@ export const getPublicPaymentMethods = async (
   }
 
   const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(
-    PaymentMethod,
+    PaymentMethodRepository.PaymentMethod,
     { ...rest, ...filter },
   )
     .search(['name', 'value', 'description'])
@@ -88,7 +85,7 @@ export const getPaymentMethods = async (
   }
 
   const paymentMethodQuery = new AppAggregationQuery<TPaymentMethod>(
-    PaymentMethod,
+    PaymentMethodRepository.PaymentMethod,
     { ...rest, ...filter },
   )
     .search(['name', 'value', 'description'])
@@ -115,15 +112,12 @@ export const updatePaymentMethod = async (
   id: string,
   payload: Partial<TPaymentMethod>,
 ): Promise<TPaymentMethod> => {
-  const data = await PaymentMethod.findById(id).lean();
+  const data = await PaymentMethodRepository.findById(id);
   if (!data) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
 
-  const result = await PaymentMethod.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  });
+  const result = await PaymentMethodRepository.updateById(id, payload);
 
   return result!;
 };
@@ -135,13 +129,11 @@ export const updatePaymentMethods = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const paymentMethods = await PaymentMethod.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = paymentMethods.map((pm) => pm._id.toString());
+  const paymentMethods = await PaymentMethodRepository.findMany(ids);
+  const foundIds = paymentMethods.map((pm: any) => pm._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  const result = await PaymentMethod.updateMany(
+  const result = await PaymentMethodRepository.updateMany(
     { _id: { $in: foundIds } },
     { ...payload },
   );
@@ -153,28 +145,19 @@ export const updatePaymentMethods = async (
 };
 
 export const deletePaymentMethod = async (id: string): Promise<void> => {
-  const paymentMethod = await PaymentMethod.findById(id);
-  if (!paymentMethod) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
-  }
-
-  await paymentMethod.softDelete();
+  await PaymentMethodRepository.softDeleteById(id);
 };
 
 export const deletePaymentMethodPermanent = async (
   id: string,
 ): Promise<void> => {
-  const paymentMethod = await PaymentMethod.findById(id)
-    .setOptions({ bypassDeleted: true })
-    .lean();
+  const paymentMethod = await PaymentMethodRepository.findById(id);
 
   if (!paymentMethod) {
     throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
   }
 
-  await PaymentMethod.findByIdAndDelete(id).setOptions({
-    bypassDeleted: true,
-  });
+  await PaymentMethodRepository.hardDeleteById(id);
 };
 
 export const deletePaymentMethods = async (
@@ -183,13 +166,11 @@ export const deletePaymentMethods = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const paymentMethods = await PaymentMethod.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = paymentMethods.map((pm) => pm._id.toString());
+  const paymentMethods = await PaymentMethodRepository.findMany(ids);
+  const foundIds = paymentMethods.map((pm: any) => pm._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await PaymentMethod.updateMany(
+  await PaymentMethodRepository.updateMany(
     { _id: { $in: foundIds } },
     { is_deleted: true },
   );
@@ -206,20 +187,12 @@ export const deletePaymentMethodsPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const paymentMethods = await PaymentMethod.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+  const paymentMethods = await PaymentMethodRepository.findManyWithDeleted(ids);
 
-  const foundIds = paymentMethods.map((pm) => pm._id.toString());
+  const foundIds = paymentMethods.map((pm: any) => pm._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await PaymentMethod.deleteMany({
-    _id: { $in: foundIds },
-    is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
+  await PaymentMethodRepository.hardDeleteMany(foundIds);
 
   return {
     count: foundIds.length,
@@ -230,11 +203,7 @@ export const deletePaymentMethodsPermanent = async (
 export const restorePaymentMethod = async (
   id: string,
 ): Promise<TPaymentMethod> => {
-  const paymentMethod = await PaymentMethod.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  );
+  const paymentMethod = await PaymentMethodRepository.restoreById(id);
 
   if (!paymentMethod) {
     throw new AppError(
@@ -252,15 +221,10 @@ export const restorePaymentMethods = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await PaymentMethod.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+  const result = await PaymentMethodRepository.restoreMany(ids);
 
-  const restoredPaymentMethods = await PaymentMethod.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredPaymentMethods.map((pm) => pm._id.toString());
+  const restoredPaymentMethods = await PaymentMethodRepository.findMany(ids);
+  const restoredIds = restoredPaymentMethods.map((pm: any) => pm._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   return {
