@@ -9,8 +9,19 @@ This document presents a **fully industry-standard monolithic modular backend ar
 ```plaintext
 project-root/
 ├─ documents/                # Project documentation
+│  ├─ apis/                  # API documentation and postman collections
+│  │  ├─ auth_apis/          # Auth module docs & collection
+│  │  └─ user_apis/          # User module docs & collection
+│  ├─ memories/              # History and Architectural Decisions (ADR)
+│  ├─ plans/                 # Detailed feature implementation roadmaps
+│  │  ├─ [feature_name]/     # Example: auth_token_version/
+│  │  │  ├─ plan.md          # Architectural override & strategy
+│  │  │  └─ tasks.md         # Phase-by-phase task list
+│  │  └─ README.md           # Planning guidelines
+│  ├─ project_roles.md       # Development Rules and Guidelines
+│  ├─ project_structure.md   # This file (Source of truth)
+│  └─ project_specification.md # Functional requirements
 ├─ infra/                    # Infrastructure & deployment config (Docker, Nginx, etc.)
-├─ postman_collection/       # Postman API collections for testing
 ├─ public/                   # Static files for frontend distribution (Ignored)
 ├─ uploads/                  # Temporary and persistent file uploads (Ignored)
 ├─ dist/                     # Compiled JS output

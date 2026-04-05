@@ -81,7 +81,22 @@ Request flow must follow this strict hierarchy:
 
 ---
 
-## 9. Testing Standards
+## 9. Documentation & Planning Standards
+
+For every significant feature or architectural refactor:
+
+1.  **Strict Planning:** Create a subdirectory in `documents/plans/[feature-name]/`.
+    *   `plan.md`: Archictectural overview, strategy, and reasoning.
+    *   `tasks.md`: Phase-by-phase implementation checklist.
+2.  **Memory Persistence:** Once a decision is finalized, record it in `documents/memories/` using the **ADR (Architectural Decision Record)** format (e.g., `002-feature-name.md`).
+3.  **Source of Truth:** Ensure the `project_structure.md` and `project_specification.md` are updated upon implementation to reflect the NEW source of truth.
+4.  **API Documentation:** Every new module MUST have a corresponding folder in `documents/apis/[module_name]__apis/`.
+    *   `api.md`: Detailed documentation of each endpoint.
+    *   `collection.json`: Modular Postman collection for THAT module only.
+
+---
+
+## 10. Testing Standards
 
 *   **Convention:** Use `.spec.ts` for all test files.
 *   **Placement:** Unit tests should be within a `__tests__/` folder inside the corresponding module.
