@@ -1,26 +1,11 @@
 import mongoose from 'mongoose';
-import { UserSubscription } from './user-subscription.model';
+import * as UserSubscriptionRepository from './user-subscription.repository';
 import { TUserSubscriptionDocument } from './user-subscription.type';
 
 export const getActiveSubscription = async (
   userId: string,
 ): Promise<TUserSubscriptionDocument | null> => {
-  const now = new Date();
-  
-  // Find an active subscription that hasn't expired
-  const activeSubscription = await UserSubscription.findOne({
-    user: userId,
-    status: 'active',
-    current_period_end: { $gt: now },
-  }).populate({
-    path: 'package_snapshot',
-    model: 'PackageHistory',
-    populate: {
-      path: 'features',
-    }
-  }).lean();
-
-  return activeSubscription as unknown as TUserSubscriptionDocument | null;
+  return await UserSubscriptionRepository.findActiveSubscription(userId);
 };
 
 export const createSubscription = async (
@@ -28,12 +13,12 @@ export const createSubscription = async (
   session?: mongoose.ClientSession,
 ) => {
   // Inactivate previous active subscriptions for the user
-  await UserSubscription.updateMany(
-    { user: payload.user, status: 'active' },
-    { $set: { status: 'canceled' } },
-    { session }
+  await UserSubscriptionRepository.updateManyStatuses(
+    payload.user,
+    'active',
+    'canceled',
+    session
   );
 
-  const result = await UserSubscription.create([payload], { session });
-  return result[0];
+  return await UserSubscriptionRepository.create(payload, session);
 };
