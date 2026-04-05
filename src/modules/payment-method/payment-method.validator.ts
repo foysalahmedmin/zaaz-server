@@ -34,6 +34,7 @@ export const createPaymentMethodValidationSchema = z.object({
       .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
+    is_recurring: z.boolean().optional(),
   }),
 });
 
@@ -74,6 +75,7 @@ export const updatePaymentMethodValidationSchema = z.object({
       .nonnegative('Sequence must be 0 or greater')
       .optional(),
     is_active: z.boolean().optional(),
+    is_recurring: z.boolean().optional(),
   }),
 });
 

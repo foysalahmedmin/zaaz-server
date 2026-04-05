@@ -45,6 +45,10 @@ const paymentMethodSchema = new Schema<TPaymentMethodDocument>(
       type: Boolean,
       default: false,
     },
+    is_recurring: {
+      type: Boolean,
+      default: false,
+    },
     is_active: {
       type: Boolean,
       default: true,

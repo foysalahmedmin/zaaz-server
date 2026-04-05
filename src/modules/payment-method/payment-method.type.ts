@@ -8,6 +8,7 @@ export type TPaymentMethod = {
   config?: Record<string, any>;
   sequence?: number;
   is_test?: boolean;
+  is_recurring: boolean;
   is_active: boolean;
   is_deleted?: boolean;
 };
