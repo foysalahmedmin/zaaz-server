@@ -742,7 +742,10 @@ export const initiatePayment = async (options: {
       currency,
     );
     discountAmount = discount_amount;
-    couponId = coupon._id;
+    couponId =
+      typeof coupon._id === 'string'
+        ? new mongoose.Types.ObjectId(coupon._id)
+        : coupon._id;
   }
 
   const finalAmount = gatewayAmount - discountAmount;

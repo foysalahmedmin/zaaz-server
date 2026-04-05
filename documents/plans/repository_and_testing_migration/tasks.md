@@ -51,10 +51,10 @@
 - [x] **GIT COMMIT** ✅
 
 ### 🎟️ Coupon Module
-- [ ] Create `coupon.repository.ts`.
-- [ ] Refactor `coupon.service.ts`.
-- [ ] Implement & Verify Tests.
-- [ ] **GIT COMMIT** ✅
+- [x] Create `coupon.repository.ts`.
+- [x] Refactor `coupon.service.ts`.
+- [x] Implement & Verify Tests.
+- [x] **GIT COMMIT** ✅
 
 ---
 

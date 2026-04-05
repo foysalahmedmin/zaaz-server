@@ -3,6 +3,7 @@ import { Document, Model, Types } from 'mongoose';
 export type TDiscountType = 'percentage' | 'fixed';
 
 export type TCoupon = {
+  _id?: Types.ObjectId | string;
   code: string;
   discount_type: TDiscountType;
   discount_value: number; // For percentage: e.g. 10 for 10%. For fixed: optional or unused if using fixed_amount

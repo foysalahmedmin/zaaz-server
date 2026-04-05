@@ -1,25 +1,16 @@
 import httpStatus from 'http-status';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { getPriceInCurrency } from '../../utils/currency.utils';
 import { PackagePlan } from '../package-plan/package-plan.model';
-import { Coupon } from './coupon.model';
+import * as CouponRepository from './coupon.repository';
 import { TCoupon } from './coupon.type';
 
 const createCoupon = async (payload: TCoupon) => {
-  const result = await Coupon.create(payload);
-  return result;
+  return await CouponRepository.create(payload);
 };
 
 const getAllCoupons = async (query: Record<string, unknown>) => {
-  const couponQuery = new AppAggregationQuery<TCoupon>(Coupon, query)
-    .search(['code'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await couponQuery.execute([
+  const result = await CouponRepository.findPaginated(query, [
     {
       key: 'active',
       filter: { is_active: true },
@@ -35,34 +26,29 @@ const getAllCoupons = async (query: Record<string, unknown>) => {
   ]);
 
   // Calculate global total usage
-  const totalUsageResult = await Coupon.aggregate([
-    { $match: { is_deleted: { $ne: true } } },
-    { $group: { _id: null, total: { $sum: '$usage_count' } } },
-  ]);
+  const totalUsage = await CouponRepository.getTotalUsage();
 
   if (result.meta && result.meta.statistics) {
-    result.meta.statistics.total_usage = totalUsageResult[0]?.total || 0;
+    result.meta.statistics.total_usage = totalUsage;
   }
 
   return result;
 };
 
 const getCouponById = async (id: string) => {
-  const result = await Coupon.findById(id);
-  return result;
+  return await CouponRepository.findById(id);
 };
 
 const updateCoupon = async (id: string, payload: Partial<TCoupon>) => {
-  const result = await Coupon.findByIdAndUpdate(id, payload, { new: true });
-  return result;
+  return await CouponRepository.updateById(id, payload);
 };
 
 const deleteCoupon = async (id: string) => {
-  const coupon = await Coupon.findById(id);
-  if (!coupon) {
+  const result = await CouponRepository.softDelete(id);
+  if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Coupon not found');
   }
-  return await coupon.softDelete();
+  return result;
 };
 
 const updateCouponByCode = async (
@@ -70,22 +56,18 @@ const updateCouponByCode = async (
   payload: Partial<TCoupon>,
   options: Record<string, any> = {},
 ) => {
-  const result = await Coupon.findOneAndUpdate({ code }, payload, {
-    new: true,
-    ...options,
-  }).setOptions(options);
-  return result;
+  return await CouponRepository.updateByCode(code, payload, options);
 };
 
 const deleteCouponByCode = async (
   code: string,
   options: Record<string, any> = {},
 ) => {
-  const coupon = await Coupon.findOne({ code }).setOptions(options);
-  if (!coupon) {
+  const result = await CouponRepository.softDeleteByCode(code, options);
+  if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Coupon not found');
   }
-  return await coupon.softDelete();
+  return result;
 };
 
 const validateCoupon = async (
@@ -94,7 +76,7 @@ const validateCoupon = async (
   planId: string,
   currency: 'USD' | 'BDT',
 ) => {
-  const coupon = await Coupon.findOne({ code, is_active: true });
+  const coupon = await CouponRepository.findActiveByCode(code);
 
   if (!coupon) {
     throw new AppError(httpStatus.NOT_FOUND, 'Invalid or inactive coupon code');
@@ -186,7 +168,7 @@ export const CouponServices = {
   deleteCoupon,
   deleteCouponByCode,
   validateCoupon,
-  isCouponExist: Coupon.isCouponExist.bind(Coupon),
+  isCouponExist: CouponRepository.isCouponExist,
 };
 
 
