@@ -36,4 +36,29 @@
 ---
 
 ## 📦 Phase 2: Subscription & Packages
-...
+**Goal:** Migrate Package, Plan, and Subscription management.
+
+### 🍱 Package & Plan Module
+- [x] Create `package.repository.ts` and `plan.repository.ts`.
+- [x] Refactor `package.service.ts` and `plan.service.ts`.
+- [x] Implement & Verify Tests.
+- [x] **GIT COMMIT** ✅
+
+### 🔄 User Subscription Module
+- [ ] Create `user-subscription.repository.ts`.
+- [ ] Refactor `user-subscription.service.ts`.
+- [ ] Implement & Verify Tests.
+- [ ] **GIT COMMIT** ✅
+
+### 🎟️ Coupon Module
+- [ ] Create `coupon.repository.ts`.
+- [ ] Refactor `coupon.service.ts`.
+- [ ] Implement & Verify Tests.
+- [ ] **GIT COMMIT** ✅
+
+---
+
+## 💎 Phase 3: Credits & AI Models
+- [ ] Create repositories for AI model, credits models (usage, profit, process).
+- [ ] Refactor services and implement tests.
+- [ ] **GIT COMMIT** ✅

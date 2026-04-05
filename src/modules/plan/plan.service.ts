@@ -2,7 +2,7 @@ import httpStatus from 'http-status';
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { invalidateCacheByPattern, withCache } from '../../utils/cache.utils';
-import { Plan } from './plan.model';
+import * as PlanRepository from './plan.repository';
 import { TPlan } from './plan.type';
 
 const CACHE_TTL = 86400; // 24 hours (Optimized for production with proper invalidation)
@@ -13,17 +13,17 @@ const clearPlanCache = async () => {
 };
 
 export const createPlan = async (data: TPlan): Promise<TPlan> => {
-  const result = await Plan.create([data]);
+  const result = await PlanRepository.Plan.create([data]);
 
   // Clear cache after creation
   await clearPlanCache();
 
-  return result[0].toObject();
+  return result[0];
 };
 
 export const getPlan = async (id: string): Promise<TPlan> => {
   return withCache(`plan:${id}`, CACHE_TTL, async () => {
-    const result = await Plan.findById(id).lean();
+    const result = await PlanRepository.findById(id);
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
     }
@@ -42,7 +42,7 @@ export const getPlans = async (
 
     const filter: Record<string, unknown> = {};
 
-    const planQuery = new AppAggregationQuery<TPlan>(Plan, {
+    const planQuery = new AppAggregationQuery<TPlan>(PlanRepository.Plan, {
       ...rest,
       ...filter,
     })
@@ -71,12 +71,12 @@ export const updatePlan = async (
   id: string,
   payload: Partial<TPlan>,
 ): Promise<TPlan> => {
-  const data = await Plan.findById(id).lean();
+  const data = await PlanRepository.findById(id);
   if (!data) {
     throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
   }
 
-  const result = await Plan.findByIdAndUpdate(id, payload, {
+  const result = await PlanRepository.Plan.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   });
@@ -94,11 +94,11 @@ export const updatePlans = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const plans = await Plan.find({ _id: { $in: ids } }).lean();
+  const plans = await PlanRepository.Plan.find({ _id: { $in: ids } }).lean();
   const foundIds = plans.map((plan) => plan._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  const result = await Plan.updateMany(
+  const result = await PlanRepository.Plan.updateMany(
     { _id: { $in: foundIds } },
     { ...payload },
   );
@@ -113,19 +113,14 @@ export const updatePlans = async (
 };
 
 export const deletePlan = async (id: string): Promise<void> => {
-  const plan = await Plan.findById(id);
-  if (!plan) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
-  }
-
-  await plan.softDelete();
+  await PlanRepository.softDelete(id);
 
   // Clear cache after deletion
   await clearPlanCache();
 };
 
 export const deletePlanPermanent = async (id: string): Promise<void> => {
-  const plan = await Plan.findById(id)
+  const plan = await PlanRepository.Plan.findById(id)
     .setOptions({ bypassDeleted: true })
     .lean();
 
@@ -133,7 +128,7 @@ export const deletePlanPermanent = async (id: string): Promise<void> => {
     throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
   }
 
-  await Plan.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
+  await PlanRepository.Plan.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
 
   // Clear cache after deletion
   await clearPlanCache();
@@ -145,11 +140,11 @@ export const deletePlans = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const plans = await Plan.find({ _id: { $in: ids } }).lean();
+  const plans = await PlanRepository.Plan.find({ _id: { $in: ids } }).lean();
   const foundIds = plans.map((plan) => plan._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await Plan.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  await PlanRepository.Plan.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
 
   // Clear cache after deletion
   await clearPlanCache();
@@ -166,7 +161,7 @@ export const deletePlansPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const plans = await Plan.find({
+  const plans = await PlanRepository.Plan.find({
     _id: { $in: ids },
     is_deleted: true,
   })
@@ -176,7 +171,7 @@ export const deletePlansPermanent = async (
   const foundIds = plans.map((plan) => plan._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await Plan.deleteMany({
+  await PlanRepository.Plan.deleteMany({
     _id: { $in: foundIds },
     is_deleted: true,
   }).setOptions({ bypassDeleted: true });
@@ -191,7 +186,7 @@ export const deletePlansPermanent = async (
 };
 
 export const restorePlan = async (id: string): Promise<TPlan> => {
-  const plan = await Plan.findOneAndUpdate(
+  const plan = await PlanRepository.Plan.findOneAndUpdate(
     { _id: id, is_deleted: true },
     { is_deleted: false },
     { new: true },
@@ -213,12 +208,12 @@ export const restorePlans = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await Plan.updateMany(
+  const result = await PlanRepository.Plan.updateMany(
     { _id: { $in: ids }, is_deleted: true },
     { is_deleted: false },
   );
 
-  const restoredPlans = await Plan.find({ _id: { $in: ids } }).lean();
+  const restoredPlans = await PlanRepository.Plan.find({ _id: { $in: ids } }).lean();
   const restoredIds = restoredPlans.map((plan) => plan._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 

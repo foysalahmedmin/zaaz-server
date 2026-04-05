@@ -15,9 +15,9 @@ import {
   deletePackagePlansByPackage,
   getPackagePlansByPackage,
 } from '../package-plan/package-plan.service';
-import { Plan } from '../plan/plan.model';
+import * as PackageRepository from './package.repository';
+import * as PlanRepository from '../plan/plan.repository';
 import { getPriceInCurrency } from '../../utils/currency.utils';
-import { Package } from './package.model';
 import { TPackage } from './package.type';
 
 const CACHE_TTL = 86400; // 24 hours (Optimized for production with proper invalidation)
@@ -155,7 +155,7 @@ export const createPackage = async (
 
   // If is_initial is true, ensure no other package has is_initial=true
   if (packageData.is_initial === true) {
-    await Package.updateMany(
+    await PackageRepository.Package.updateMany(
       { is_initial: true, _id: { $ne: null } },
       { $set: { is_initial: false } },
       { session },
@@ -163,7 +163,7 @@ export const createPackage = async (
   }
 
   // Create package
-  const result = await Package.create([packageData], { session });
+  const result = await PackageRepository.Package.create([packageData], { session });
   const packageId = result[0]._id.toString();
 
   // Handle Plans
@@ -177,7 +177,7 @@ export const createPackage = async (
   });
 
   // Validate all plans exist and are active
-  const planDocs = await Plan.find({
+  const planDocs = await PlanRepository.Plan.find({
     _id: { $in: planIds },
     is_active: true,
   })
@@ -285,7 +285,7 @@ export const getPublicPackage = async (id: string): Promise<any> => {
       ...getPlansLookupStage(),
     ];
 
-    const results = await Package.aggregate(pipeline);
+    const results = await PackageRepository.Package.aggregate(pipeline);
     if (!results || results.length === 0) {
       throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
     }
@@ -327,7 +327,7 @@ export const getPackage = async (id: string): Promise<any> => {
     ...getPlansLookupStage(),
   ];
 
-  const results = await Package.aggregate(pipeline);
+  const results = await PackageRepository.Package.aggregate(pipeline);
   if (!results || results.length === 0) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
@@ -364,7 +364,7 @@ export const getPublicPackages = async (
       ];
 
       const { _id: _, ...restQuery } = query;
-      const packageQuery = new AppAggregationQuery<TPackage>(Package, {
+      const packageQuery = new AppAggregationQuery<TPackage>(PackageRepository.Package, {
         ...restQuery,
         ...baseFilter,
       })
@@ -402,7 +402,7 @@ export const getPackages = async (
     ...getPlansLookupStage(),
   ];
 
-  const packageQuery = new AppAggregationQuery<TPackage>(Package, {
+  const packageQuery = new AppAggregationQuery<TPackage>(PackageRepository.Package, {
     ...rest,
     ...filter,
   })
@@ -456,7 +456,7 @@ export const updatePackage = async (
   },
   session?: mongoose.ClientSession,
 ): Promise<TPackage> => {
-  const packageData = await Package.findById(id).lean();
+  const packageData = await PackageRepository.findById(id);
   if (!packageData) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
@@ -523,7 +523,7 @@ export const updatePackage = async (
           ? new mongoose.Types.ObjectId(p.plan)
           : p.plan,
       );
-      const planDocs = await Plan.find({
+      const planDocs = await PlanRepository.Plan.find({
         _id: { $in: planIdsToAdd },
         is_active: true,
       }).session(session || null);
@@ -619,7 +619,7 @@ export const updatePackage = async (
   }
 
   if (payload.is_initial === true) {
-    await Package.updateMany(
+    await PackageRepository.Package.updateMany(
       { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
       { $set: { is_initial: false } },
       { session },
@@ -632,7 +632,7 @@ export const updatePackage = async (
   const currentVersion = packageData.version || 1;
   const nextVersion = currentVersion + 1;
   
-  await Package.findByIdAndUpdate(id, { ...packageFieldsToUpdate, version: nextVersion }, {
+  await PackageRepository.Package.findByIdAndUpdate(id, { ...packageFieldsToUpdate, version: nextVersion }, {
     new: true,
     runValidators: true,
   }).session(session || null);
@@ -692,7 +692,7 @@ export const updatePackages = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const foundPackages = await Package.find({ _id: { $in: ids } }).lean();
+  const foundPackages = await PackageRepository.Package.find({ _id: { $in: ids } }).lean();
   const foundIds = foundPackages.map((pkg) => pkg._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
@@ -709,12 +709,12 @@ export const updatePackages = async (
 };
 
 export const deletePackage = async (id: string): Promise<void> => {
-  const packageData = await Package.findById(id);
+  const packageData = await PackageRepository.findById(id);
   if (!packageData) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  await packageData.softDelete();
+  await PackageRepository.softDelete(id);
   // Also soft delete associated package-plans and package-feature-configs
   await deletePackagePlansByPackage(id);
   await PackageFeatureConfigServices.deleteConfigsByPackage(id);
@@ -724,7 +724,7 @@ export const deletePackage = async (id: string): Promise<void> => {
 };
 
 export const deletePackagePermanent = async (id: string): Promise<void> => {
-  const packageData = await Package.findById(id)
+  const packageData = await PackageRepository.Package.findById(id)
     .setOptions({ bypassDeleted: true })
     .lean();
 
@@ -732,7 +732,7 @@ export const deletePackagePermanent = async (id: string): Promise<void> => {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found');
   }
 
-  await Package.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
+  await PackageRepository.Package.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
   // Also permanently delete associated package-plans and package-feature-configs
   const { PackagePlan } = await import('../package-plan/package-plan.model');
   await PackagePlan.deleteMany({ package: id }).setOptions({
@@ -754,11 +754,11 @@ export const deletePackages = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const packages = await Package.find({ _id: { $in: ids } }).lean();
+  const packages = await PackageRepository.Package.find({ _id: { $in: ids } }).lean();
   const foundIds = packages.map((pkg) => pkg._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await Package.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  await PackageRepository.Package.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
   // Also soft delete associated package-plans and package-feature-configs
   await Promise.all(
     foundIds.map((packageId) => deletePackagePlansByPackage(packageId)),
@@ -784,7 +784,7 @@ export const deletePackagesPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const packages = await Package.find({
+  const packages = await PackageRepository.Package.find({
     _id: { $in: ids },
     is_deleted: true,
   })
@@ -794,7 +794,7 @@ export const deletePackagesPermanent = async (
   const foundIds = packages.map((pkg) => pkg._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await Package.deleteMany({
+  await PackageRepository.Package.deleteMany({
     _id: { $in: foundIds },
     is_deleted: true,
   }).setOptions({ bypassDeleted: true });
@@ -819,7 +819,7 @@ export const deletePackagesPermanent = async (
 };
 
 export const restorePackage = async (id: string): Promise<TPackage> => {
-  const packageData = await Package.findOneAndUpdate(
+  const packageData = await PackageRepository.Package.findOneAndUpdate(
     { _id: id, is_deleted: true },
     { is_deleted: false },
     { new: true },
@@ -849,12 +849,12 @@ export const restorePackages = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await Package.updateMany(
+  const result = await PackageRepository.Package.updateMany(
     { _id: { $in: ids }, is_deleted: true },
     { is_deleted: false },
   );
 
-  const restoredPackages = await Package.find({ _id: { $in: ids } }).lean();
+  const restoredPackages = await PackageRepository.Package.find({ _id: { $in: ids } }).lean();
   const restoredIds = restoredPackages.map((pkg) => pkg._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
@@ -879,7 +879,7 @@ export const updatePackageIsInitial = async (
   is_initial: boolean,
   session?: mongoose.ClientSession,
 ): Promise<TPackage> => {
-  const packageData = await Package.findById(id)
+  const packageData = await PackageRepository.Package.findById(id)
     .session(session || null)
     .lean();
 
@@ -889,14 +889,14 @@ export const updatePackageIsInitial = async (
 
   // If setting is_initial to true, ensure no other package has is_initial=true
   if (is_initial === true) {
-    await Package.updateMany(
+    await PackageRepository.Package.updateMany(
       { is_initial: true, _id: { $ne: new mongoose.Types.ObjectId(id) } },
       { $set: { is_initial: false } },
       { session },
     );
   }
 
-  const result = await Package.findByIdAndUpdate(
+  const result = await PackageRepository.Package.findByIdAndUpdate(
     id,
     { is_initial },
     {
@@ -912,7 +912,7 @@ export const updatePackageIsInitial = async (
   // Clear cache after update
   await clearPackageCache();
 
-  return result.toObject();
+  return result;
 };
 
 /**
