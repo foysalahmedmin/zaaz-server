@@ -1,6 +1,7 @@
 import { Document, Model, Types } from 'mongoose';
 
 export type TAiModel = {
+  _id?: string | Types.ObjectId;
   name: string;
   value: string;
   provider: string;

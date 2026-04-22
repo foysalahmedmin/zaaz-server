@@ -1,185 +1,90 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { UserWallet } from '../user-wallet/user-wallet.model';
 import { clearUserWalletCache } from '../user-wallet/user-wallet.service';
-import { CreditsTransaction } from './credits-transaction.model';
+import * as CreditsTransactionRepository from './credits-transaction.repository';
 import { TCreditsTransaction } from './credits-transaction.type';
 
 export const createCreditsTransaction = async (
   data: TCreditsTransaction,
   session?: mongoose.ClientSession,
 ): Promise<TCreditsTransaction> => {
-  const result = await CreditsTransaction.create([data], { session });
-  return result[0].toObject();
+  return await CreditsTransactionRepository.create(data, session);
 };
 
 export const executeCreditsTransaction = async (
   data: TCreditsTransaction,
   session?: mongoose.ClientSession,
 ): Promise<TCreditsTransaction> => {
-  // Validate user_wallet exists
-  const wallet = await UserWallet.findById(data.user_wallet)
-    .session(session || null)
-    .lean();
+  const wallet = await CreditsTransactionRepository.findWalletById(
+    data.user_wallet,
+    session,
+  );
 
   if (!wallet) {
     throw new AppError(httpStatus.NOT_FOUND, 'User wallet not found');
   }
 
-  // Set email from wallet if not provided
   if (!data.email && wallet.email) {
     data.email = wallet.email;
   }
 
-  // Update wallet based on transaction type
   if (data.type === 'increase') {
-    await UserWallet.findByIdAndUpdate(
+    await CreditsTransactionRepository.updateWalletCredits(
       data.user_wallet,
-      { $inc: { credits: data.credits } },
-      { session },
+      data.credits,
+      session,
     );
   } else if (data.type === 'decrease') {
-    // Check if user has enough credits
     if (wallet.credits < data.credits) {
-      throw new AppError(
-        httpStatus.BAD_REQUEST,
-        'Insufficient credits in wallet',
-      );
+      throw new AppError(httpStatus.BAD_REQUEST, 'Insufficient credits in wallet');
     }
-    await UserWallet.findByIdAndUpdate(
+    await CreditsTransactionRepository.updateWalletCredits(
       data.user_wallet,
-      { $inc: { credits: -data.credits } },
-      { session },
+      -data.credits,
+      session,
     );
   }
 
-  const result = await CreditsTransaction.create([data], { session });
-
-  // Clear wallet cache
+  const result = await CreditsTransactionRepository.create(data, session);
   await clearUserWalletCache(wallet.user.toString());
-
-  return result[0].toObject();
+  return result;
 };
 
 export const getCreditsTransactions = async (
   query: Record<string, unknown>,
   options: { isPublic?: boolean } = {},
-): Promise<{
-  data: TCreditsTransaction[];
-  meta: { total: number; page: number; limit: number };
-}> => {
+): Promise<{ data: TCreditsTransaction[]; meta: any }> => {
   const { user, email, user_wallet, type, ...rest } = query;
 
   const filter: Record<string, unknown> = {};
+  if (user) filter.user = new mongoose.Types.ObjectId(user as string);
+  if (user_wallet) filter.user_wallet = new mongoose.Types.ObjectId(user_wallet as string);
+  if (email) filter.email = email;
+  if (type) filter.type = type;
 
-  if (user) {
-    filter.user = new mongoose.Types.ObjectId(user as string);
-  }
+  const sensitiveFields = ['profit_credits', 'cost_credits', 'cost_price', 'credit_price'];
+  let fieldOverrides: string | undefined;
 
-  if (user_wallet) {
-    filter.user_wallet = new mongoose.Types.ObjectId(user_wallet as string);
-  }
-  if (email) {
-    filter.email = email;
-  }
-
-  if (type) {
-    filter.type = type;
-  }
-
-  // Handle sensitive fields for public access
   if (options.isPublic) {
-    const sensitiveFields = [
-      'profit_credits',
-      'cost_credits',
-      'cost_price',
-      'credit_price',
-    ];
-
     if (rest.fields && typeof rest.fields === 'string') {
-      // If specific fields requested, remove sensitive ones from the request
       const requestedFields = rest.fields.split(',');
       const safeFields = requestedFields.filter(
-        (field) => !sensitiveFields.includes(field.trim()),
+        (f) => !sensitiveFields.includes(f.trim()),
       );
       rest.fields = safeFields.join(',');
     } else {
-      // If all fields requested (default), explicitly exclude sensitive ones
-      rest.fields = sensitiveFields.map((f) => `-${f}`).join(',');
+      fieldOverrides = sensitiveFields.map((f) => `-${f}`).join(',');
     }
-  } else {
-    // Admin access: Include sensitive fields if requested or default
-    // We do NOT need to explicitly verify fields here as admins are trusted
-    // But if we wanted to be explicit, we could add '+profit_credits' etc. here
-    // However, the current AppAggregationQuery logic handles this based on user request.
-    // The key is that `select: false` in model prevents auto-inclusion.
-    // If admin explicitly wants these fields in the list, they must request them
-    // via ?fields=profit_credits,cost_credits etc.
-    // OR we change model default.
-    // Given the requirement is "admin apis ghulo chara onno kothao jate oi fildes ghulo na chole jay",
-    // relying on `select: false` is correct. Admin must explicitly select them.
   }
 
-  const creditsTransactionQuery = new AppAggregationQuery<TCreditsTransaction>(
-    CreditsTransaction,
-    { ...rest, ...filter },
-  );
-
-  creditsTransactionQuery
-    .populate([
-      { path: 'user_wallet', select: '_id credits', justOne: true },
-      {
-        path: 'decrease_source',
-        select: '_id name endpoint credits',
-        justOne: true,
-      },
-      {
-        path: 'payment_transaction',
-        select: '_id status amount currency',
-        justOne: true,
-      },
-      { path: 'plan', select: '_id name', justOne: true },
-    ])
-    .search(['email', 'usage_key'])
-    .filter()
-    .sort(['type', 'credits', 'created_at', 'updated_at'] as any)
-    .paginate()
-    .fields();
-
-  const result = await creditsTransactionQuery.execute([
-    {
-      key: 'increase',
-      filter: { type: 'increase' },
-    },
-    {
-      key: 'decrease',
-      filter: { type: 'decrease' },
-    },
-    {
-      key: 'from_payment',
-      filter: { type: 'increase', increase_source: 'payment' },
-    },
-    {
-      key: 'from_bonus',
-      filter: { type: 'increase', increase_source: 'bonus' },
-    },
-  ]);
-
-  return result;
+  return await CreditsTransactionRepository.findPaginated(rest, filter, fieldOverrides);
 };
 
 export const getCreditsTransaction = async (
   id: string,
 ): Promise<TCreditsTransaction> => {
-  const result = await CreditsTransaction.findById(id)
-    .select('+profit_credits +cost_credits +cost_price')
-    .populate([
-      { path: 'user_wallet', select: '_id credits' },
-      { path: 'decrease_source', select: '_id name endpoint credits' },
-      { path: 'payment_transaction', select: '_id status amount currency' },
-    ]);
+  const result = await CreditsTransactionRepository.findById(id, true);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits transaction not found');
   }
@@ -187,145 +92,99 @@ export const getCreditsTransaction = async (
 };
 
 export const deleteCreditsTransaction = async (id: string): Promise<void> => {
-  const transaction = await CreditsTransaction.findById(id).lean();
+  const transaction = await CreditsTransactionRepository.findById(id);
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits transaction not found');
   }
 
-  // Reverse the transaction effect on wallet
-  const wallet = await UserWallet.findById(transaction.user_wallet);
+  const wallet = await CreditsTransactionRepository.findWalletById(
+    transaction.user_wallet,
+  );
   if (wallet) {
-    if (transaction.type === 'increase') {
-      wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-    } else {
-      wallet.credits += transaction.credits;
-    }
-    await wallet.save();
-
-    // Clear wallet cache
+    wallet.credits =
+      transaction.type === 'increase'
+        ? Math.max(0, wallet.credits - transaction.credits)
+        : wallet.credits + transaction.credits;
+    await CreditsTransactionRepository.saveWallet(wallet);
     await clearUserWalletCache(wallet.user.toString());
   }
 
-  await CreditsTransaction.findByIdAndUpdate(id, { is_deleted: true });
+  await CreditsTransactionRepository.softDeleteById(id);
 };
 
 export const deleteCreditsTransactionPermanent = async (
   id: string,
 ): Promise<void> => {
-  const transaction = await CreditsTransaction.findById(id).setOptions({
-    bypassDeleted: true,
-  });
+  const transaction = await CreditsTransactionRepository.findById(id);
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits transaction not found');
   }
 
-  // Reverse the transaction effect on wallet before permanent delete
-  const wallet = await UserWallet.findById(transaction.user_wallet);
+  const wallet = await CreditsTransactionRepository.findWalletById(
+    transaction.user_wallet,
+  );
   if (wallet) {
-    if (transaction.type === 'increase') {
-      wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-    } else {
-      wallet.credits += transaction.credits;
-    }
-    await wallet.save();
-
-    // Clear wallet cache
+    wallet.credits =
+      transaction.type === 'increase'
+        ? Math.max(0, wallet.credits - transaction.credits)
+        : wallet.credits + transaction.credits;
+    await CreditsTransactionRepository.saveWallet(wallet);
     await clearUserWalletCache(wallet.user.toString());
   }
 
-  await CreditsTransaction.findByIdAndDelete(id);
+  await CreditsTransactionRepository.permanentDeleteById(id);
 };
 
 export const deleteCreditsTransactions = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const transactions = await CreditsTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
-    transaction._id.toString(),
-  );
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const transactions = await CreditsTransactionRepository.findByIds(ids);
+  const foundIds = transactions.map((t) => (t as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  // Reverse wallet effects for all transactions
-  for (const transaction of transactions) {
-    const wallet = await UserWallet.findById(transaction.user_wallet);
+  for (const t of transactions) {
+    const wallet = await CreditsTransactionRepository.findWalletById(t.user_wallet);
     if (wallet) {
-      if (transaction.type === 'increase') {
-        wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-      } else {
-        wallet.credits += transaction.credits;
-      }
-      await wallet.save();
-
-      // Clear wallet cache
+      wallet.credits =
+        t.type === 'increase'
+          ? Math.max(0, wallet.credits - t.credits)
+          : wallet.credits + t.credits;
+      await CreditsTransactionRepository.saveWallet(wallet);
       await clearUserWalletCache(wallet.user.toString());
     }
   }
 
-  await CreditsTransaction.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await CreditsTransactionRepository.softDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const deleteCreditsTransactionsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const transactions = await CreditsTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
-    transaction._id.toString(),
-  );
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const transactions = await CreditsTransactionRepository.findByIds(ids);
+  const foundIds = transactions.map((t) => (t as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  // Reverse wallet effects for all transactions before permanent delete
-  for (const transaction of transactions) {
-    const wallet = await UserWallet.findById(transaction.user_wallet);
+  for (const t of transactions) {
+    const wallet = await CreditsTransactionRepository.findWalletById(t.user_wallet);
     if (wallet) {
-      if (transaction.type === 'increase') {
-        wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-      } else {
-        wallet.credits += transaction.credits;
-      }
-      await wallet.save();
-
-      // Clear wallet cache
+      wallet.credits =
+        t.type === 'increase'
+          ? Math.max(0, wallet.credits - t.credits)
+          : wallet.credits + t.credits;
+      await CreditsTransactionRepository.saveWallet(wallet);
       await clearUserWalletCache(wallet.user.toString());
     }
   }
 
-  await CreditsTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await CreditsTransactionRepository.permanentDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const restoreCreditsTransaction = async (
   id: string,
 ): Promise<TCreditsTransaction> => {
-  const transaction = await CreditsTransaction.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+  const transaction = await CreditsTransactionRepository.restore(id);
   if (!transaction) {
     throw new AppError(
       httpStatus.NOT_FOUND,
@@ -333,17 +192,15 @@ export const restoreCreditsTransaction = async (
     );
   }
 
-  // Re-apply the transaction effect on wallet when restoring
-  const wallet = await UserWallet.findById(transaction.user_wallet);
+  const wallet = await CreditsTransactionRepository.findWalletById(
+    transaction.user_wallet,
+  );
   if (wallet) {
-    if (transaction.type === 'increase') {
-      wallet.credits += transaction.credits;
-    } else {
-      wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-    }
-    await wallet.save();
-
-    // Clear wallet cache
+    wallet.credits =
+      transaction.type === 'increase'
+        ? wallet.credits + transaction.credits
+        : Math.max(0, wallet.credits - transaction.credits);
+    await CreditsTransactionRepository.saveWallet(wallet);
     await clearUserWalletCache(wallet.user.toString());
   }
 
@@ -352,45 +209,24 @@ export const restoreCreditsTransaction = async (
 
 export const restoreCreditsTransactions = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await CreditsTransaction.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await CreditsTransactionRepository.restoreMany(ids);
 
-  const restoredTransactions = await CreditsTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredTransactions.map((transaction) =>
-    transaction._id.toString(),
-  );
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+  const restored = await CreditsTransactionRepository.findByIds(ids);
+  const restoredIds = restored.map((t) => (t as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !restoredIds.includes(id));
 
-  // Re-apply wallet effects for all restored transactions
-  for (const transaction of restoredTransactions) {
-    const wallet = await UserWallet.findById(transaction.user_wallet);
+  for (const t of restored) {
+    const wallet = await CreditsTransactionRepository.findWalletById(t.user_wallet);
     if (wallet) {
-      if (transaction.type === 'increase') {
-        wallet.credits += transaction.credits;
-      } else {
-        wallet.credits = Math.max(0, wallet.credits - transaction.credits);
-      }
-      await wallet.save();
-
-      // Clear wallet cache
+      wallet.credits =
+        t.type === 'increase'
+          ? wallet.credits + t.credits
+          : Math.max(0, wallet.credits - t.credits);
+      await CreditsTransactionRepository.saveWallet(wallet);
       await clearUserWalletCache(wallet.user.toString());
     }
   }
 
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
-
-
-
-

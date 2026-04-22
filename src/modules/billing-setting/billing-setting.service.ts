@@ -1,15 +1,13 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { withCache } from '../../utils/cache.utils';
-import { BillingSettingHistory } from '../billing-setting-history/billing-setting-history.model';
 import { clearCreditsProcessCache } from '../credits-process/credits-process.service';
 import { DEFAULT_BILLING_SETTING } from './billing-setting.constant';
-import { BillingSetting } from './billing-setting.model';
+import * as BillingSettingRepository from './billing-setting.repository';
 import { TBillingSetting } from './billing-setting.type';
 
-const CACHE_TTL = 86400; // 24 hours
+const CACHE_TTL = 86400;
 
 export const createBillingSetting = async (
   payload: TBillingSetting,
@@ -18,31 +16,24 @@ export const createBillingSetting = async (
   session.startTransaction();
 
   try {
-    // If is_initial is true, unset others
     if (payload.is_initial) {
-      await BillingSetting.updateMany(
+      await BillingSettingRepository.updateMany(
         { is_initial: true },
         { is_initial: false },
-        { session },
+        session,
       );
     } else {
-      // If this is the first settings, make it initial by default
-      const count = await BillingSetting.countDocuments({
-        is_deleted: { $ne: true },
-      }).session(session);
-      if (count === 0) {
-        payload.is_initial = true;
-      }
+      const count = await BillingSettingRepository.countDocuments(
+        { is_deleted: { $ne: true } },
+        session,
+      );
+      if (count === 0) payload.is_initial = true;
     }
 
-    const result = await BillingSetting.create([payload], { session });
-
+    const result = await BillingSettingRepository.create(payload, session);
     await session.commitTransaction();
-
-    // Clear credits process cache
     await clearCreditsProcessCache('billing');
-
-    return result[0];
+    return result;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -51,20 +42,16 @@ export const createBillingSetting = async (
   }
 };
 
-export const getAllBillingSettings = async (query: Record<string, unknown>) => {
-  const billingSettingQuery = new AppAggregationQuery(BillingSetting, query)
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await billingSettingQuery.execute();
-  return result;
+export const getAllBillingSettings = async (
+  query: Record<string, unknown>,
+): Promise<any> => {
+  return await BillingSettingRepository.findPaginated(query);
 };
 
 export const getBillingSetting = async (
   id: string,
 ): Promise<TBillingSetting> => {
-  const result = await BillingSetting.findById(id);
+  const result = await BillingSettingRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
   }
@@ -73,11 +60,11 @@ export const getBillingSetting = async (
 
 export const getInitialBillingSetting = async (): Promise<TBillingSetting> => {
   return await withCache('billing-setting:initial', CACHE_TTL, async () => {
-    const result = await BillingSetting.findOne({
+    const result = await BillingSettingRepository.findOne({
       is_initial: true,
       is_active: true,
       is_deleted: { $ne: true },
-    }).lean();
+    });
 
     if (!result) {
       console.warn(
@@ -93,8 +80,8 @@ export const updateBillingSetting = async (
   id: string,
   payload: Partial<TBillingSetting>,
 ): Promise<TBillingSetting> => {
-  const existingSetting = await BillingSetting.findById(id).lean();
-  if (!existingSetting) {
+  const existing = await BillingSettingRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
   }
 
@@ -102,47 +89,26 @@ export const updateBillingSetting = async (
   session.startTransaction();
 
   try {
-    // Create history before update
-    await BillingSettingHistory.create(
-      [
-        {
-          billing_setting: existingSetting._id,
-          credit_price: existingSetting.credit_price,
-          currency: existingSetting.currency,
-          status: existingSetting.status,
-          applied_at: existingSetting.applied_at,
-          is_active: existingSetting.is_active,
-          is_initial: existingSetting.is_initial,
-          is_deleted: existingSetting.is_deleted,
-        },
-      ],
-      { session },
+    await BillingSettingRepository.createHistory(
+      existing as TBillingSetting & { _id: any },
+      session,
     );
 
-    // If is_initial is true, unset others
     if (payload.is_initial) {
-      await BillingSetting.updateMany(
+      await BillingSettingRepository.updateMany(
         { _id: { $ne: id }, is_initial: true },
         { is_initial: false },
-        { session },
+        session,
       );
     }
 
-    const result = await BillingSetting.findByIdAndUpdate(id, payload, {
-      new: true,
-      runValidators: true,
-      session,
-    });
-
+    const result = await BillingSettingRepository.updateById(id, payload, session);
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
     }
 
     await session.commitTransaction();
-
-    // Clear credits process cache
     await clearCreditsProcessCache('billing');
-
     return result;
   } catch (error) {
     await session.abortTransaction();
@@ -153,124 +119,67 @@ export const updateBillingSetting = async (
 };
 
 export const deleteBillingSetting = async (id: string): Promise<void> => {
-  const result = await BillingSetting.findById(id);
-
+  const result = await BillingSettingRepository.softDeleteById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (result as any).softDelete();
-
-  // Clear credits process cache
   await clearCreditsProcessCache('billing');
 };
 
 export const deleteBillingSettingPermanent = async (
   id: string,
 ): Promise<void> => {
-  const result = await BillingSetting.findByIdAndDelete(id).setOptions({
-    bypassDeleted: true,
-  });
-
+  const result = await BillingSettingRepository.permanentDeleteById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
   }
-
-  // Clear credits process cache
   await clearCreditsProcessCache('billing');
 };
 
 export const deleteBillingSettings = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const settings = await BillingSetting.find({ _id: { $in: ids } }).lean();
-  const foundIds = settings.map((s) => s._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const settings = await BillingSettingRepository.findByIds(ids);
+  const foundIds = settings.map((s) => (s as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  await BillingSetting.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await BillingSettingRepository.softDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const deleteBillingSettingsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const settings = await BillingSetting.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const settings = await BillingSettingRepository.findByIds(ids, true);
+  const deletable = settings.filter((s: any) => s.is_deleted);
+  const foundIds = deletable.map((s: any) => s._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  const foundIds = settings.map((s) => s._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await BillingSetting.deleteMany({
-    _id: { $in: foundIds },
-    is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await BillingSettingRepository.permanentDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const restoreBillingSetting = async (
   id: string,
 ): Promise<TBillingSetting> => {
-  const result = await BillingSetting.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false, is_active: false }, // Restored items inactive by default to avoid conflicts
-    { new: true },
-  );
-
+  const result = await BillingSettingRepository.restore(id);
   if (!result) {
     throw new AppError(
       httpStatus.NOT_FOUND,
       'Billing Setting not found or not deleted',
     );
   }
-
   return result;
 };
 
 export const restoreBillingSettings = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await BillingSetting.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false, is_active: false },
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await BillingSettingRepository.restoreMany(ids);
 
-  const restoredSettings = await BillingSetting.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredSettings.map((s) => s._id.toString());
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+  const restored = await BillingSettingRepository.findByIds(ids);
+  const restoredIds = restored.map((s: any) => s._id.toString());
+  const not_found_ids = ids.filter((id) => !restoredIds.includes(id));
 
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
-
-
-
-

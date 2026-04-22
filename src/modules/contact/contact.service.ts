@@ -1,18 +1,15 @@
 import httpStatus from 'http-status';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import config from '../../config/env';
 import { sendEmail } from '../../utils/send-email';
-import { Contact } from './contact.model';
+import * as ContactRepository from './contact.repository';
 import { TContact, TCreateContact } from './contact.type';
 
 export const createContact = async (
   payload: TCreateContact,
 ): Promise<TContact> => {
-  // Save to database
-  const created_contact = await Contact.create(payload);
+  const created_contact = await ContactRepository.create(payload);
 
-  // Send email notification
   try {
     await sendEmail({
       to: config.email,
@@ -34,32 +31,20 @@ export const createContact = async (
       `,
     });
   } catch (error) {
-    // Log error but don't fail the request if email fails
     console.error('Failed to send contact email:', error);
   }
 
-  return created_contact.toObject();
+  return created_contact;
 };
 
 export const getContacts = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TContact[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const contactQuery = new AppAggregationQuery<TContact>(Contact, query)
-    .search(['name', 'email', 'subject', 'message'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await contactQuery.execute();
-  return result;
+): Promise<{ data: TContact[]; meta: any }> => {
+  return await ContactRepository.findPaginated(query);
 };
 
 export const getContact = async (id: string): Promise<TContact> => {
-  const result = await Contact.findById(id).lean();
+  const result = await ContactRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Contact not found');
   }
@@ -67,102 +52,59 @@ export const getContact = async (id: string): Promise<TContact> => {
 };
 
 export const deleteContact = async (id: string): Promise<void> => {
-  const contact = await Contact.findById(id).lean();
-  if (!contact) {
+  const existing = await ContactRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Contact not found');
   }
-
-  await Contact.findByIdAndUpdate(id, { is_deleted: true });
+  await ContactRepository.softDeleteById(id);
 };
 
 export const deleteContactPermanent = async (id: string): Promise<void> => {
-  const contact = await Contact.findById(id).setOptions({
-    bypassDeleted: true,
-  });
-  if (!contact) {
+  const existing = await ContactRepository.findByIdWithDeleted(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Contact not found');
   }
-
-  await Contact.findByIdAndDelete(id);
+  await ContactRepository.permanentDeleteById(id);
 };
 
 export const deleteContacts = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const contacts = await Contact.find({ _id: { $in: ids } }).lean();
-  const foundIds = contacts.map((contact) => contact._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await ContactRepository.findByIds(ids);
+  const foundIds = existing.map((c) => (c as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  await Contact.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await ContactRepository.softDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const deleteContactsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const contacts = await Contact.find({ _id: { $in: ids } }).lean();
-  const foundIds = contacts.map((contact) => contact._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await ContactRepository.findByIds(ids);
+  const foundIds = existing.map((c) => (c as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  await Contact.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await ContactRepository.permanentDeleteMany(foundIds);
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const restoreContact = async (id: string): Promise<TContact> => {
-  const contact = await Contact.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
-  if (!contact) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Contact not found or not deleted',
-    );
+  const result = await ContactRepository.restore(id);
+  if (!result) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Contact not found or not deleted');
   }
-
-  return contact;
+  return result;
 };
 
 export const restoreContacts = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await Contact.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await ContactRepository.restoreMany(ids);
 
-  const restoredContacts = await Contact.find({ _id: { $in: ids } }).lean();
-  const restoredIds = restoredContacts.map((contact) => contact._id.toString());
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+  const restored = await ContactRepository.findByIds(ids);
+  const restoredIds = restored.map((c) => (c as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !restoredIds.includes(id));
 
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
-
-
-
-
-

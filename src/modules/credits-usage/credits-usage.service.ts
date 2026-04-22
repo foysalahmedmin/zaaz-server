@@ -1,8 +1,7 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppQueryAggregation from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { CreditsUsage } from './credits-usage.model';
+import * as CreditsUsageRepository from './credits-usage.repository';
 import { TCreditsUsage } from './credits-usage.type';
 
 /**
@@ -12,8 +11,7 @@ export const createCreditsUsage = async (
   payload: TCreditsUsage,
   session?: mongoose.ClientSession,
 ): Promise<TCreditsUsage> => {
-  const result = await CreditsUsage.create([payload], { session });
-  return result[0];
+  return await CreditsUsageRepository.create(payload, session);
 };
 
 /**
@@ -37,52 +35,21 @@ export const getCreditsUsages = async (
     }
   }
 
-  const appQuery = new AppQueryAggregation(CreditsUsage, rest);
-
-  if (Object.keys(filter).length > 0) {
-    appQuery.pipeline([{ $match: filter }]);
-  }
-
-  appQuery
-    .populate([
-      { path: 'user_wallet', select: 'credits', justOne: true },
-      { path: 'credits_transaction', justOne: true },
-    ])
-    .search(['email', 'usage_key', 'ai_model'])
-    .filter()
-    .sort(['created_at', 'total_uses_credits'] as any)
-    .paginate()
-    .fields();
-
   const [result, aggregateStats] = await Promise.all([
-    appQuery.execute(),
-    CreditsUsage.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          total_cost_credits: { $sum: '$cost_credits' },
-          total_profit: { $sum: '$profit_credits' },
-          total_rounding: { $sum: '$rounding_credits' },
-          total_credits: { $sum: '$credits' },
-          total_price: { $sum: '$price' },
-          total_input_tokens: { $sum: '$input_tokens' },
-          total_output_tokens: { $sum: '$output_tokens' },
-        },
-      },
-    ]),
+    CreditsUsageRepository.findPaginated(rest, filter),
+    CreditsUsageRepository.getAggregateStats(filter),
   ]);
 
-  if (aggregateStats.length > 0) {
+  if (Object.keys(aggregateStats).length > 0) {
     result.meta.statistics = {
       ...result.meta.statistics,
-      total_cost_credits: aggregateStats[0].total_cost_credits || 0,
-      total_profit: aggregateStats[0].total_profit || 0,
-      total_rounding: aggregateStats[0].total_rounding || 0,
-      total_credits: aggregateStats[0].total_credits || 0,
-      total_price: aggregateStats[0].total_price || 0,
-      total_input_tokens: aggregateStats[0].total_input_tokens || 0,
-      total_output_tokens: aggregateStats[0].total_output_tokens || 0,
+      total_cost_credits: aggregateStats.total_cost_credits || 0,
+      total_profit: aggregateStats.total_profit || 0,
+      total_rounding: aggregateStats.total_rounding || 0,
+      total_credits: aggregateStats.total_credits || 0,
+      total_price: aggregateStats.total_price || 0,
+      total_input_tokens: aggregateStats.total_input_tokens || 0,
+      total_output_tokens: aggregateStats.total_output_tokens || 0,
     };
   }
 
@@ -95,9 +62,7 @@ export const getCreditsUsages = async (
 export const getCreditsUsageById = async (
   id: string,
 ): Promise<TCreditsUsage> => {
-  const result = await CreditsUsage.findById(id)
-    .populate(['user_wallet', 'credits_transaction'])
-    .select('+profit_credits +cost_credits +cost_price');
+  const result = await CreditsUsageRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits usage log not found');
   }
@@ -108,12 +73,12 @@ export const getCreditsUsageById = async (
  * Soft delete credits usage log
  */
 export const deleteCreditsUsage = async (id: string): Promise<void> => {
-  const log = await CreditsUsage.findById(id).lean();
+  const log = await CreditsUsageRepository.findById(id);
   if (!log) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits usage log not found');
   }
 
-  await CreditsUsage.findByIdAndUpdate(id, { is_deleted: true });
+  await CreditsUsageRepository.softDelete(id);
 };
 
 /**
@@ -122,15 +87,7 @@ export const deleteCreditsUsage = async (id: string): Promise<void> => {
 export const getCreditsUsagesByUsageKey = async (
   usage_key: string,
 ): Promise<TCreditsUsage[]> => {
-  const result = await CreditsUsage.find({
-    usage_key,
-    is_deleted: { $ne: true },
-  })
-    .populate(['user_wallet', 'credits_transaction'])
-    .select(
-      '+profit_credits +cost_credits +cost_price +rounding_credits +rounding_price',
-    );
-  return result;
+  return await CreditsUsageRepository.findByUsageKey(usage_key);
 };
 
 

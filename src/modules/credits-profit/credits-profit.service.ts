@@ -1,17 +1,16 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import {
   invalidateCache,
   invalidateCacheByPattern,
   withCache,
 } from '../../utils/cache.utils';
-import { CreditsProfitHistory } from '../credits-profit-history/credits-profit-history.model';
-import { CreditsProfit } from './credits-profit.model';
+import * as CreditsProfitRepository from './credits-profit.repository';
 import { TCreditsProfit } from './credits-profit.type';
 
-const CACHE_TTL = 86400; // 24 hours
+const CACHE_TTL = 86400;
+const TOTAL_PERCENTAGE_KEY = 'credits-profit:total-percentage';
 
 export const clearCreditsProfitCache = async () => {
   await invalidateCacheByPattern('credits-profit:*');
@@ -21,15 +20,15 @@ export const createCreditsProfit = async (
   data: TCreditsProfit,
   session?: mongoose.ClientSession,
 ): Promise<TCreditsProfit> => {
-  const result = await CreditsProfit.create([data], { session });
-  await invalidateCache('credits-profit:total-percentage');
-  return result[0].toObject();
+  const result = await CreditsProfitRepository.create(data, session);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
+  return result;
 };
 
 export const getPublicCreditsProfit = async (
   id: string,
 ): Promise<TCreditsProfit> => {
-  const result = await CreditsProfit.findOne({
+  const result = await CreditsProfitRepository.findOne({
     _id: id,
     is_active: true,
   });
@@ -40,7 +39,7 @@ export const getPublicCreditsProfit = async (
 };
 
 export const getCreditsProfit = async (id: string): Promise<TCreditsProfit> => {
-  const result = await CreditsProfit.findById(id);
+  const result = await CreditsProfitRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits profit not found');
   }
@@ -48,87 +47,21 @@ export const getCreditsProfit = async (id: string): Promise<TCreditsProfit> => {
 };
 
 export const getTotalProfitPercentage = async (): Promise<number> => {
-  return await withCache(
-    'credits-profit:total-percentage',
-    CACHE_TTL,
-    async () => {
-      const totalPercentageResult = await CreditsProfit.aggregate([
-        {
-          $match: {
-            is_active: true,
-            is_deleted: { $ne: true },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalPercentage: { $sum: '$percentage' },
-          },
-        },
-      ]);
-      return totalPercentageResult.length > 0
-        ? totalPercentageResult[0].totalPercentage || 0
-        : 0;
-    },
+  return await withCache(TOTAL_PERCENTAGE_KEY, CACHE_TTL, () =>
+    CreditsProfitRepository.getTotalProfitPercentage(),
   );
 };
 
 export const getPublicCreditsProfits = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TCreditsProfit[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const filter: Record<string, unknown> = {
-    is_active: true,
-  };
-
-  const creditsProfitQuery = new AppAggregationQuery<TCreditsProfit>(
-    CreditsProfit,
-    {
-      ...query,
-      ...filter,
-    },
-  )
-    .search(['name'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await creditsProfitQuery.execute();
-
-  return result;
+): Promise<{ data: TCreditsProfit[]; meta: any }> => {
+  return await CreditsProfitRepository.findPaginated(query, { is_active: true });
 };
 
 export const getCreditsProfits = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TCreditsProfit[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const creditsProfitQuery = new AppAggregationQuery<TCreditsProfit>(
-    CreditsProfit,
-    query,
-  )
-    .search(['name'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await creditsProfitQuery.execute([
-    {
-      key: 'active',
-      filter: { is_active: true },
-    },
-    {
-      key: 'inactive',
-      filter: { is_active: false },
-    },
-  ]);
-
-  return result;
+): Promise<{ data: TCreditsProfit[]; meta: any }> => {
+  return await CreditsProfitRepository.findPaginatedWithGroups(query);
 };
 
 export const updateCreditsProfit = async (
@@ -136,184 +69,114 @@ export const updateCreditsProfit = async (
   payload: Partial<TCreditsProfit>,
   session?: mongoose.ClientSession,
 ): Promise<TCreditsProfit> => {
-  const creditsProfitData = await CreditsProfit.findById(id).lean();
-  if (!creditsProfitData) {
+  const existing = await CreditsProfitRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits profit not found');
   }
 
-  // Create history before update
-  await CreditsProfitHistory.create(
-    [
-      {
-        credits_profit: id,
-        name: creditsProfitData.name,
-        percentage: creditsProfitData.percentage,
-        is_active: creditsProfitData.is_active,
-        is_deleted: creditsProfitData.is_deleted,
-      },
-    ],
-    { session },
+  await CreditsProfitRepository.createHistory(
+    id,
+    {
+      name: existing.name,
+      percentage: existing.percentage,
+      is_active: existing.is_active,
+      is_deleted: existing.is_deleted,
+    },
+    session,
   );
 
-  const result = await CreditsProfit.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  }).session(session || null);
-
-  await invalidateCache('credits-profit:total-percentage');
-
+  const result = await CreditsProfitRepository.updateById(id, payload, session);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
   return result!;
 };
 
 export const updateCreditsProfits = async (
   ids: string[],
   payload: Partial<Pick<TCreditsProfit, 'is_active'>>,
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const creditsProfits = await CreditsProfit.find({ _id: { $in: ids } }).lean();
-  const foundIds = creditsProfits.map((tp) => tp._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await CreditsProfitRepository.findByIds(ids);
+  const foundIds = existing.map((p) => (p as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  const result = await CreditsProfit.updateMany(
+  const result = await CreditsProfitRepository.updateMany(
     { _id: { $in: foundIds } },
-    { ...payload },
+    payload,
   );
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 
-  await invalidateCache('credits-profit:total-percentage');
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
 
 export const deleteCreditsProfit = async (id: string): Promise<void> => {
-  const creditsProfit = await CreditsProfit.findById(id);
-  if (!creditsProfit) {
+  const existing = await CreditsProfitRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits profit not found');
   }
-
-  await creditsProfit.softDelete();
-  await invalidateCache('credits-profit:total-percentage');
+  await CreditsProfitRepository.softDeleteById(id);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 };
 
 export const deleteCreditsProfitPermanent = async (
   id: string,
 ): Promise<void> => {
-  const creditsProfit = await CreditsProfit.findById(id)
-    .setOptions({ bypassDeleted: true })
-    .lean();
-
-  if (!creditsProfit) {
+  const existing = await CreditsProfitRepository.findByIds([id], true);
+  if (!existing.length) {
     throw new AppError(httpStatus.NOT_FOUND, 'Credits profit not found');
   }
-
-  await CreditsProfit.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
-  await invalidateCache('credits-profit:total-percentage');
+  await CreditsProfitRepository.permanentDeleteById(id);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 };
 
 export const deleteCreditsProfits = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const creditsProfits = await CreditsProfit.find({ _id: { $in: ids } }).lean();
-  const foundIds = creditsProfits.map((tp) => tp._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await CreditsProfitRepository.findByIds(ids);
+  const foundIds = existing.map((p) => (p as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  await CreditsProfit.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
+  const count = await CreditsProfitRepository.softDeleteMany(foundIds);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 
-  await invalidateCache('credits-profit:total-percentage');
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  return { count, not_found_ids };
 };
 
 export const deleteCreditsProfitsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const creditsProfits = await CreditsProfit.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await CreditsProfitRepository.findByIds(ids, true);
+  const deletable = existing.filter((p: any) => p.is_deleted);
+  const foundIds = deletable.map((p: any) => p._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  const foundIds = creditsProfits.map((tp) => tp._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+  const count = await CreditsProfitRepository.permanentDeleteMany(foundIds);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 
-  await CreditsProfit.deleteMany({
-    _id: { $in: foundIds },
-    is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
-
-  await invalidateCache('credits-profit:total-percentage');
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  return { count, not_found_ids };
 };
 
 export const restoreCreditsProfit = async (
   id: string,
 ): Promise<TCreditsProfit> => {
-  const creditsProfit = await CreditsProfit.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  );
-
-  if (creditsProfit) {
-    await invalidateCache('credits-profit:total-percentage');
-  }
-
-  if (!creditsProfit) {
+  const result = await CreditsProfitRepository.restore(id);
+  if (!result) {
     throw new AppError(
       httpStatus.NOT_FOUND,
       'Credits profit not found or not deleted',
     );
   }
-
-  return creditsProfit;
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
+  return result;
 };
 
 export const restoreCreditsProfits = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await CreditsProfit.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await CreditsProfitRepository.restoreMany(ids);
+  await invalidateCache(TOTAL_PERCENTAGE_KEY);
 
-  await invalidateCache('credits-profit:total-percentage');
+  const restored = await CreditsProfitRepository.findByIds(ids);
+  const restoredIds = restored.map((p: any) => p._id.toString());
+  const not_found_ids = ids.filter((id) => !restoredIds.includes(id));
 
-  const restoredCreditsProfits = await CreditsProfit.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredCreditsProfits.map((tp) => tp._id.toString());
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
-
-
-
-

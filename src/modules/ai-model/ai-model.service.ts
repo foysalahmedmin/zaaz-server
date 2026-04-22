@@ -1,19 +1,18 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { withCache } from '../../utils/cache.utils';
 import { AiModelHistory } from '../ai-model-history/ai-model-history.model';
 import { clearCreditsProcessCache } from '../credits-process/credits-process.service';
 import { DEFAULT_AI_MODEL } from './ai-model.constant';
-import { AiModel } from './ai-model.model';
+import * as AiModelRepository from './ai-model.repository';
 import { TAiModel } from './ai-model.type';
 
 const CACHE_TTL = 86400; // 24 hours
 
 export const createAiModel = async (payload: TAiModel): Promise<TAiModel> => {
   // Check if value already exists
-  const isExist = await AiModel.isAiModelExistByValue(payload.value);
+  const isExist = await AiModelRepository.isExistByValue(payload.value);
   if (isExist) {
     throw new AppError(
       httpStatus.CONFLICT,
@@ -27,22 +26,20 @@ export const createAiModel = async (payload: TAiModel): Promise<TAiModel> => {
   try {
     // If is_initial is true, unset others
     if (payload.is_initial) {
-      await AiModel.updateMany(
+      await AiModelRepository.updateMany(
         { is_initial: true },
         { is_initial: false },
-        { session },
+        session,
       );
     } else {
       // If this is the first model ever, make it initial by default
-      const count = await AiModel.countDocuments({
-        is_deleted: { $ne: true },
-      }).session(session);
+      const count = await AiModelRepository.countActive(session);
       if (count === 0) {
         payload.is_initial = true;
       }
     }
 
-    const result = await AiModel.create([payload], { session });
+    const result = await AiModelRepository.create(payload, session);
 
     await session.commitTransaction();
 
@@ -59,19 +56,11 @@ export const createAiModel = async (payload: TAiModel): Promise<TAiModel> => {
 };
 
 export const getAllAiModels = async (query: Record<string, unknown>) => {
-  const aiModelQuery = new AppAggregationQuery(AiModel, query)
-    .search(['name', 'value', 'provider'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await aiModelQuery.execute();
-  return result;
+  return await AiModelRepository.findPaginated(query);
 };
 
 export const getAiModel = async (id: string): Promise<TAiModel> => {
-  const result = await AiModel.findById(id);
+  const result = await AiModelRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');
   }
@@ -94,7 +83,7 @@ export const getAiModelByValueOrInitial = async (
       } else {
         filter.is_initial = true;
       }
-      const result = await AiModel.findOne(filter).lean();
+      const result = await AiModelRepository.findOne(filter);
       if (!result) {
         console.warn(
           `[AI Model] AI Model "${value || 'initial'}" not found in DB. Falling back to system defaults.`,
@@ -119,18 +108,10 @@ export const getAiModelsByValuesOrInitial = async (
   values: string[],
 ): Promise<TAiModel[]> => {
   // 1. Fetch requested models
-  const models = await AiModel.find({
-    value: { $in: values },
-    is_active: true,
-    is_deleted: { $ne: true },
-  }).lean();
+  const models = await AiModelRepository.findActiveByValues(values);
 
   // 2. Fetch initial model as fallback
-  const initialModel = await AiModel.findOne({
-    is_initial: true,
-    is_active: true,
-    is_deleted: { $ne: true },
-  }).lean();
+  const initialModel = await AiModelRepository.findInitialActive();
 
   const result = models;
   if (initialModel && !models.find((m) => m.is_initial)) {
@@ -144,7 +125,7 @@ export const updateAiModel = async (
   id: string,
   payload: Partial<TAiModel>,
 ): Promise<TAiModel> => {
-  const existingAiModel = await AiModel.findById(id).lean();
+  const existingAiModel = await AiModelRepository.findById(id);
   if (!existingAiModel) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');
   }
@@ -174,10 +155,10 @@ export const updateAiModel = async (
 
     // If is_initial is true, unset others
     if (payload.is_initial) {
-      await AiModel.updateMany(
+      await AiModelRepository.updateMany(
         { _id: { $ne: id }, is_initial: true },
         { is_initial: false },
-        { session },
+        session,
       );
     }
 
@@ -192,11 +173,7 @@ export const updateAiModel = async (
     // I will allow this for flexibility unless strict business rule prevents 0 initials.
     // Looking at package implementation: it seems to just unset others if payload is true.
 
-    const result = await AiModel.findByIdAndUpdate(id, payload, {
-      new: true,
-      runValidators: true,
-      session,
-    });
+    const result = await AiModelRepository.updateById(id, payload, session);
 
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');
@@ -217,13 +194,11 @@ export const updateAiModel = async (
 };
 
 export const deleteAiModel = async (id: string): Promise<TAiModel> => {
-  const result = await AiModel.findById(id);
+  const result = await AiModelRepository.softDelete(id);
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');
   }
-
-  await result.softDelete();
 
   // Clear credits process cache
   await clearCreditsProcessCache('ai-model', result.value);
@@ -232,9 +207,7 @@ export const deleteAiModel = async (id: string): Promise<TAiModel> => {
 };
 
 export const deleteAiModelPermanent = async (id: string): Promise<void> => {
-  const result = await AiModel.findByIdAndDelete(id).setOptions({
-    bypassDeleted: true,
-  });
+  const result = await AiModelRepository.permanentDelete(id);
 
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');
@@ -250,11 +223,11 @@ export const deleteAiModels = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const models = await AiModel.find({ _id: { $in: ids } }).lean();
-  const foundIds = models.map((model) => model._id.toString());
+  const models = await AiModelRepository.findByIds(ids);
+  const foundIds = models.map((model) => model._id!.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await AiModel.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  await AiModelRepository.updateMany({ _id: { $in: foundIds } }, { $set: { is_deleted: true } });
 
   return {
     count: foundIds.length,
@@ -268,20 +241,12 @@ export const deleteAiModelsPermanent = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const models = await AiModel.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+  const models = await AiModelRepository.findByIds(ids, { is_deleted: true }, true);
 
-  const foundIds = models.map((model) => model._id.toString());
+  const foundIds = models.map((model) => model._id!.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
-  await AiModel.deleteMany({
-    _id: { $in: foundIds },
-    is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
+  await AiModelRepository.deleteMany(foundIds, true);
 
   return {
     count: foundIds.length,
@@ -290,11 +255,7 @@ export const deleteAiModelsPermanent = async (
 };
 
 export const restoreAiModel = async (id: string): Promise<TAiModel> => {
-  const result = await AiModel.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  );
+  const result = await AiModelRepository.restore(id);
 
   if (!result) {
     throw new AppError(
@@ -312,13 +273,13 @@ export const restoreAiModels = async (
   count: number;
   not_found_ids: string[];
 }> => {
-  const result = await AiModel.updateMany(
+  const result = await AiModelRepository.updateMany(
     { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
+    { $set: { is_deleted: false } }
   );
 
-  const restoredModels = await AiModel.find({ _id: { $in: ids } }).lean();
-  const restoredIds = restoredModels.map((model) => model._id.toString());
+  const restoredModels = await AiModelRepository.findByIds(ids);
+  const restoredIds = restoredModels.map((model) => model._id!.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   return {
