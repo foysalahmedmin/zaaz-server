@@ -1,28 +1,19 @@
 import mongoose from 'mongoose';
-import { PackageFeature } from './package-feature.model';
+import * as PackageFeatureRepository from './package-feature.repository';
 import { TPackageFeature } from './package-feature.type';
 
 export const createPackageFeatures = async (
   payload: Partial<TPackageFeature>[],
   session?: mongoose.ClientSession,
 ) => {
-  return await PackageFeature.create(payload, { session });
+  return await PackageFeatureRepository.create(payload, session);
 };
 
 export const getPackageFeaturesByPackage = async (
   packageId: string,
-  populate: boolean = false,
+  populate = false,
 ) => {
-  const query = PackageFeature.find({
-    package: new mongoose.Types.ObjectId(packageId),
-    is_active: true,
-  });
-
-  if (populate) {
-    query.populate('feature');
-  }
-
-  return await query.lean();
+  return await PackageFeatureRepository.findByPackage(packageId, populate);
 };
 
 export const updatePackageFeatures = async (
@@ -30,52 +21,41 @@ export const updatePackageFeatures = async (
   featureIds: string[],
   session?: mongoose.ClientSession,
 ) => {
-  // 1. Get existing features
-  const existingFeatures = await PackageFeature.find({
-    package: new mongoose.Types.ObjectId(packageId),
-  }).session(session || null);
+  const existingFeatures = await PackageFeatureRepository.findRawByPackage(packageId, session);
+  const existingFeatureIds = existingFeatures.map((pf) => pf.feature.toString());
 
-  const existingFeatureIds = existingFeatures.map((pf) =>
-    pf.feature.toString(),
-  );
-
-  // 2. Determine additions and removals
   const toAdd = featureIds.filter((id) => !existingFeatureIds.includes(id));
   const toRemove = existingFeatureIds.filter((id) => !featureIds.includes(id));
 
-  // 3. Remove features (Soft delete)
   if (toRemove.length > 0) {
-    await PackageFeature.updateMany(
+    await PackageFeatureRepository.updateMany(
       {
         package: new mongoose.Types.ObjectId(packageId),
         feature: { $in: toRemove },
       },
       { is_deleted: true, is_active: false },
-      { session },
+      session,
     );
   }
 
-  // 4. Add new features
   if (toAdd.length > 0) {
     const newFeatures = toAdd.map((featureId) => ({
       package: new mongoose.Types.ObjectId(packageId),
       feature: new mongoose.Types.ObjectId(featureId),
       is_active: true,
     }));
-    await PackageFeature.create(newFeatures, { session });
+    await PackageFeatureRepository.create(newFeatures, session);
   }
 
-  // 5. Restore any that were deleted but are now back in the list (if hard delete logic wasn't used)
-  // (Optional optimization: check if any "toAdd" were previously soft deleted and just undelete them)
   if (toAdd.length > 0) {
-    await PackageFeature.updateMany(
+    await PackageFeatureRepository.updateMany(
       {
         package: new mongoose.Types.ObjectId(packageId),
         feature: { $in: toAdd },
         is_deleted: true,
       },
       { is_deleted: false, is_active: true },
-      { session },
+      session,
     );
   }
 };
@@ -84,11 +64,5 @@ export const deletePackageFeaturesByPackage = async (
   packageId: string,
   session?: mongoose.ClientSession,
 ) => {
-  return await PackageFeature.updateMany(
-    { package: new mongoose.Types.ObjectId(packageId) },
-    { is_deleted: true, is_active: false },
-    { session },
-  );
+  return await PackageFeatureRepository.deleteByPackage(packageId, session);
 };
-
-

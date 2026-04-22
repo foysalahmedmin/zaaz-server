@@ -1,33 +1,28 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { withCache } from '../../utils/cache.utils';
 import { clearFeatureCache } from '../feature/feature.service';
-import { FeatureEndpoint } from './feature-endpoint.model';
+import * as FeatureEndpointRepository from './feature-endpoint.repository';
 import { TFeatureEndpoint } from './feature-endpoint.type';
 
-const CACHE_TTL = 86400; // 24 hours
+const CACHE_TTL = 86400;
 
 export const createFeatureEndpoint = async (
   data: TFeatureEndpoint,
 ): Promise<TFeatureEndpoint> => {
-  // Convert value to lowercase
   const featureEndpointData = {
     ...data,
     value: data.value?.toLowerCase().trim(),
   };
 
-  // Check if value already exists (for non-deleted records)
   if (featureEndpointData.value) {
-    const existingFeatureEndpoint = await FeatureEndpoint.findOne({
-      value: featureEndpointData.value,
-      is_deleted: { $ne: true },
-    })
-      .setOptions({ bypassDeleted: true })
-      .lean();
-
-    if (existingFeatureEndpoint) {
+    const existing = await FeatureEndpointRepository.findOne(
+      { value: featureEndpointData.value, is_deleted: { $ne: true } },
+      false,
+      true,
+    );
+    if (existing) {
       throw new AppError(
         httpStatus.CONFLICT,
         `Feature endpoint with value '${featureEndpointData.value}' already exists`,
@@ -35,21 +30,18 @@ export const createFeatureEndpoint = async (
     }
   }
 
-  const result = await FeatureEndpoint.create(featureEndpointData);
-
-  // Clear feature cache
+  const result = await FeatureEndpointRepository.create(featureEndpointData);
   await clearFeatureCache();
-
-  return result.toObject();
+  return result;
 };
 
 export const getPublicFeatureEndpoint = async (
   id: string,
 ): Promise<TFeatureEndpoint> => {
-  const result = await FeatureEndpoint.findOne({
-    _id: id,
-    is_active: true,
-  }).populate('feature');
+  const result = await FeatureEndpointRepository.findOne(
+    { _id: id, is_active: true },
+    true,
+  );
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
@@ -71,18 +63,17 @@ export const getPublicFeatureEndpointByIdOrValue = async ({
     `feature-endpoint:public:${_id || value}`,
     CACHE_TTL,
     async () => {
-      const query: any = { is_active: true };
+      const filter: any = { is_active: true };
 
       if (_id && mongoose.Types.ObjectId.isValid(_id) && value) {
-        query.$or = [{ _id: new mongoose.Types.ObjectId(_id) }, { value }];
+        filter.$or = [{ _id: new mongoose.Types.ObjectId(_id) }, { value }];
       } else if (_id && mongoose.Types.ObjectId.isValid(_id)) {
-        query._id = new mongoose.Types.ObjectId(_id);
+        filter._id = new mongoose.Types.ObjectId(_id);
       } else if (value) {
-        query.value = value;
+        filter.value = value;
       }
 
-      const result = await FeatureEndpoint.findOne(query).populate('feature');
-
+      const result = await FeatureEndpointRepository.findOne(filter, true);
       if (!result) {
         throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
       }
@@ -94,7 +85,7 @@ export const getPublicFeatureEndpointByIdOrValue = async ({
 export const getFeatureEndpoint = async (
   id: string,
 ): Promise<TFeatureEndpoint> => {
-  const result = await FeatureEndpoint.findById(id).populate('feature');
+  const result = await FeatureEndpointRepository.findById(id, true);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
@@ -103,109 +94,50 @@ export const getFeatureEndpoint = async (
 
 export const getPublicFeatureEndpoints = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TFeatureEndpoint[];
-  meta: { total: number; page: number; limit: number };
-}> => {
+): Promise<{ data: TFeatureEndpoint[]; meta: any }> => {
   const { feature, method, ...rest } = query;
+  const filter: Record<string, unknown> = { is_active: true };
 
-  const filter: Record<string, unknown> = {
-    is_active: true,
-  };
+  if (feature) filter.feature = new mongoose.Types.ObjectId(feature as string);
+  if (method) filter.method = method;
 
-  if (feature) {
-    filter.feature = new mongoose.Types.ObjectId(feature as string);
-  }
-
-  if (method) {
-    filter.method = method;
-  }
-
-  const featureEndpointQuery = new AppAggregationQuery<TFeatureEndpoint>(
-    FeatureEndpoint,
-    { ...rest, ...filter },
-  );
-  featureEndpointQuery
-    .populate([{ path: 'feature', justOne: true }])
-    .search(['name', 'value', 'endpoint', 'description'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await featureEndpointQuery.execute();
-
-  return result;
+  return await FeatureEndpointRepository.findPaginated(rest, filter);
 };
 
 export const getFeatureEndpoints = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TFeatureEndpoint[];
-  meta: { total: number; page: number; limit: number };
-}> => {
+): Promise<{ data: TFeatureEndpoint[]; meta: any }> => {
   const { feature, method, ...rest } = query;
-
   const filter: Record<string, unknown> = {};
 
-  if (feature) {
-    filter.feature = new mongoose.Types.ObjectId(feature as string);
-  }
+  if (feature) filter.feature = new mongoose.Types.ObjectId(feature as string);
+  if (method) filter.method = method;
 
-  if (method) {
-    filter.method = method;
-  }
-
-  const featureEndpointQuery = new AppAggregationQuery<TFeatureEndpoint>(
-    FeatureEndpoint,
-    { ...rest, ...filter },
-  );
-  featureEndpointQuery
-    .populate([{ path: 'feature', justOne: true }])
-    .search(['name', 'value', 'endpoint', 'description'])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await featureEndpointQuery.execute([
-    {
-      key: 'active',
-      filter: { is_active: true },
-    },
-    {
-      key: 'inactive',
-      filter: { is_active: false },
-    },
+  return await FeatureEndpointRepository.findPaginated(rest, filter, [
+    { key: 'active', filter: { is_active: true } },
+    { key: 'inactive', filter: { is_active: false } },
   ]);
-
-  return result;
 };
 
 export const updateFeatureEndpoint = async (
   id: string,
   payload: Partial<TFeatureEndpoint>,
 ): Promise<TFeatureEndpoint> => {
-  const data = await FeatureEndpoint.findById(id).lean();
-  if (!data) {
+  const existing = await FeatureEndpointRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
 
-  // Convert value to lowercase if provided
   const updateData: Partial<TFeatureEndpoint> = { ...payload };
   if (payload.value !== undefined) {
     updateData.value = payload.value.toLowerCase().trim();
 
-    // Check if value already exists (for non-deleted records, excluding current feature endpoint)
-    const existingFeatureEndpoint = await FeatureEndpoint.findOne({
-      value: updateData.value,
-      _id: { $ne: id },
-      is_deleted: { $ne: true },
-    })
-      .setOptions({ bypassDeleted: true })
-      .lean();
-
-    if (existingFeatureEndpoint) {
+    const conflict = await FeatureEndpointRepository.findOne(
+      { value: updateData.value, _id: { $ne: id }, is_deleted: { $ne: true } },
+      false,
+      true,
+    );
+    if (conflict) {
       throw new AppError(
         httpStatus.CONFLICT,
         `Feature endpoint with value '${updateData.value}' already exists`,
@@ -213,179 +145,95 @@ export const updateFeatureEndpoint = async (
     }
   }
 
-  const result = await FeatureEndpoint.findByIdAndUpdate(id, updateData, {
-    new: true,
-    runValidators: true,
-  });
-
-  // Clear feature cache
+  const result = await FeatureEndpointRepository.updateById(id, updateData);
   await clearFeatureCache();
-
   return result!;
 };
 
 export const updateFeatureEndpoints = async (
   ids: string[],
   payload: Partial<Pick<TFeatureEndpoint, 'is_active'>>,
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const featureEndpoints = await FeatureEndpoint.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = featureEndpoints.map((fe) => fe._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await FeatureEndpointRepository.findByIds(ids);
+  const foundIds = existing.map((fe) => (fe as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  const result = await FeatureEndpoint.updateMany(
+  const result = await FeatureEndpointRepository.updateMany(
     { _id: { $in: foundIds } },
-    { ...payload },
+    payload,
   );
-
-  // Clear feature cache
   await clearFeatureCache();
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
 
 export const deleteFeatureEndpoint = async (id: string): Promise<void> => {
-  const featureEndpoint = await FeatureEndpoint.findById(id);
-  if (!featureEndpoint) {
+  const existing = await FeatureEndpointRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
-
-  await featureEndpoint.softDelete();
-
-  // Clear feature cache
+  await FeatureEndpointRepository.softDeleteById(id);
   await clearFeatureCache();
 };
 
 export const deleteFeatureEndpointPermanent = async (
   id: string,
 ): Promise<void> => {
-  const featureEndpoint = await FeatureEndpoint.findById(id)
-    .setOptions({ bypassDeleted: true })
-    .lean();
-
-  if (!featureEndpoint) {
+  const existing = await FeatureEndpointRepository.findById(id);
+  if (!existing) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature endpoint not found');
   }
-
-  await FeatureEndpoint.findByIdAndDelete(id).setOptions({
-    bypassDeleted: true,
-  });
-
-  // Clear feature cache
+  await FeatureEndpointRepository.permanentDeleteById(id);
   await clearFeatureCache();
 };
 
 export const deleteFeatureEndpoints = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const featureEndpoints = await FeatureEndpoint.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = featureEndpoints.map((fe) => fe._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await FeatureEndpointRepository.findByIds(ids);
+  const foundIds = existing.map((fe) => (fe as any)._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  await FeatureEndpoint.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  // Clear feature cache
+  await FeatureEndpointRepository.softDeleteMany(foundIds);
   await clearFeatureCache();
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const deleteFeatureEndpointsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const featureEndpoints = await FeatureEndpoint.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const existing = await FeatureEndpointRepository.findByIds(ids, true);
+  const deletable = existing.filter((fe: any) => fe.is_deleted);
+  const foundIds = deletable.map((fe: any) => fe._id.toString());
+  const not_found_ids = ids.filter((id) => !foundIds.includes(id));
 
-  const foundIds = featureEndpoints.map((fe) => fe._id.toString());
-  const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await FeatureEndpoint.deleteMany({
-    _id: { $in: foundIds },
-    is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
-
-  // Clear feature cache
+  await FeatureEndpointRepository.permanentDeleteMany(foundIds);
   await clearFeatureCache();
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  return { count: foundIds.length, not_found_ids };
 };
 
 export const restoreFeatureEndpoint = async (
   id: string,
 ): Promise<TFeatureEndpoint> => {
-  const featureEndpoint = await FeatureEndpoint.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  );
-
-  if (!featureEndpoint) {
+  const result = await FeatureEndpointRepository.restore(id);
+  if (!result) {
     throw new AppError(
       httpStatus.NOT_FOUND,
       'Feature endpoint not found or not deleted',
     );
   }
-
-  // Clear feature cache
   await clearFeatureCache();
-
-  return featureEndpoint;
+  return result;
 };
 
 export const restoreFeatureEndpoints = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await FeatureEndpoint.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await FeatureEndpointRepository.restoreMany(ids);
 
-  const restoredFeatureEndpoints = await FeatureEndpoint.find({
-    _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredFeatureEndpoints.map((fe) => fe._id.toString());
-  const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
+  const restored = await FeatureEndpointRepository.findByIds(ids);
+  const restoredIds = restored.map((fe: any) => fe._id.toString());
+  const not_found_ids = ids.filter((id) => !restoredIds.includes(id));
 
-  // Clear feature cache
   await clearFeatureCache();
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids };
 };
-
-
-
-
