@@ -15,8 +15,8 @@ export type TFeatureHistory = {
   updated_at?: Date;
 };
 
-// Embedded plan data structure for history
-export type TPlanHistory = {
+// Embedded interval data structure for history
+export type TIntervalHistory = {
   _id: mongoose.Types.ObjectId;
   name: string;
   description?: string;
@@ -26,10 +26,10 @@ export type TPlanHistory = {
   updated_at?: Date;
 };
 
-// Embedded package-plan data structure for history
-export type TPackagePlanHistory = {
+// Embedded package-price data structure for history
+export type TPackagePriceHistory = {
   _id: mongoose.Types.ObjectId;
-  plan: TPlanHistory;
+  interval: TIntervalHistory;
   price: number;
   previous_price?: number;
   credits: number;
@@ -49,7 +49,7 @@ export type TPackageHistory = {
   badge?: string;
   points?: string[];
   features: TFeatureHistory[];
-  plans: TPackagePlanHistory[];
+  prices: TPackagePriceHistory[];
   sequence?: number;
   is_active?: boolean;
   version?: number;
@@ -61,5 +61,3 @@ export interface TPackageHistoryDocument extends TPackageHistory, Document {
 }
 
 export type TPackageHistoryModel = Model<TPackageHistoryDocument>;
-
-

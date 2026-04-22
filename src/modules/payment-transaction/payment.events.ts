@@ -13,7 +13,7 @@ export interface PaymentEventPayload {
   currency: string;
   paymentMethodId: string;
   packageId?: string;
-  planId?: string;
+  intervalId?: string;
   metadata?: Record<string, any>;
   timestamp: Date;
 }

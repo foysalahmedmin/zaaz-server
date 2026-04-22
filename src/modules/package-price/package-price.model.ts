@@ -1,16 +1,16 @@
 import mongoose, { Query, Schema } from 'mongoose';
 import {
-  TPackagePlan,
-  TPackagePlanDocument,
-  TPackagePlanModel,
-} from './package-plan.type';
+  TPackagePrice,
+  TPackagePriceDocument,
+  TPackagePriceModel,
+} from './package-price.type';
 
-const packagePlanSchema = new Schema<TPackagePlanDocument>(
+const packagePriceSchema = new Schema<TPackagePriceDocument>(
   {
-    plan: {
+    interval: {
       type: Schema.Types.ObjectId,
-      ref: 'Plan',
-      required: [true, 'Plan is required'],
+      ref: 'Interval',
+      required: [true, 'Interval is required'],
       index: true,
     },
     package: {
@@ -56,23 +56,21 @@ const packagePlanSchema = new Schema<TPackagePlanDocument>(
   },
 );
 
-// Indexes
-packagePlanSchema.index({ package: 1, plan: 1 }, { unique: true });
-packagePlanSchema.index({ package: 1, is_initial: 1, is_active: 1 });
-packagePlanSchema.index({ package: 1, is_active: 1, is_deleted: 1 });
-packagePlanSchema.index({ plan: 1 });
-packagePlanSchema.index({ is_deleted: 1 });
-packagePlanSchema.index({ created_at: -1 });
+packagePriceSchema.index({ package: 1, interval: 1 }, { unique: true });
+packagePriceSchema.index({ package: 1, is_initial: 1, is_active: 1 });
+packagePriceSchema.index({ package: 1, is_active: 1, is_deleted: 1 });
+packagePriceSchema.index({ interval: 1 });
+packagePriceSchema.index({ is_deleted: 1 });
+packagePriceSchema.index({ created_at: -1 });
 
-// toJSON override to remove sensitive fields from output
-packagePlanSchema.methods.toJSON = function () {
-  const packagePlan = this.toObject();
-  delete packagePlan.is_deleted;
-  return packagePlan;
+packagePriceSchema.methods.toJSON = function () {
+  const packagePrice = this.toObject();
+  delete packagePrice.is_deleted;
+  return packagePrice;
 };
 
-packagePlanSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<TPackagePlan, TPackagePlan>;
+packagePriceSchema.pre(/^find/, function (next) {
+  const query = this as unknown as Query<TPackagePrice, TPackagePrice>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -85,26 +83,21 @@ packagePlanSchema.pre(/^find/, function (next) {
   next();
 });
 
-// Aggregation pipeline
-packagePlanSchema.pre('aggregate', function (next) {
+packagePriceSchema.pre('aggregate', function (next) {
   this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
   next();
 });
 
-// Static methods
-packagePlanSchema.statics.isPackagePlanExist = async function (_id: string) {
+packagePriceSchema.statics.isPackagePriceExist = async function (_id: string) {
   return await this.findById(_id);
 };
 
-// Instance methods
-packagePlanSchema.methods.softDelete = async function () {
+packagePriceSchema.methods.softDelete = async function () {
   this.is_deleted = true;
   return await this.save();
 };
 
-export const PackagePlan = mongoose.model<
-  TPackagePlanDocument,
-  TPackagePlanModel
->('PackagePlan', packagePlanSchema);
-
-
+export const PackagePrice = mongoose.model<TPackagePriceDocument, TPackagePriceModel>(
+  'PackagePrice',
+  packagePriceSchema,
+);

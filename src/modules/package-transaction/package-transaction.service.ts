@@ -16,11 +16,11 @@ export const createPackageTransaction = async (
 export const getPackageTransactions = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TPackageTransaction[]; meta: any }> => {
-  const { user, package: packageId, plan, ...rest } = query_params;
+  const { user, package: packageId, interval, ...rest } = query_params;
   const filter: Record<string, unknown> = {};
   if (user) filter.user = new mongoose.Types.ObjectId(user as string);
   if (packageId) filter.package = new mongoose.Types.ObjectId(packageId as string);
-  if (plan) filter.plan = new mongoose.Types.ObjectId(plan as string);
+  if (interval) filter.interval = new mongoose.Types.ObjectId(interval as string);
 
   return await PackageTransactionRepository.findPaginated(rest, filter, [
     { key: 'payment', filter: { increase_source: 'payment' } },

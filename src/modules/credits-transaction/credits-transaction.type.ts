@@ -14,7 +14,7 @@ export type TCreditsTransaction = {
   increase_source?: TCreditsTransactionIncreaseSource;
   decrease_source?: TCreditsTransactionDecreaseSource;
   payment_transaction?: mongoose.Types.ObjectId;
-  plan?: mongoose.Types.ObjectId;
+  interval?: mongoose.Types.ObjectId;
   usage_key?: string;
   is_active?: boolean;
   is_deleted?: boolean;

@@ -209,13 +209,13 @@ export const giveSelfInitialPackage = catchAsync(async (req, res) => {
   });
 });
 export const assignPackage = catchAsync(async (req, res) => {
-  const { user_id, package_id, plan_id, increase_source, email } = req.body;
+  const { user_id, package_id, interval_id, increase_source, email } = req.body;
 
   const result = await UserWalletServices.assignPackage(
     {
       user_id,
       package_id,
-      plan_id,
+      interval_id,
       increase_source,
       email,
     },

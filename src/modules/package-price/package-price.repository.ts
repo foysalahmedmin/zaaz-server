@@ -1,53 +1,53 @@
 import AppAggregationQuery from '../../builder/app-aggregation-query';
 import mongoose from 'mongoose';
-import { PackagePlan } from './package-plan.model';
-import { TPackagePlan } from './package-plan.type';
+import { PackagePrice } from './package-price.model';
+import { TPackagePrice } from './package-price.type';
 
-export { PackagePlan };
+export { PackagePrice };
 
 export const findById = async (
   id: string | mongoose.Types.ObjectId,
   session?: mongoose.ClientSession,
-): Promise<TPackagePlan | null> => {
-  return await PackagePlan.findById(id).session(session || null).lean();
+): Promise<TPackagePrice | null> => {
+  return await PackagePrice.findById(id).session(session || null).lean();
 };
 
 export const findOne = async (
   filter: Record<string, unknown>,
   session?: mongoose.ClientSession,
   bypassDeleted = false,
-): Promise<TPackagePlan | null> => {
-  const query = PackagePlan.findOne(filter).session(session || null);
+): Promise<TPackagePrice | null> => {
+  const query = PackagePrice.findOne(filter).session(session || null);
   if (bypassDeleted) query.setOptions({ bypassDeleted: true });
   return await query.lean();
 };
 
 export const create = async (
-  data: TPackagePlan,
+  data: TPackagePrice,
   session?: mongoose.ClientSession,
-): Promise<TPackagePlan> => {
-  const result = await PackagePlan.create([data], { session });
+): Promise<TPackagePrice> => {
+  const result = await PackagePrice.create([data], { session });
   return result[0].toObject();
 };
 
 export const createMany = async (
-  data: TPackagePlan[],
+  data: TPackagePrice[],
   session?: mongoose.ClientSession,
-): Promise<TPackagePlan[]> => {
-  const results = await PackagePlan.create(data, { session });
+): Promise<TPackagePrice[]> => {
+  const results = await PackagePrice.create(data, { session });
   return results.map((r) => r.toObject());
 };
 
 export const findByPackage = async (
   packageId: string,
   activeOnly = false,
-): Promise<TPackagePlan[]> => {
-  const filter: any = {
-    package: packageId,
-    is_deleted: { $ne: true },
-  };
+): Promise<TPackagePrice[]> => {
+  const filter: any = { package: packageId, is_deleted: { $ne: true } };
   if (activeOnly) filter.is_active = true;
-  return await PackagePlan.find(filter).populate('plan').sort({ is_initial: -1, created_at: 1 }).lean();
+  return await PackagePrice.find(filter)
+    .populate('interval')
+    .sort({ is_initial: -1, created_at: 1 })
+    .lean();
 };
 
 export const findPaginated = async (
@@ -55,8 +55,8 @@ export const findPaginated = async (
   filter: Record<string, unknown> = {},
   groups?: { key: string; filter: Record<string, unknown> }[],
 ): Promise<any> => {
-  const q = new AppAggregationQuery<TPackagePlan>(PackagePlan, { ...query, ...filter });
-  q.populate({ path: 'plan', justOne: true })
+  const q = new AppAggregationQuery<TPackagePrice>(PackagePrice, { ...query, ...filter });
+  q.populate({ path: 'interval', justOne: true })
     .populate({ path: 'package', justOne: true })
     .search([])
     .filter()
@@ -68,10 +68,10 @@ export const findPaginated = async (
 
 export const updateById = async (
   id: string | mongoose.Types.ObjectId,
-  payload: Partial<TPackagePlan>,
+  payload: Partial<TPackagePrice>,
   session?: mongoose.ClientSession,
-): Promise<TPackagePlan | null> => {
-  return await PackagePlan.findByIdAndUpdate(id, payload, {
+): Promise<TPackagePrice | null> => {
+  return await PackagePrice.findByIdAndUpdate(id, payload, {
     new: true,
     runValidators: true,
   }).session(session || null);
@@ -82,14 +82,14 @@ export const updateMany = async (
   update: Record<string, unknown>,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
-  await PackagePlan.updateMany(filter, update, { session });
+  await PackagePrice.updateMany(filter, update, { session });
 };
 
 export const softDeleteById = async (
   id: string,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
-  const doc = await PackagePlan.findById(id).session(session || null);
+  const doc = await PackagePrice.findById(id).session(session || null);
   if (doc) await doc.softDelete();
 };
 
@@ -97,14 +97,14 @@ export const softDeleteByPackage = async (
   packageId: string,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
-  await PackagePlan.updateMany({ package: packageId }, { is_deleted: true }, { session });
+  await PackagePrice.updateMany({ package: packageId }, { is_deleted: true }, { session });
 };
 
 export const restoreByPackage = async (
   packageId: string,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
-  await PackagePlan.updateMany(
+  await PackagePrice.updateMany(
     { package: packageId, is_deleted: true },
     { is_deleted: false },
     { session },

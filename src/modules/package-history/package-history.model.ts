@@ -89,14 +89,14 @@ const packageHistorySchema = new Schema<TPackageHistoryDocument>(
         updated_at: Date,
       },
     ],
-    // Embedded package-plan objects with plan populated (not references)
-    plans: [
+    // Embedded package-price objects with interval populated (not references)
+    prices: [
       {
         _id: {
           type: Schema.Types.ObjectId,
           required: true,
         },
-        plan: {
+        interval: {
           _id: {
             type: Schema.Types.ObjectId,
             required: true,

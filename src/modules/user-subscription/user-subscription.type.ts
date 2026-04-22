@@ -7,7 +7,7 @@ export type TUserSubscription = {
   user: mongoose.Types.ObjectId;
   package: mongoose.Types.ObjectId | null;
   package_snapshot: mongoose.Types.ObjectId | null;
-  plan: mongoose.Types.ObjectId | null;
+  interval: mongoose.Types.ObjectId | null;
   status: TUserSubscriptionStatus;
   current_period_start: Date;
   current_period_end: Date;

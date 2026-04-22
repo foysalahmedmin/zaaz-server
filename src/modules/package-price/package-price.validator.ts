@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-// Common schema parts
 const idSchema = z.string().refine((val) => /^[0-9a-fA-F]{24}$/.test(val), {
   message: 'Invalid ID format',
 });
@@ -9,9 +8,9 @@ const priceSchema = z
   .number({ invalid_type_error: 'Price must be a number' })
   .nonnegative('Price must be 0 or greater');
 
-export const createPackagePlanValidationSchema = z.object({
+export const createPackagePriceValidationSchema = z.object({
   body: z.object({
-    plan: idSchema,
+    interval: idSchema,
     package: idSchema,
     previous_price: priceSchema.optional(),
     price: priceSchema,
@@ -24,16 +23,14 @@ export const createPackagePlanValidationSchema = z.object({
   }),
 });
 
-export const createPackagePlansValidationSchema = z.object({
-  body: z.array(createPackagePlanValidationSchema.shape.body),
+export const createPackagePricesValidationSchema = z.object({
+  body: z.array(createPackagePriceValidationSchema.shape.body),
 });
 
-export const updatePackagePlanValidationSchema = z.object({
-  params: z.object({
-    id: idSchema,
-  }),
+export const updatePackagePriceValidationSchema = z.object({
+  params: z.object({ id: idSchema }),
   body: z.object({
-    plan: idSchema.optional(),
+    interval: idSchema.optional(),
     package: idSchema.optional(),
     previous_price: priceSchema.optional(),
     price: priceSchema.optional(),
@@ -47,10 +44,6 @@ export const updatePackagePlanValidationSchema = z.object({
   }),
 });
 
-export const packagePlanOperationValidationSchema = z.object({
-  params: z.object({
-    id: idSchema,
-  }),
+export const packagePriceOperationValidationSchema = z.object({
+  params: z.object({ id: idSchema }),
 });
-
-

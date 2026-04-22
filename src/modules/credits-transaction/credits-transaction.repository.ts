@@ -43,7 +43,7 @@ export const findPaginated = async (
     { path: 'user_wallet', select: '_id credits', justOne: true },
     { path: 'decrease_source', select: '_id name endpoint credits', justOne: true },
     { path: 'payment_transaction', select: '_id status amount currency', justOne: true },
-    { path: 'plan', select: '_id name', justOne: true },
+    { path: 'interval', select: '_id name', justOne: true },
   ])
     .search(['email', 'usage_key'])
     .filter()

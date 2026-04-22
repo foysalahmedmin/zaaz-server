@@ -17,11 +17,11 @@ import FeatureRoutes from './modules/feature/feature.route';
 import NotificationRecipientRoutes from './modules/notification-recipient/notification-recipient.route';
 import NotificationRoutes from './modules/notification/notification.route';
 import PackageHistoryRoutes from './modules/package-history/package-history.route';
-import PackagePlanRoutes from './modules/package-plan/package-plan.route';
+import PackagePriceRoutes from './modules/package-price/package-price.route';
 import PackageRoutes from './modules/package/package.route';
 import PaymentMethodRoutes from './modules/payment-method/payment-method.route';
 import PaymentTransactionRoutes from './modules/payment-transaction/payment-transaction.route';
-import PlanRoutes from './modules/plan/plan.route';
+import IntervalRoutes from './modules/interval/interval.route';
 import UserWalletRoutes from './modules/user-wallet/user-wallet.route';
 import UserRoutes from './modules/user/user.route';
 
@@ -83,16 +83,16 @@ const moduleRoutes = [
     route: FeaturePopupRoutes,
   },
   {
-    path: '/plans',
-    route: PlanRoutes,
+    path: '/intervals',
+    route: IntervalRoutes,
   },
   {
     path: '/packages',
     route: PackageRoutes,
   },
   {
-    path: '/package-plans',
-    route: PackagePlanRoutes,
+    path: '/package-prices',
+    route: PackagePriceRoutes,
   },
   {
     path: '/coupons',

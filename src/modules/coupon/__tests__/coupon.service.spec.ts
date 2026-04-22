@@ -27,7 +27,7 @@ describe('Coupon Service Unit Tests', () => {
       (CouponRepository.findActiveByCode as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        CouponServices.validateCoupon('INVALID', 'pkg-1', 'plan-1', 'USD')
+        CouponServices.validateCoupon('INVALID', 'pkg-1', 'interval-1', 'USD')
       ).rejects.toThrow(new AppError(httpStatus.NOT_FOUND, 'Invalid or inactive coupon code'));
     });
   });

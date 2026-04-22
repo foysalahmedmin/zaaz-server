@@ -104,7 +104,7 @@ export const validateCouponValidationSchema = z.object({
   body: z.object({
     code: z.string().trim(),
     package: idSchema,
-    plan: idSchema,
+    interval: idSchema,
     currency: z.enum(['USD', 'BDT']),
   }),
 });

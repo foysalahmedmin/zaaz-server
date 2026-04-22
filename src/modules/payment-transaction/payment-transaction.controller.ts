@@ -151,7 +151,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
   const userId = req.user._id;
   const {
     package: packageId,
-    plan: planId,
+    interval: intervalId,
     payment_method: paymentMethodId,
     return_url: returnUrl,
     cancel_url: cancelUrl,
@@ -170,7 +170,7 @@ export const initiatePayment = catchAsync(async (req, res) => {
   const result = await PaymentTransactionServices.initiatePayment({
     userId,
     packageId,
-    planId,
+    intervalId,
     paymentMethodId,
     returnUrl,
     cancelUrl,

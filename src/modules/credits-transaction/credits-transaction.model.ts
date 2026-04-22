@@ -74,9 +74,9 @@ const creditsTransactionSchema = new Schema<TCreditsTransactionDocument>(
           'payment_transaction is required when type is increase and increase_source is payment',
       },
     },
-    plan: {
+    interval: {
       type: Schema.Types.ObjectId,
-      ref: 'Plan',
+      ref: 'Interval',
       index: true,
     },
     usage_key: {

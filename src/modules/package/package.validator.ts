@@ -9,8 +9,8 @@ const priceSchema = z
   .number({ invalid_type_error: 'Price must be a number' })
   .nonnegative('Price must be 0 or greater');
 
-const packagePlanDataSchema = z.object({
-  plan: idSchema,
+const packagePriceDataSchema = z.object({
+  interval: idSchema,
   price: priceSchema,
   credits: z
     .number({ invalid_type_error: 'Credits must be a number' })
@@ -42,11 +42,11 @@ export const createPackageValidationSchema = z.object({
         required_error: 'At least one feature is required',
       })
       .nonempty('At least one feature is required'),
-    plans: z
-      .array(packagePlanDataSchema, {
-        required_error: 'At least one plan is required',
+    prices: z
+      .array(packagePriceDataSchema, {
+        required_error: 'At least one price is required',
       })
-      .nonempty('At least one plan is required'),
+      .nonempty('At least one price is required'),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')
@@ -86,7 +86,7 @@ export const updatePackageValidationSchema = z.object({
       .array(idSchema)
       .nonempty('At least one feature is required')
       .optional(),
-    plans: z.array(packagePlanDataSchema).optional(),
+    prices: z.array(packagePriceDataSchema).optional(),
     sequence: z
       .number({ invalid_type_error: 'Sequence must be a number' })
       .int('Sequence must be an integer')

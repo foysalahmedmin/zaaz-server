@@ -1,7 +1,7 @@
 import mongoose, { Query, Schema } from 'mongoose';
-import { TPlan, TPlanDocument, TPlanModel } from './plan.type';
+import { TInterval, TIntervalDocument, TIntervalModel } from './interval.type';
 
-const planSchema = new Schema<TPlanDocument>(
+const intervalSchema = new Schema<TIntervalDocument>(
   {
     name: {
       type: String,
@@ -44,20 +44,18 @@ const planSchema = new Schema<TPlanDocument>(
   },
 );
 
-// Indexes
-planSchema.index({ is_active: 1, is_deleted: 1 });
-planSchema.index({ duration: 1 });
-planSchema.index({ created_at: -1 });
+intervalSchema.index({ is_active: 1, is_deleted: 1 });
+intervalSchema.index({ duration: 1 });
+intervalSchema.index({ created_at: -1 });
 
-// toJSON override to remove sensitive fields from output
-planSchema.methods.toJSON = function () {
-  const plan = this.toObject();
-  delete plan.is_deleted;
-  return plan;
+intervalSchema.methods.toJSON = function () {
+  const interval = this.toObject();
+  delete interval.is_deleted;
+  return interval;
 };
 
-planSchema.pre(/^find/, function (next) {
-  const query = this as unknown as Query<TPlan, TPlan>;
+intervalSchema.pre(/^find/, function (next) {
+  const query = this as unknown as Query<TInterval, TInterval>;
   const opts = query.getOptions();
 
   if (!opts?.bypassDeleted && query.getQuery().is_deleted === undefined) {
@@ -70,26 +68,21 @@ planSchema.pre(/^find/, function (next) {
   next();
 });
 
-// Aggregation pipeline
-planSchema.pre('aggregate', function (next) {
+intervalSchema.pre('aggregate', function (next) {
   this.pipeline().unshift({ $match: { is_deleted: { $ne: true } } });
   next();
 });
 
-// Static methods
-planSchema.statics.isPlanExist = async function (_id: string) {
+intervalSchema.statics.isIntervalExist = async function (_id: string) {
   return await this.findById(_id);
 };
 
-// Instance methods
-planSchema.methods.softDelete = async function () {
+intervalSchema.methods.softDelete = async function () {
   this.is_deleted = true;
   return await this.save();
 };
 
-export const Plan = mongoose.model<TPlanDocument, TPlanModel>(
-  'Plan',
-  planSchema,
+export const Interval = mongoose.model<TIntervalDocument, TIntervalModel>(
+  'Interval',
+  intervalSchema,
 );
-
-

@@ -30,7 +30,7 @@ export const sendPaymentNotificationEmail = async (
       packagePlan?.package?.name ||
       'Package',
     planName:
-      (transaction as any).plan?.name || packagePlan?.plan?.name || 'Plan',
+      (transaction as any).interval?.name || packagePlan?.interval?.name || 'Interval',
     credits: packagePlan?.credits || (transaction as any).price?.credits || 0,
   };
 

@@ -1,7 +1,7 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/app-error';
 import { getPriceInCurrency } from '../../utils/currency.utils';
-import { PackagePlan } from '../package-plan/package-plan.model';
+import { PackagePrice } from '../package-price/package-price.model';
 import * as CouponRepository from './coupon.repository';
 import { TCoupon } from './coupon.type';
 
@@ -73,7 +73,7 @@ const deleteCouponByCode = async (
 const validateCoupon = async (
   code: string,
   packageId: string,
-  planId: string,
+  intervalId: string,
   currency: 'USD' | 'BDT',
 ) => {
   const coupon = await CouponRepository.findActiveByCode(code);
@@ -112,17 +112,17 @@ const validateCoupon = async (
   }
 
   // Get price for min purchase validation
-  const packagePlan = await PackagePlan.findOne({
+  const packagePrice = await PackagePrice.findOne({
     package: packageId,
-    plan: planId,
+    interval: intervalId,
     is_active: true,
   });
 
-  if (!packagePlan) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Package plan not found');
+  if (!packagePrice) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package price not found');
   }
 
-  const originalPrice = getPriceInCurrency(packagePlan.price, currency);
+  const originalPrice = getPriceInCurrency(packagePrice.price, currency);
   const minPurchase = getPriceInCurrency(coupon.min_purchase_amount, currency);
 
   if (originalPrice < minPurchase) {

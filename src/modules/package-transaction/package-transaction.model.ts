@@ -30,10 +30,10 @@ const packageTransactionSchema = new Schema<TPackageTransactionDocument>(
       required: [true, 'Package is required'],
       index: true,
     },
-    plan: {
+    interval: {
       type: Schema.Types.ObjectId,
-      ref: 'Plan',
-      required: [true, 'Plan is required'],
+      ref: 'Interval',
+      required: [true, 'Interval is required'],
       index: true,
     },
     credits: {

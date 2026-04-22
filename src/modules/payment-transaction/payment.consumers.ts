@@ -26,7 +26,7 @@ export const handlePaymentCompleted = async (
 
     // Fetch transaction with necessary population
     const transaction = await PaymentTransaction.findById(transactionId)
-      .populate('package plan price coupon')
+      .populate('package interval price coupon')
       .session(session);
 
     if (!transaction) {
@@ -53,7 +53,7 @@ export const handlePaymentCompleted = async (
       {
         user_id: transaction.user.toString(),
         package_id: transaction.package.toString(),
-        plan_id: transaction.plan.toString(),
+        interval_id: transaction.interval.toString(),
         increase_source: 'payment',
         payment_transaction_id: transactionId,
         email: transaction.email,

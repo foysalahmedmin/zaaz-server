@@ -5,7 +5,7 @@ export type TPackageTransaction = {
   email?: string;
   user_wallet: mongoose.Types.ObjectId;
   package: mongoose.Types.ObjectId;
-  plan: mongoose.Types.ObjectId;
+  interval: mongoose.Types.ObjectId;
   credits: number;
   increase_source: 'payment' | 'bonus';
   payment_transaction?: mongoose.Types.ObjectId;

@@ -84,7 +84,7 @@ export const assignPackageValidationSchema = z.object({
   body: z.object({
     user_id: idSchema,
     package_id: idSchema,
-    plan_id: idSchema,
+    interval_id: idSchema,
     increase_source: z.enum(['payment', 'bonus']),
     email: z.string().email('Invalid email format').optional(),
   }),

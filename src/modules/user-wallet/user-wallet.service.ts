@@ -3,11 +3,11 @@ import mongoose from 'mongoose';
 import AppError from '../../builder/app-error';
 import { invalidateCache, withCache } from '../../utils/cache.utils';
 import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
-import { PackagePlan } from '../package-plan/package-plan.model';
-import { getPackagePlansByPackage } from '../package-plan/package-plan.service';
+import { PackagePrice } from '../package-price/package-price.model';
+import { getPackagePricesByPackage } from '../package-price/package-price.service';
 import { PackageTransaction } from '../package-transaction/package-transaction.model';
 import { Package } from '../package/package.model';
-import { Plan } from '../plan/plan.model';
+import { Interval } from '../interval/interval.model';
 import * as UserWalletRepository from './user-wallet.repository';
 import { TUserWallet } from './user-wallet.type';
 
@@ -122,11 +122,11 @@ export const decrementWalletCredits = async (
 export const getUserWallets = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TUserWallet[]; meta: any }> => {
-  const { user, package: packageId, plan, ...rest } = query_params;
+  const { user, package: packageId, interval, ...rest } = query_params;
   const filter: Record<string, unknown> = {};
   if (user) filter.user = new mongoose.Types.ObjectId(user as string);
   if (packageId) filter.package = new mongoose.Types.ObjectId(packageId as string);
-  if (plan) filter.plan = new mongoose.Types.ObjectId(plan as string);
+  if (interval) filter.interval = new mongoose.Types.ObjectId(interval as string);
 
   return await UserWalletRepository.findPaginated(rest, filter, [{ key: 'all', filter: {} }]);
 };
@@ -344,16 +344,16 @@ export const giveInitialPackage = async (
     );
   }
 
-  const packagePlans = await getPackagePlansByPackage(initialPackage._id.toString(), false);
-  const initialPlan = packagePlans.find((pp) => pp.is_initial === true);
+  const packagePrices = await getPackagePricesByPackage(initialPackage._id.toString(), false);
+  const initialPrice = packagePrices.find((pp) => pp.is_initial === true);
 
-  if (!initialPlan) {
-    throw new AppError(httpStatus.NOT_FOUND, 'No initial plan found for the initial package.');
+  if (!initialPrice) {
+    throw new AppError(httpStatus.NOT_FOUND, 'No initial price found for the initial package.');
   }
 
-  const planData = await Plan.findById(initialPlan.plan).session(session || null).lean();
-  if (!planData) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
+  const intervalData = await Interval.findById(initialPrice.interval).session(session || null).lean();
+  if (!intervalData) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Interval not found');
   }
 
   const existingWallet = await UserWalletRepository.findOne({ user: user_id }, session);
@@ -374,7 +374,7 @@ export const giveInitialPackage = async (
     {
       user_id,
       package_id: initialPackage._id.toString(),
-      plan_id: planData._id.toString(),
+      interval_id: intervalData._id.toString(),
       increase_source: 'bonus',
       email,
       is_initial: true,
@@ -387,7 +387,7 @@ export const assignPackage = async (
   data: {
     user_id: string;
     package_id: string;
-    plan_id: string;
+    interval_id: string;
     increase_source: 'payment' | 'bonus';
     payment_transaction_id?: string;
     email?: string;
@@ -395,7 +395,7 @@ export const assignPackage = async (
   },
   session?: mongoose.ClientSession,
 ): Promise<TUserWallet> => {
-  const { user_id, package_id, plan_id, increase_source, payment_transaction_id, email, is_initial } = data;
+  const { user_id, package_id, interval_id, increase_source, payment_transaction_id, email, is_initial } = data;
 
   if (payment_transaction_id) {
     const existingLog = await CreditsTransaction.findOne({
@@ -412,21 +412,21 @@ export const assignPackage = async (
     }
   }
 
-  const packagePlan = await PackagePlan.findOne({
+  const packagePrice = await PackagePrice.findOne({
     package: package_id,
-    plan: plan_id,
+    interval: interval_id,
     is_active: true,
   })
     .session(session || null)
     .lean();
 
-  if (!packagePlan) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Package plan not found or not active');
+  if (!packagePrice) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package price not found or not active');
   }
 
-  const planData = await Plan.findById(plan_id).session(session || null).lean();
-  if (!planData) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Plan not found');
+  const intervalData = await Interval.findById(interval_id).session(session || null).lean();
+  if (!intervalData) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Interval not found');
   }
 
   const existingWallet = await UserWalletRepository.findOne({ user: user_id }, session);
@@ -449,7 +449,7 @@ export const assignPackage = async (
   const updatedWallet = await UserWalletRepository.findOneAndUpdate(
     filter,
     {
-      $inc: { credits: packagePlan.credits },
+      $inc: { credits: packagePrice.credits },
       $set: { ...(is_initial ? { initial_package_given: true } : {}) },
     },
     session,
@@ -457,9 +457,9 @@ export const assignPackage = async (
 
   const now = new Date();
   let expiresAt: Date;
-  if (planData.duration && planData.duration > 0) {
+  if (intervalData.duration && intervalData.duration > 0) {
     expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + (planData.duration as number));
+    expiresAt.setDate(expiresAt.getDate() + (intervalData.duration as number));
   } else {
     expiresAt = new Date(now);
     expiresAt.setFullYear(expiresAt.getFullYear() + 100);
@@ -492,7 +492,7 @@ export const assignPackage = async (
       user: new mongoose.Types.ObjectId(user_id),
       package: new mongoose.Types.ObjectId(package_id),
       package_snapshot: snapshotId,
-      plan: new mongoose.Types.ObjectId(plan_id),
+      interval: new mongoose.Types.ObjectId(interval_id),
       status: 'active',
       current_period_start: now,
       current_period_end: expiresAt,
@@ -532,8 +532,8 @@ export const assignPackage = async (
             user_wallet: (updatedWallet as any)._id,
             email: email || (updatedWallet as any).email,
             package: new mongoose.Types.ObjectId(package_id),
-            plan: new mongoose.Types.ObjectId(plan_id),
-            credits: packagePlan.credits,
+            interval: new mongoose.Types.ObjectId(interval_id),
+            credits: packagePrice.credits,
             increase_source,
             payment_transaction: payment_transaction_id,
           },
@@ -565,8 +565,8 @@ export const assignPackage = async (
             email: email || (updatedWallet as any).email,
             type: 'increase',
             increase_source,
-            credits: packagePlan.credits,
-            plan: new mongoose.Types.ObjectId(plan_id),
+            credits: packagePrice.credits,
+            interval: new mongoose.Types.ObjectId(interval_id),
             payment_transaction: payment_transaction_id,
           },
         ],

@@ -27,7 +27,7 @@ async function migrate() {
     const walletsToMigrate = await userWalletsCollection.find({
       $or: [
         { package: { $exists: true, $ne: null } },
-        { plan: { $exists: true, $ne: null } }
+        { interval: { $exists: true, $ne: null } }
       ]
     }).toArray();
 
@@ -48,7 +48,7 @@ async function migrate() {
         continue;
       }
 
-      if (!wallet.package || !wallet.plan) {
+      if (!wallet.package || !wallet.interval) {
         console.log(`⚠️ User ${userId} has incomplete legacy data. Skipping.`);
         skippedCount++;
         continue;
@@ -81,7 +81,7 @@ async function migrate() {
         user: userId,
         package: wallet.package,
         package_snapshot: history._id,
-        plan: wallet.plan,
+        interval: wallet.interval,
         status: 'active',
         current_period_start: wallet.updated_at || now,
         current_period_end: expiresAt,
@@ -97,7 +97,7 @@ async function migrate() {
       // but since we removed them from the schema, they won't be visible anyway)
       await userWalletsCollection.updateOne(
         { _id: wallet._id },
-        { $unset: { package: "", plan: "", expires_at: "", bonus_credits: "", type: "" } }
+        { $unset: { package: "", interval: "", expires_at: "", bonus_credits: "", type: "" } }
       );
 
       migratedCount++;

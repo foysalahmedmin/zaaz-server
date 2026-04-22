@@ -38,7 +38,7 @@ describe('PaymentTransaction Route Integration Tests', () => {
     it('should initiate a payment and return redirect URL', async () => {
       const mockPayload = {
         package: '507f1f77bcf86cd799439011',
-        plan: '507f1f77bcf86cd799439012',
+        interval: '507f1f77bcf86cd799439012',
         payment_method: '507f1f77bcf86cd799439013',
         return_url: 'http://return.com',
         cancel_url: 'http://cancel.com',

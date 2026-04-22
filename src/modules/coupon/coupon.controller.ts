@@ -58,11 +58,11 @@ const deleteCoupon = catchAsync(async (req, res) => {
 });
 
 const validateCoupon = catchAsync(async (req, res) => {
-  const { code, package: packageId, plan: planId, currency } = req.body;
+  const { code, package: packageId, interval: intervalId, currency } = req.body;
   const result = await CouponServices.validateCoupon(
     code,
     packageId,
-    planId,
+    intervalId,
     currency,
   );
   responseFormatter(res, {

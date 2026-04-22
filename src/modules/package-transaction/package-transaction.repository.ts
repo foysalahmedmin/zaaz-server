@@ -25,7 +25,7 @@ export const findById = async (
 export const findByIdPopulated = async (id: string): Promise<TPackageTransaction | null> => {
   return await PackageTransaction.findById(id).populate([
     'package',
-    'plan',
+    'interval',
     'user',
     'user_wallet',
     'payment_transaction',
@@ -47,7 +47,7 @@ export const findPaginated = async (
   });
   q.populate([
     { path: 'package', justOne: true },
-    { path: 'plan', justOne: true },
+    { path: 'interval', justOne: true },
     { path: 'user', select: 'name email', justOne: true },
   ])
     .search(['email'])

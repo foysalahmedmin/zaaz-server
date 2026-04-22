@@ -11,12 +11,12 @@ import {
 } from '../package-feature/package-feature.service';
 import { PackageHistory } from '../package-history/package-history.model';
 import {
-  createPackagePlans,
-  deletePackagePlansByPackage,
-  getPackagePlansByPackage,
-} from '../package-plan/package-plan.service';
+  createPackagePrices,
+  deletePackagePricesByPackage,
+  getPackagePricesByPackage,
+} from '../package-price/package-price.service';
 import * as PackageRepository from './package.repository';
-import * as PlanRepository from '../plan/plan.repository';
+import * as IntervalRepository from '../interval/interval.repository';
 import { getPriceInCurrency } from '../../utils/currency.utils';
 import { TPackage } from './package.type';
 
@@ -29,22 +29,22 @@ export const clearPackageCache = async () => {
 
 const transformPackageWithCurrency = (pkg: any) => {
   if (!pkg) return pkg;
-  
-  const transformedPlans = (pkg.plans || []).map((plan: any) => ({
-    ...plan,
-    price_bdt: getPriceInCurrency(plan.price, 'BDT'),
+
+  const transformedPrices = (pkg.prices || []).map((price: any) => ({
+    ...price,
+    price_bdt: getPriceInCurrency(price.price, 'BDT'),
   }));
 
   return {
     ...pkg,
-    plans: transformedPlans,
+    prices: transformedPrices,
   };
 };
 
-const getPlansLookupStage = () => [
+const getPricesLookupStage = () => [
   {
     $lookup: {
-      from: 'packageplans',
+      from: 'packageprices',
       let: { packageId: '$_id' },
       pipeline: [
         {
@@ -56,21 +56,21 @@ const getPlansLookupStage = () => [
         },
         {
           $lookup: {
-            from: 'plans',
-            localField: 'plan',
+            from: 'intervals',
+            localField: 'interval',
             foreignField: '_id',
-            as: 'plan',
+            as: 'interval',
           },
         },
         {
           $unwind: {
-            path: '$plan',
+            path: '$interval',
             preserveNullAndEmptyArrays: false,
           },
         },
         {
           $project: {
-            plan: 1,
+            interval: 1,
             price: 1,
             previous_price: 1,
             credits: 1,
@@ -83,7 +83,7 @@ const getPlansLookupStage = () => [
           $sort: { is_initial: -1, created_at: 1 },
         },
       ],
-      as: 'plans',
+      as: 'prices',
     },
   },
 ];
@@ -126,8 +126,8 @@ const getFeaturesLookupStage = () => [
 
 export const createPackage = async (
   data: TPackage & {
-    plans?: Array<{
-      plan: mongoose.Types.ObjectId | string;
+    prices?: Array<{
+      interval: mongoose.Types.ObjectId | string;
       price: number;
       credits: number;
       is_initial?: boolean;
@@ -137,23 +137,16 @@ export const createPackage = async (
   },
   session?: mongoose.ClientSession,
 ): Promise<TPackage> => {
-  // Extract plans and features from payload
-  const { plans, features, ...packageData } = data;
+  const { prices, features, ...packageData } = data;
 
-  // Validate plans are provided and at least one exists
-  if (!plans || plans.length === 0) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'At least one plan is required');
+  if (!prices || prices.length === 0) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'At least one price is required');
   }
 
-  // Validate features are provided and at least one exists
   if (!features || features.length === 0) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'At least one feature is required',
-    );
+    throw new AppError(httpStatus.BAD_REQUEST, 'At least one feature is required');
   }
 
-  // If is_initial is true, ensure no other package has is_initial=true
   if (packageData.is_initial === true) {
     await PackageRepository.Package.updateMany(
       { is_initial: true, _id: { $ne: null } },
@@ -162,42 +155,34 @@ export const createPackage = async (
     );
   }
 
-  // Create package
   const result = await PackageRepository.Package.create([packageData], { session });
   const packageId = result[0]._id.toString();
 
-  // Handle Plans
-  // Implement plan creation logic identical to before
-  const planIds: mongoose.Types.ObjectId[] = plans.map((p: any) => {
-    const planId = p.plan;
-    if (typeof planId === 'string') {
-      return new mongoose.Types.ObjectId(planId);
+  const intervalIds: mongoose.Types.ObjectId[] = prices.map((p: any) => {
+    const intervalId = p.interval;
+    if (typeof intervalId === 'string') {
+      return new mongoose.Types.ObjectId(intervalId);
     }
-    return planId;
+    return intervalId;
   });
 
-  // Validate all plans exist and are active
-  const planDocs = await PlanRepository.Plan.find({
-    _id: { $in: planIds },
+  const intervalDocs = await IntervalRepository.Interval.find({
+    _id: { $in: intervalIds },
     is_active: true,
   })
     .session(session || null)
     .lean();
 
-  if (planDocs.length !== planIds.length) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      'One or more plans not found or not active',
-    );
+  if (intervalDocs.length !== intervalIds.length) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'One or more intervals not found or not active');
   }
 
-  // Ensure exactly one is_initial=true
-  const initialPlans = plans.filter((p: any) => p.is_initial === true);
-  if (initialPlans.length === 0) {
-    plans[0].is_initial = true;
-  } else if (initialPlans.length > 1) {
+  const initialPrices = prices.filter((p: any) => p.is_initial === true);
+  if (initialPrices.length === 0) {
+    prices[0].is_initial = true;
+  } else if (initialPrices.length > 1) {
     let foundFirst = false;
-    plans.forEach((p: any) => {
+    prices.forEach((p: any) => {
       if (p.is_initial === true) {
         if (!foundFirst) {
           foundFirst = true;
@@ -208,23 +193,20 @@ export const createPackage = async (
     });
   }
 
-  // Create package-plan documents
-  const packagePlanData = plans.map((planData: any) => ({
-    plan:
-      typeof planData.plan === 'string'
-        ? new mongoose.Types.ObjectId(planData.plan)
-        : planData.plan,
+  const packagePriceData = prices.map((priceData: any) => ({
+    interval:
+      typeof priceData.interval === 'string'
+        ? new mongoose.Types.ObjectId(priceData.interval)
+        : priceData.interval,
     package: new mongoose.Types.ObjectId(packageId),
-    price: planData.price,
-    credits: planData.credits,
-    is_initial: planData.is_initial || false,
-    is_active: planData.is_active !== undefined ? planData.is_active : true,
+    price: priceData.price,
+    credits: priceData.credits,
+    is_initial: priceData.is_initial || false,
+    is_active: priceData.is_active !== undefined ? priceData.is_active : true,
   }));
 
-  await createPackagePlans(packagePlanData, session);
+  await createPackagePrices(packagePriceData, session);
 
-  // Handle Features
-  // Create package-feature documents
   const packageFeatureData = features.map((featureId: string) => ({
     package: new mongoose.Types.ObjectId(packageId),
     feature: new mongoose.Types.ObjectId(featureId),
@@ -233,15 +215,14 @@ export const createPackage = async (
 
   await createPackageFeatures(packageFeatureData, session);
 
-  // Clear cache after creation
   await clearPackageCache();
 
   const createdPackage = await getPackage(packageId);
 
   const embeddedFeatures = (createdPackage.features || []).map((feature: any) => ({ ...feature }));
-  const embeddedPlans = (createdPackage.plans || []).map((pp: any) => ({
+  const embeddedPrices = (createdPackage.prices || []).map((pp: any) => ({
     _id: pp._id,
-    plan: pp.plan,
+    interval: pp.interval,
     price: pp.price,
     previous_price: pp.previous_price,
     credits: pp.credits,
@@ -261,7 +242,7 @@ export const createPackage = async (
     badge: createdPackage.badge,
     points: createdPackage.points,
     features: embeddedFeatures,
-    plans: embeddedPlans,
+    prices: embeddedPrices,
     sequence: createdPackage.sequence,
     is_active: createdPackage.is_active,
     version: createdPackage.version || 1,
@@ -282,7 +263,7 @@ export const getPublicPackage = async (id: string): Promise<any> => {
         },
       },
       ...getFeaturesLookupStage(),
-      ...getPlansLookupStage(),
+      ...getPricesLookupStage(),
     ];
 
     const results = await PackageRepository.Package.aggregate(pipeline);
@@ -324,7 +305,7 @@ export const getPackage = async (id: string): Promise<any> => {
       },
     },
     ...getFeaturesLookupStage(),
-    ...getPlansLookupStage(),
+    ...getPricesLookupStage(),
   ];
 
   const results = await PackageRepository.Package.aggregate(pipeline);
@@ -360,7 +341,7 @@ export const getPublicPackages = async (
 
       const lookupStages: any[] = [
         ...getFeaturesLookupStage(),
-        ...getPlansLookupStage(),
+        ...getPricesLookupStage(),
       ];
 
       const { _id: _, ...restQuery } = query;
@@ -399,7 +380,7 @@ export const getPackages = async (
 
   const lookupStages: any[] = [
     ...getFeaturesLookupStage(),
-    ...getPlansLookupStage(),
+    ...getPricesLookupStage(),
   ];
 
   const packageQuery = new AppAggregationQuery<TPackage>(PackageRepository.Package, {
@@ -445,8 +426,8 @@ export const getPackages = async (
 export const updatePackage = async (
   id: string,
   payload: Partial<TPackage> & {
-    plans?: Array<{
-      plan: mongoose.Types.ObjectId | string;
+    prices?: Array<{
+      interval: mongoose.Types.ObjectId | string;
       price: number;
       credits: number;
       is_initial?: boolean;
@@ -462,84 +443,81 @@ export const updatePackage = async (
   }
 
 
-  // Handle Plans Sync (Complex logic preserved)
-  if (payload.plans !== undefined) {
-    // ... [Logic for Plan Sync largely same as before, simplified for this tool call but should be robust]
-    // Re-implementing logic with imports inside function to avoid circular dep issues if any
-    const { updatePackagePlan, deletePackagePlan } =
-      await import('../package-plan/package-plan.service');
+  if (payload.prices !== undefined) {
+    const { updatePackagePrice, deletePackagePrice } =
+      await import('../package-price/package-price.service');
 
-    type UpdatePlanInput = {
-      plan: mongoose.Types.ObjectId | string;
+    type UpdatePriceInput = {
+      interval: mongoose.Types.ObjectId | string;
       price: number;
       credits: number;
       is_initial?: boolean;
       is_active?: boolean;
     };
 
-    const currentPackagePlans = await getPackagePlansByPackage(id, false);
-    const oldPlanIds = currentPackagePlans.map((pp) => {
-      const planId =
-        typeof pp.plan === 'object' && pp.plan?._id
-          ? pp.plan._id.toString()
-          : pp.plan.toString();
-      return planId;
+    const currentPackagePrices = await getPackagePricesByPackage(id, false);
+    const oldIntervalIds = currentPackagePrices.map((pp) => {
+      const intervalId =
+        typeof pp.interval === 'object' && pp.interval?._id
+          ? pp.interval._id.toString()
+          : pp.interval.toString();
+      return intervalId;
     });
 
-    const newPackagePlanInputs = payload.plans as UpdatePlanInput[];
-    const newPlanIds = newPackagePlanInputs.map((p) =>
-      typeof p.plan === 'string' ? p.plan : p.plan.toString(),
+    const newPackagePriceInputs = payload.prices as UpdatePriceInput[];
+    const newIntervalIds = newPackagePriceInputs.map((p) =>
+      typeof p.interval === 'string' ? p.interval : p.interval.toString(),
     );
 
-    const addedPlanInputs = newPackagePlanInputs.filter(
+    const addedPriceInputs = newPackagePriceInputs.filter(
       (p) =>
-        !oldPlanIds.includes(
-          typeof p.plan === 'string' ? p.plan : p.plan.toString(),
+        !oldIntervalIds.includes(
+          typeof p.interval === 'string' ? p.interval : p.interval.toString(),
         ),
     );
-    const removedPackagePlans = currentPackagePlans.filter((pp) => {
-      const planId =
-        typeof pp.plan === 'object' && pp.plan?._id
-          ? pp.plan._id.toString()
-          : pp.plan.toString();
-      return !newPlanIds.includes(planId);
+    const removedPackagePrices = currentPackagePrices.filter((pp) => {
+      const intervalId =
+        typeof pp.interval === 'object' && pp.interval?._id
+          ? pp.interval._id.toString()
+          : pp.interval.toString();
+      return !newIntervalIds.includes(intervalId);
     });
-    const existingPlanInputs = newPackagePlanInputs.filter((p) => {
-      const planId = typeof p.plan === 'string' ? p.plan : p.plan.toString();
-      return oldPlanIds.includes(planId);
+    const existingPriceInputs = newPackagePriceInputs.filter((p) => {
+      const intervalId = typeof p.interval === 'string' ? p.interval : p.interval.toString();
+      return oldIntervalIds.includes(intervalId);
     });
 
-    if (removedPackagePlans.length > 0) {
+    if (removedPackagePrices.length > 0) {
       await Promise.all(
-        removedPackagePlans.map((pp) =>
-          deletePackagePlan((pp as any)._id.toString()),
+        removedPackagePrices.map((pp) =>
+          deletePackagePrice((pp as any)._id.toString()),
         ),
       );
     }
 
-    if (addedPlanInputs.length > 0) {
-      const planIdsToAdd = addedPlanInputs.map((p) =>
-        typeof p.plan === 'string'
-          ? new mongoose.Types.ObjectId(p.plan)
-          : p.plan,
+    if (addedPriceInputs.length > 0) {
+      const intervalIdsToAdd = addedPriceInputs.map((p) =>
+        typeof p.interval === 'string'
+          ? new mongoose.Types.ObjectId(p.interval)
+          : p.interval,
       );
-      const planDocs = await PlanRepository.Plan.find({
-        _id: { $in: planIdsToAdd },
+      const intervalDocs = await IntervalRepository.Interval.find({
+        _id: { $in: intervalIdsToAdd },
         is_active: true,
       }).session(session || null);
 
-      if (planDocs.length !== planIdsToAdd.length) {
+      if (intervalDocs.length !== intervalIdsToAdd.length) {
         throw new AppError(
           httpStatus.BAD_REQUEST,
-          'One or more new plans not found or not active',
+          'One or more new intervals not found or not active',
         );
       }
 
-      const packagePlanDataToCreate = addedPlanInputs.map((input) => ({
-        plan:
-          typeof input.plan === 'string'
-            ? new mongoose.Types.ObjectId(input.plan)
-            : input.plan,
+      const packagePriceDataToCreate = addedPriceInputs.map((input) => ({
+        interval:
+          typeof input.interval === 'string'
+            ? new mongoose.Types.ObjectId(input.interval)
+            : input.interval,
         package: new mongoose.Types.ObjectId(id),
         previous_price: undefined,
         price: input.price,
@@ -547,26 +525,26 @@ export const updatePackage = async (
         is_initial: input.is_initial ?? false,
         is_active: input.is_active ?? true,
       }));
-      await createPackagePlans(packagePlanDataToCreate, session);
+      await createPackagePrices(packagePriceDataToCreate, session);
     }
 
-    if (existingPlanInputs.length > 0) {
+    if (existingPriceInputs.length > 0) {
       await Promise.all(
-        existingPlanInputs.map(async (input) => {
-          const inputPlanId =
-            typeof input.plan === 'string' ? input.plan : input.plan.toString();
-          const existingPackagePlan = currentPackagePlans.find((pp) => {
-            const ppPlanId =
-              typeof pp.plan === 'object' && pp.plan?._id
-                ? pp.plan._id.toString()
-                : pp.plan.toString();
-            return ppPlanId === inputPlanId;
+        existingPriceInputs.map(async (input) => {
+          const inputIntervalId =
+            typeof input.interval === 'string' ? input.interval : input.interval.toString();
+          const existingPackagePrice = currentPackagePrices.find((pp) => {
+            const ppIntervalId =
+              typeof pp.interval === 'object' && pp.interval?._id
+                ? pp.interval._id.toString()
+                : pp.interval.toString();
+            return ppIntervalId === inputIntervalId;
           });
-          if (existingPackagePlan) {
-            await updatePackagePlan(
-              (existingPackagePlan as any)._id.toString(),
+          if (existingPackagePrice) {
+            await updatePackagePrice(
+              (existingPackagePrice as any)._id.toString(),
               {
-                previous_price: existingPackagePlan.price,
+                previous_price: existingPackagePrice.price,
                 price: input.price,
                 credits: input.credits,
                 is_initial: input.is_initial,
@@ -579,31 +557,30 @@ export const updatePackage = async (
       );
     }
 
-    // Ensure initial plan consistency (same logic as before)
-    const allCurrentPackagePlans = await getPackagePlansByPackage(id, false);
-    const initialPlans = allCurrentPackagePlans.filter((pp) => pp.is_initial);
+    const allCurrentPackagePrices = await getPackagePricesByPackage(id, false);
+    const initialPrices = allCurrentPackagePrices.filter((pp) => pp.is_initial);
 
-    if (allCurrentPackagePlans.length > 0 && initialPlans.length === 0) {
-      const firstActivePlan = allCurrentPackagePlans.find((pp) => pp.is_active);
-      if (firstActivePlan) {
-        await updatePackagePlan(
-          (firstActivePlan as any)._id.toString(),
+    if (allCurrentPackagePrices.length > 0 && initialPrices.length === 0) {
+      const firstActivePrice = allCurrentPackagePrices.find((pp) => pp.is_active);
+      if (firstActivePrice) {
+        await updatePackagePrice(
+          (firstActivePrice as any)._id.toString(),
           { is_initial: true },
           session,
         );
       } else {
-        await updatePackagePlan(
-          (allCurrentPackagePlans[0] as any)._id.toString(),
+        await updatePackagePrice(
+          (allCurrentPackagePrices[0] as any)._id.toString(),
           { is_initial: true },
           session,
         );
       }
-    } else if (initialPlans.length > 1) {
+    } else if (initialPrices.length > 1) {
       await Promise.all(
-        initialPlans
+        initialPrices
           .slice(1)
           .map((pp) =>
-            updatePackagePlan(
+            updatePackagePrice(
               (pp as any)._id.toString(),
               { is_initial: false },
               session,
@@ -613,7 +590,6 @@ export const updatePackage = async (
     }
   }
 
-  // Handle Features Sync
   if (payload.features !== undefined) {
     await updatePackageFeatures(id, payload.features, session);
   }
@@ -626,26 +602,24 @@ export const updatePackage = async (
     );
   }
 
-  // Update package fields
-  const { plans, features, ...packageFieldsToUpdate } = payload;
-  
+  const { prices, features, ...packageFieldsToUpdate } = payload;
+
   const currentVersion = packageData.version || 1;
   const nextVersion = currentVersion + 1;
-  
+
   await PackageRepository.Package.findByIdAndUpdate(id, { ...packageFieldsToUpdate, version: nextVersion }, {
     new: true,
     runValidators: true,
   }).session(session || null);
 
-  // Clear cache after update
   await clearPackageCache();
 
   const finalPopulatedPackage = await getPackage(id);
 
   const finalEmbeddedFeatures = (finalPopulatedPackage.features || []).map((feature: any) => ({ ...feature }));
-  const finalEmbeddedPlans = (finalPopulatedPackage.plans || []).map((pp: any) => ({
+  const finalEmbeddedPrices = (finalPopulatedPackage.prices || []).map((pp: any) => ({
     _id: pp._id,
-    plan: pp.plan,
+    interval: pp.interval,
     price: pp.price,
     previous_price: pp.previous_price,
     credits: pp.credits,
@@ -655,7 +629,6 @@ export const updatePackage = async (
     updated_at: pp.updated_at,
   }));
 
-  // Create history capturing the completely updated snapshot for version stability
   await PackageHistory.create([{
     package: id,
     value: finalPopulatedPackage.value,
@@ -666,7 +639,7 @@ export const updatePackage = async (
     badge: finalPopulatedPackage.badge,
     points: finalPopulatedPackage.points,
     features: finalEmbeddedFeatures,
-    plans: finalEmbeddedPlans,
+    prices: finalEmbeddedPrices,
     sequence: finalPopulatedPackage.sequence,
     is_active: finalPopulatedPackage.is_active,
     version: finalPopulatedPackage.version || nextVersion,
@@ -679,8 +652,8 @@ export const updatePackage = async (
 export const updatePackages = async (
   ids: string[],
   payload: Partial<TPackage> & {
-    plans?: Array<{
-      plan: mongoose.Types.ObjectId | string;
+    prices?: Array<{
+      interval: mongoose.Types.ObjectId | string;
       price: number;
       credits: number;
       is_initial?: boolean;
@@ -715,8 +688,8 @@ export const deletePackage = async (id: string): Promise<void> => {
   }
 
   await PackageRepository.softDelete(id);
-  // Also soft delete associated package-plans and package-feature-configs
-  await deletePackagePlansByPackage(id);
+  // Also soft delete associated package-prices and package-feature-configs
+  await deletePackagePricesByPackage(id);
   await PackageFeatureConfigServices.deleteConfigsByPackage(id);
 
   // Clear cache after deletion
@@ -733,9 +706,9 @@ export const deletePackagePermanent = async (id: string): Promise<void> => {
   }
 
   await PackageRepository.Package.findByIdAndDelete(id).setOptions({ bypassDeleted: true });
-  // Also permanently delete associated package-plans and package-feature-configs
-  const { PackagePlan } = await import('../package-plan/package-plan.model');
-  await PackagePlan.deleteMany({ package: id }).setOptions({
+  // Also permanently delete associated package-prices and package-feature-configs
+  const { PackagePrice } = await import('../package-price/package-price.model');
+  await PackagePrice.deleteMany({ package: id }).setOptions({
     bypassDeleted: true,
   });
   const { PackageFeatureConfig } =
@@ -759,9 +732,9 @@ export const deletePackages = async (
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   await PackageRepository.Package.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
-  // Also soft delete associated package-plans and package-feature-configs
+  // Also soft delete associated package-prices and package-feature-configs
   await Promise.all(
-    foundIds.map((packageId) => deletePackagePlansByPackage(packageId)),
+    foundIds.map((packageId) => deletePackagePricesByPackage(packageId)),
   );
   await Promise.all(
     foundIds.map((packageId) =>
@@ -798,9 +771,9 @@ export const deletePackagesPermanent = async (
     _id: { $in: foundIds },
     is_deleted: true,
   }).setOptions({ bypassDeleted: true });
-  // Also permanently delete associated package-plans and package-feature-configs
-  const { PackagePlan } = await import('../package-plan/package-plan.model');
-  await PackagePlan.deleteMany({ package: { $in: foundIds } }).setOptions({
+  // Also permanently delete associated package-prices and package-feature-configs
+  const { PackagePrice: PackagePriceModel } = await import('../package-price/package-price.model');
+  await PackagePriceModel.deleteMany({ package: { $in: foundIds } }).setOptions({
     bypassDeleted: true,
   });
   const { PackageFeatureConfig } =
@@ -832,10 +805,10 @@ export const restorePackage = async (id: string): Promise<TPackage> => {
     );
   }
 
-  // Also restore associated package-plans
-  const { restorePackagePlansByPackage } =
-    await import('../package-plan/package-plan.service');
-  await restorePackagePlansByPackage(id);
+  // Also restore associated package-prices
+  const { restorePackagePricesByPackage } =
+    await import('../package-price/package-price.service');
+  await restorePackagePricesByPackage(id);
 
   // Clear cache after restoration
   await clearPackageCache();
@@ -858,11 +831,11 @@ export const restorePackages = async (
   const restoredIds = restoredPackages.map((pkg) => pkg._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
-  // Also restore associated package-plans
-  const { restorePackagePlansByPackage } =
-    await import('../package-plan/package-plan.service');
+  // Also restore associated package-prices
+  const { restorePackagePricesByPackage } =
+    await import('../package-price/package-price.service');
   await Promise.all(
-    restoredIds.map((packageId) => restorePackagePlansByPackage(packageId)),
+    restoredIds.map((packageId) => restorePackagePricesByPackage(packageId)),
   );
 
   // Clear cache after restoration

@@ -12,7 +12,7 @@ describe('Package Service Unit Tests', () => {
 
   describe('getPackage', () => {
     it('should return a package with populated data', async () => {
-      const mockResult = { _id: 'pkg-123', name: 'Starter', plans: [], features: [] };
+      const mockResult = { _id: 'pkg-123', name: 'Starter', prices: [], features: [] };
       const mockAggregate = jest.fn().mockResolvedValue([mockResult]);
       (PackageRepository.Package.aggregate as jest.Mock) = mockAggregate;
 

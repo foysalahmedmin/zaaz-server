@@ -59,16 +59,16 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       required: [true, 'Package is required'],
       index: true,
     },
-    plan: {
+    interval: {
       type: Schema.Types.ObjectId,
-      ref: 'Plan',
-      required: [true, 'Plan is required'],
+      ref: 'Interval',
+      required: [true, 'Interval is required'],
       index: true,
     },
     price: {
       type: Schema.Types.ObjectId,
-      ref: 'PackagePlan',
-      required: [true, 'Price (package-plan) is required'],
+      ref: 'PackagePrice',
+      required: [true, 'Price (package-price) is required'],
       index: true,
     },
     coupon: {

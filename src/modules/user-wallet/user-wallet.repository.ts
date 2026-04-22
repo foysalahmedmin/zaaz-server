@@ -76,7 +76,7 @@ export const findPaginated = async (
   const q = new AppAggregationQuery<TUserWallet>(UserWallet, { ...query, ...filter });
   q.populate([
     { path: 'package', justOne: true },
-    { path: 'plan', justOne: true },
+    { path: 'interval', justOne: true },
   ])
     .search(['email'])
     .filter()

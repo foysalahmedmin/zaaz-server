@@ -19,8 +19,8 @@ export type TPaymentTransaction = {
   gateway_session_id?: string; // Stripe session ID or SSL Commerz session ID
   gateway_status?: string; // Gateway-specific status (paid, VALID, etc.)
   package: mongoose.Types.ObjectId;
-  plan: mongoose.Types.ObjectId;
-  price: mongoose.Types.ObjectId; // PackagePlan document _id
+  interval: mongoose.Types.ObjectId;
+  price: mongoose.Types.ObjectId; // PackagePrice document _id
   coupon?: mongoose.Types.ObjectId; // Applied coupon ID
   discount_amount?: number; // Calculated discount amount
   amount: number;

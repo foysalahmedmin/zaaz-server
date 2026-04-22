@@ -25,10 +25,10 @@ const userSubscriptionSchema = new Schema<TUserSubscriptionDocument>(
       required: [true, 'Package snapshot is required'],
       index: true,
     },
-    plan: {
+    interval: {
       type: Schema.Types.ObjectId,
-      ref: 'Plan',
-      required: [true, 'Plan is required'],
+      ref: 'Interval',
+      required: [true, 'Interval is required'],
       index: true,
     },
     status: {

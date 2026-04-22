@@ -6,10 +6,10 @@ import config from '../../config/env';
 import { PaymentGatewayFactory } from '../../providers/payment-gateways';
 import { RabbitMQ } from '../../config/rabbitmq';
 import { CouponServices } from '../coupon/coupon.service';
-import { PackagePlan } from '../package-plan/package-plan.model';
+import { PackagePrice } from '../package-price/package-price.model';
 import { Package } from '../package/package.model';
 import { PaymentMethod } from '../payment-method/payment-method.model';
-import { Plan } from '../plan/plan.model';
+import { Interval } from '../interval/interval.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { getPriceInCurrency } from '../../utils/currency.utils';
 import { PaymentStateMachine } from './payment-state-machine';
@@ -131,7 +131,7 @@ export const updatePaymentTransactionStatus = async (
       currency: updatedTransaction.currency,
       paymentMethodId: updatedTransaction.payment_method.toString(),
       packageId: updatedTransaction.package.toString(),
-      planId: updatedTransaction.plan.toString(),
+      intervalId: updatedTransaction.interval.toString(),
       timestamp: new Date(),
     };
 
@@ -218,8 +218,8 @@ export const getPaymentTransactions = async (
       { path: 'user_wallet', select: '_id credits', justOne: true },
       { path: 'payment_method', select: '_id name currencies', justOne: true },
       { path: 'package', select: '_id name', justOne: true },
-      { path: 'plan', select: '_id name duration', justOne: true },
-      { path: 'price', select: '_id price credits', justOne: true }, // package-plan
+      { path: 'interval', select: '_id name duration', justOne: true },
+      { path: 'price', select: '_id price credits', justOne: true }, // package-price
       {
         path: 'coupon',
         select: '_id code discount_type discount_value is_affiliate',
@@ -272,8 +272,8 @@ export const getPaymentTransaction = async (
       { path: 'user_wallet', select: '_id credits' },
       { path: 'payment_method', select: '_id name currencies' },
       { path: 'package', select: '_id name' },
-      { path: 'plan', select: '_id name duration' },
-      { path: 'price', select: '_id price credits' }, // package-plan
+      { path: 'interval', select: '_id name duration' },
+      { path: 'price', select: '_id price credits' }, // package-price
       {
         path: 'coupon',
         select: '_id code discount_type discount_value is_affiliate',
@@ -627,7 +627,7 @@ export const restorePaymentTransactions = async (
 export const initiatePayment = async (options: {
   userId: string;
   packageId: string;
-  planId: string;
+  intervalId: string;
   paymentMethodId: string;
   returnUrl: string;
   cancelUrl: string;
@@ -645,7 +645,7 @@ export const initiatePayment = async (options: {
   const {
     userId,
     packageId,
-    planId,
+    intervalId,
     paymentMethodId,
     returnUrl,
     cancelUrl,
@@ -682,28 +682,28 @@ export const initiatePayment = async (options: {
     throw new AppError(httpStatus.NOT_FOUND, 'Package not found or inactive');
   }
 
-  // Validate plan exists and is active
-  const plan = await Plan.findById(planId)
+  // Validate interval exists and is active
+  const interval = await Interval.findById(intervalId)
     .session(session || null)
     .lean();
-  if (!plan || !plan.is_active) {
-    throw new AppError(httpStatus.BAD_REQUEST, 'Plan not found or not active');
+  if (!interval || !interval.is_active) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'Interval not found or not active');
   }
 
-  // Get package-plan for this package+plan combination
-  const packagePlan = await PackagePlan.findOne({
+  // Get package-price for this package+interval combination
+  const packagePrice = await PackagePrice.findOne({
     package: packageId,
-    plan: planId,
+    interval: intervalId,
     is_active: true,
     is_deleted: { $ne: true },
   })
     .session(session || null)
     .lean();
 
-  if (!packagePlan) {
+  if (!packagePrice) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      'Package-plan not found or not active for this package and plan combination',
+      'Package-price not found or not active for this package and interval combination',
     );
   }
 
@@ -728,7 +728,7 @@ export const initiatePayment = async (options: {
   }
 
   // Get gateway amount in the requested currency
-  const gatewayAmount = getPriceInCurrency(packagePlan.price, currency);
+  const gatewayAmount = getPriceInCurrency(packagePrice.price, currency);
 
   // Coupon handling
   let discountAmount = 0;
@@ -738,7 +738,7 @@ export const initiatePayment = async (options: {
     const { coupon, discount_amount } = await CouponServices.validateCoupon(
       coupon_code,
       packageId,
-      planId,
+      intervalId,
       currency,
     );
     discountAmount = discount_amount;
@@ -769,8 +769,8 @@ export const initiatePayment = async (options: {
         payment_method: new mongoose.Types.ObjectId(paymentMethodId),
         gateway_transaction_id: '',
         package: new mongoose.Types.ObjectId(packageId),
-        plan: new mongoose.Types.ObjectId(planId),
-        price: packagePlan._id, // Store package-plan document _id
+        interval: new mongoose.Types.ObjectId(intervalId),
+        price: packagePrice._id, // Store package-price document _id
         coupon: couponId,
         discount_amount: discountAmount,
         amount: finalAmount,
