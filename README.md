@@ -35,12 +35,13 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 - **High-Throughput Batch Processing**: Optimized credit deduction engine using a **Batch Aggregator** and RabbitMQ to handle thousands of concurrent requests with minimal database IO.
 - **Multi-Level Intelligence Caching**: Integrated L1 (In-Memory LRU) and L2 (Redis) caching for sub-millisecond lookups of billing settings and AI model configurations.
 - Dynamic Consumption Logic: Internal service-to-service validation APIs specifically designed for feature-rich environments and word-limit enforcement.
-- Expiration Engine: Automated duration-based expiration logic for both credits and tiered packages.
 
 ### Subscription and Product Packaging
 
-- Multi-Currency Tiering: Flexible package management supporting USD and BDT with distinct token/subscription types.
-- SNAPSHOT Versioning: PackageHistory architecture maintains immutable records of package states, ensuring financial integrity for active user subscriptions.
+- **Interval-Based Pricing**: Flexible package pricing model with configurable billing intervals (e.g., Monthly, Yearly) supporting USD and BDT currencies.
+- **UserSubscription Engine**: Dedicated subscription lifecycle management tracking `current_period_start`, `current_period_end`, `auto_renew`, and cancellation logic per user.
+- **Automated Expiration Jobs**: Background cron job runs nightly to detect and expire subscriptions that have passed their `current_period_end`, keeping subscription state accurate without manual intervention.
+- **SNAPSHOT Versioning**: PackageHistory architecture maintains immutable records of package states at the time of purchase, ensuring financial integrity for all active user subscriptions.
 - Onboarding Logic: Automated initial offer enforcement to streamline user acquisition credits.
 
 ### Dynamic Package Configuration System
@@ -67,6 +68,7 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
 
 - Model Registry: Centralized management for Large Language Models (LLM) and specialized AI models with dynamic metadata.
 - Intelligence Billing: Global and model-specific billing rules for real-time cost/profit calculation during credit processing.
+- **Internal Proxy Architecture**: Dedicated `internal-credits-process` and `internal-feature-usage-log` service layers act as HTTP proxy clients, allowing partner services to delegate credit deduction and usage telemetry to this server via a shared API key.
 
 ### Feature Feedback System
 
@@ -148,6 +150,7 @@ graph LR
     validator[Zod Schema Validator]
     controller[Orchestration Controllers]
     service[Domain Services]
+    repository[Data Repositories]
     builder[Advanced Query Utilities]
     model[Mongoose Data Models]
     schema[(Physical Database)]
@@ -157,6 +160,7 @@ graph LR
     validator --> controller
     controller --> service
     service --> builder
+    builder --> repository
     builder --> model
     model --> schema
 ```
@@ -171,21 +175,24 @@ Our modular architecture enforces a unidirectional dependency flow. Incoming req
 
 ```text
 src/
-├── app/
-│   ├── builder/        # Advanced Aggregation Query Engine and Custom Error Classes
-│   ├── config/         # Multi-environment Registry and Feature Flags
-│   ├── errors/         # Specialized Handlers for Validation, Duplication, and Cast Errors
-│   ├── interface/      # Global Type Definitions and Interface Contracts
-│   ├── middlewares/    # Auth, RBAC, Rate-Limiting, and Data Sanitization
-│   ├── modules/        # Feature-specific Domain Modules (30 production-grade modules)
-│   ├── rabbitmq/       # RabbitMQ Message Broker Connections and Consumer Registry
-│   ├── kafka/          # Kafka Message Broker with Producer/Consumer and DLT support
-│   ├── redis/          # Distributed Cache configuration and Pub/Sub logic
-│   ├── socket/         # Real-time Event Orchestration and Redis backplane
-│   ├── utils/          # Core Utilities (catchAsync, sendResponse, Credit Process Wrappers)
-│   └── routes/         # Centralized API Versioning and Route Mounting
-├── app.ts              # Express Pipeline Configuration
-└── index.ts            # Entry Point and Managed Cluster Execution
+├── builder/                    # AppAggregationQuery Engine and Custom AppError Classes
+├── config/                     # Multi-environment Registry, DB, RabbitMQ, Redis connections
+├── internal-credits-process/   # HTTP proxy client for credits-process (partner service integration)
+├── internal-feature-usage-log/ # HTTP proxy client for feature usage log (partner service integration)
+├── internal-give-credits/      # Internal service for administrative credit grants
+├── jobs/                       # Background cron jobs (e.g., nightly subscription expiration)
+├── middlewares/                 # Auth, RBAC, Rate-Limiting, and Data Sanitization
+├── modules/                    # Feature-specific Domain Modules (33+ production-grade modules)
+├── providers/                  # External service provider integrations
+│   ├── analytics/              # Google Analytics integration
+│   └── payment-gateways/       # Stripe, SSL Commerz, and bKash implementations
+├── scripts/                    # One-time database migration scripts
+├── templates/                  # Email and notification HTML templates
+├── types/                      # Global TypeScript type definitions and interface contracts
+├── utils/                      # Core Utilities (catchAsync, sendResponse, cache, currency)
+├── routes.ts                   # Centralized API versioning and route mounting
+├── app.ts                      # Express pipeline configuration
+└── index.ts                    # Entry point and managed cluster execution
 ```
 
 ---
@@ -225,13 +232,23 @@ erDiagram
         ObjectId _id PK
         ObjectId user FK "Unique, Indexed"
         string email "Indexed"
-        ObjectId package FK
-        ObjectId plan FK
         number credits "Available balance"
-        date expires_at
         boolean initial_credits_given
         boolean initial_package_given
-        string type "free|paid"
+        boolean is_deleted
+    }
+
+    UserSubscription {
+        ObjectId _id PK
+        ObjectId user FK "Indexed"
+        ObjectId package FK "Indexed"
+        ObjectId package_snapshot FK "PackageHistory, Indexed"
+        ObjectId interval FK "Interval, Indexed"
+        string status "trialing|active|past_due|canceled|expired"
+        date current_period_start
+        date current_period_end "Indexed"
+        boolean cancel_at_period_end
+        boolean auto_renew
         boolean is_deleted
     }
 
@@ -245,8 +262,22 @@ erDiagram
         string increase_source "payment|bonus"
         ObjectId decrease_source FK "FeatureEndpoint"
         ObjectId payment_transaction FK
-        ObjectId plan FK
-        string usage_key
+        ObjectId interval FK "Interval, Indexed"
+        string usage_key "Indexed"
+        boolean is_active
+        boolean is_deleted
+    }
+
+    PackageTransaction {
+        ObjectId _id PK
+        ObjectId user FK
+        string email
+        ObjectId user_wallet FK
+        ObjectId package FK
+        ObjectId interval FK "Interval, Indexed"
+        number credits
+        string increase_source "payment|bonus"
+        ObjectId payment_transaction FK
         boolean is_active
         boolean is_deleted
     }
@@ -294,7 +325,7 @@ erDiagram
         string description
         string endpoint "URL path"
         string method "GET|POST|PUT|DELETE|PATCH"
-        number credits "Cost per use"
+        number min_credits "Minimum credits required"
         boolean is_active
         boolean is_deleted
     }
@@ -317,8 +348,18 @@ erDiagram
         boolean is_deleted
     }
 
+    FeaturePopup {
+        ObjectId _id PK
+        ObjectId feature FK
+        string title
+        string description
+        string[] actions "Embedded action objects"
+        boolean is_active
+        boolean is_deleted
+    }
+
     %% ============================================
-    %% PACKAGES & PLANS
+    %% PACKAGES & INTERVALS
     %% ============================================
 
     Package {
@@ -336,7 +377,7 @@ erDiagram
         boolean is_deleted
     }
 
-    Plan {
+    Interval {
         ObjectId _id PK
         string name "Indexed"
         string description
@@ -346,12 +387,12 @@ erDiagram
         boolean is_deleted
     }
 
-    PackagePlan {
+    PackagePrice {
         ObjectId _id PK
-        ObjectId plan FK
-        ObjectId package FK
-        object price "USD and BDT"
-        object previous_price
+        ObjectId interval FK "Interval, Indexed"
+        ObjectId package FK "Indexed"
+        number price "Currency-agnostic amount"
+        number previous_price
         number credits
         boolean is_initial
         boolean is_active
@@ -370,9 +411,12 @@ erDiagram
     PackageHistory {
         ObjectId _id PK
         ObjectId package FK
+        string value
         string name
-        object[] features "Snapshots"
-        object[] plans "Snapshots"
+        string description
+        string content
+        string type
+        object[] features "Embedded feature snapshots"
         boolean is_active
         boolean is_deleted
     }
@@ -397,11 +441,10 @@ erDiagram
         ObjectId _id PK
         string name "e.g. Stripe"
         string value "e.g. stripe"
-        string currency "ISO code"
+        string[] currencies "Supported ISO codes"
         string secret "Encrypted"
         string public_key
         string webhook_url
-        string[] currencies
         object config
         boolean is_test
         boolean is_active
@@ -419,8 +462,8 @@ erDiagram
         string gateway_session_id
         string gateway_status
         ObjectId package FK
-        ObjectId plan FK
-        ObjectId price FK "PackagePlan"
+        ObjectId interval FK "Interval"
+        ObjectId price FK "PackagePrice"
         ObjectId coupon FK
         number discount_amount
         number amount
@@ -590,23 +633,32 @@ erDiagram
     %% User to Wallet (1:1)
     User ||--|| UserWallet : "owns"
 
-    %% Wallet to Package/Plan
-    UserWallet }o--|| Package : "subscribed_to"
-    UserWallet }o--|| Plan : "active_plan"
+    %% Subscription
+    User ||--o{ UserSubscription : "subscribes"
+    Package ||--o{ UserSubscription : "subscribed_under"
+    Interval ||--o{ UserSubscription : "billed_at"
+    PackageHistory ||--o{ UserSubscription : "snapshot_at"
 
     %% Credits Flow
     User ||--o{ CreditsTransaction : "initiates"
     UserWallet ||--o{ CreditsTransaction : "tracks"
     CreditsTransaction ||--|| CreditsUsage : "details"
+    Interval ||--o{ CreditsTransaction : "associated_interval"
+
+    %% Package Transaction
+    User ||--o{ PackageTransaction : "records"
+    Package ||--o{ PackageTransaction : "purchased"
+    Interval ||--o{ PackageTransaction : "for_interval"
 
     %% Feature System
     Feature ||--o{ Feature : "parent_child"
     Feature ||--o{ FeatureEndpoint : "exposes"
     FeatureEndpoint ||--o{ FeatureUsageLog : "logs"
+    Feature ||--o{ FeaturePopup : "has_popup"
 
     %% Package Architecture
-    Package ||--o{ PackagePlan : "priced_as"
-    Plan ||--o{ PackagePlan : "defines_duration"
+    Package ||--o{ PackagePrice : "priced_as"
+    Interval ||--o{ PackagePrice : "defines_duration"
     Package ||--o{ PackageFeature : "includes"
     Feature ||--o{ PackageFeature : "available_in"
     Package ||--o{ PackageHistory : "versioned"
@@ -617,7 +669,8 @@ erDiagram
     %% Payment Flow
     User ||--o{ PaymentTransaction : "makes"
     PaymentMethod ||--o{ PaymentTransaction : "processes"
-    PaymentTransaction }o--|| PackagePlan : "purchases"
+    PaymentTransaction }o--|| PackagePrice : "purchases"
+    PaymentTransaction }o--|| Interval : "for_interval"
     PaymentTransaction }o--o| Coupon : "applies"
     PaymentTransaction ||--o| CreditsTransaction : "generates"
 
@@ -643,7 +696,7 @@ erDiagram
 
 </div>
 
-The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 28 core persistent collections. The architecture employs junction tables (`PackagePlan`, `PackageFeature`, and `PackageFeatureConfig`) to establish normalized many-to-many relationships between Packages, Plans, Features, and FeatureEndpoints, eliminating data redundancy while maintaining query performance through optimized aggregation pipelines. The `PackageFeatureConfig` collection enables dynamic, package-specific overrides for feature behavior, credit costs, and usage limits without code changes. Essential metadata and security fields are strictly enforced at the Mongoose layer. Critical transactional data is protected via SNAPSHOT History collections (AiModelHistory, PackageHistory, BillingSettingHistory, etc.), which capture immutable configurations at the point of sale, ensuring that historical records remain accurate regardless of future configuration changes.
+The database utilizes a highly relational document-oriented schema optimized for financial consistency and historical auditability across 30+ core persistent collections. The `Interval` collection defines billing durations (e.g., Monthly, Yearly) and is the central reference for `PackagePrice`, `PaymentTransaction`, `CreditsTransaction`, `PackageTransaction`, and `UserSubscription`. The `PackagePrice` junction model links a `Package` to an `Interval` with a specific price and credit amount, replacing the older plan-based pricing model. The `PackageFeatureConfig` collection enables dynamic, package-specific overrides for feature behavior, credit costs, and usage limits without code changes. Critical transactional data is protected via SNAPSHOT History collections (`AiModelHistory`, `PackageHistory`, `BillingSettingHistory`, etc.), which capture immutable configurations at the point of purchase, ensuring that historical records remain accurate regardless of future changes. The `UserSubscription` model manages the full subscription lifecycle per user, while `PackageTransaction` provides an auditable ledger of every credit top-up event tied to a package and interval.
 
 ---
 
@@ -652,12 +705,13 @@ The database utilizes a highly relational document-oriented schema optimized for
 The service layer exposes the following API clusters via the `/api` namespace:
 
 - Identity Management: `/api/auth` (Sign-in, Sign-up, Google SSO, Password Recovery)
-- Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/credits-usages`
+- Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/token-process`, `/api/credits-usages`
 - Financial Operations: `/api/payment-transactions`, `/api/payment-methods`, `/api/package-transactions`
-- Catalog and Inventory: `/api/packages`, `/api/plans`, `/api/package-plans`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
+- Catalog and Inventory: `/api/packages`, `/api/intervals`, `/api/package-prices`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
 - Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`, `/api/feature-feedbacks`
-- Intelligence Governance: `/api/ai-models`, `/api/billing-settings`
-- Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/notification-recipients`, `/api/storage`, `/api/contact`
+- Intelligence Governance: `/api/ai-models`, `/api/ai-model-histories`, `/api/billing-settings`, `/api/billing-setting-histories`, `/api/credits-profits`, `/api/credits-profit-histories`
+- Infrastructure Services: `/api/dashboard`, `/api/notifications`, `/api/notification-recipients`, `/api/files`, `/api/contact`
+- History and Audit: `/api/package-histories`, `/api/feature-usage-logs`
 
 ---
 
@@ -691,8 +745,8 @@ sequenceDiagram
     participant MQ as RabbitMQ
     participant Cron as Reconciliation Job
 
-    User->>API: POST /initiate (Plan ID)
-    API->>DB: Verify Plan Availability
+    User->>API: POST /initiate (Interval + Package ID)
+    API->>DB: Verify Package & Interval Availability
     API->>Gateway: Create Transaction Session
     Gateway-->>API: Session ID & Redirect URL
     API-->>User: 302 Redirect to Secure Gateway
@@ -710,13 +764,13 @@ sequenceDiagram
 
     API->>DB: Atomic Update & Audit Log
     API->>MQ: Dispatch 'PAYMENT.COMPLETED' Event
-    MQ->>API: Consumer: Update Wallet & Credits
+    MQ->>API: Consumer: Update Wallet, Subscription & Credits
     API-->>User: Signal Fulfillment success
 ```
 
 </div>
 
-The Payment Settlement Workflow is engineered for maximum financial resilience. By utilizing an atomic locking mechanism at the database level, the system prevents duplicate processing of the same transaction. The credit assignment is decoupled through RabbitMQ, ensuring that even if the main gateway callback completes, the intensive wallet calculations are processed with guaranteed delivery, mitigating losses during network instability.
+The Payment Settlement Workflow is engineered for maximum financial resilience. By utilizing an atomic locking mechanism at the database level, the system prevents duplicate processing of the same transaction. Upon successful payment, a `UserSubscription` record is created or renewed, a `PackageTransaction` ledger entry is written, and the wallet balance is incremented — all triggered asynchronously through RabbitMQ, ensuring guaranteed delivery even during network instability.
 
 ### Asynchronous Telemetry and Credit Consumption
 
@@ -789,6 +843,7 @@ This asynchronous workflow decouples high-frequency AI feature requests from dat
 - MQ Resilience: Dead Letter Queues (DLQ) configured for all critical consumers to prevent message loss.
 - Atomic Integrity: All financial state changes utilize MongoDB atomic increments and concurrency locks.
 - Payment Safety: Automated reconciliation verifies transaction outcomes directly with gateway APIs, backed by a formal State Machine.
+- **Subscription Lifecycle**: Nightly cron job automatically expires overdue subscriptions to maintain accurate entitlement state.
 - Security Posture: Full Zod runtime validation and JWT lifecycle rotation enforced.
 - **Observability**: Real-time Prometheus metrics for system health, latency, and throughput tracking.
 - **Deduplication**: Multi-key request deduplication to prevent double-billing during network retries.
