@@ -1,175 +1,81 @@
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { BillingSettingHistory } from './billing-setting-history.model';
+import * as BillingSettingHistoryRepository from './billing-setting-history.repository';
 import { TBillingSettingHistory } from './billing-setting-history.type';
 
 export const getBillingSettingHistories = async (
   billingSettingId: string,
   query: Record<string, unknown> = {},
-): Promise<{
-  data: TBillingSettingHistory[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const historyQuery = new AppAggregationQuery<TBillingSettingHistory>(
-    BillingSettingHistory,
-    query,
-  );
-
-  historyQuery.pipeline([
-    {
-      $match: {
-        billing_setting: new mongoose.Types.ObjectId(billingSettingId),
-      },
-    },
-  ]);
-
-  historyQuery
-    .populate([{ path: 'billing_setting', justOne: true }])
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await historyQuery.execute();
-
-  return result;
+): Promise<{ data: TBillingSettingHistory[]; meta: { total: number; page: number; limit: number } }> => {
+  return await BillingSettingHistoryRepository.findPaginated(billingSettingId, query);
 };
 
-export const getBillingSettingHistory = async (
-  id: string,
-): Promise<TBillingSettingHistory> => {
-  const result = await BillingSettingHistory.findById(id).populate([
-    { path: 'billing_setting' },
-  ]);
+export const getBillingSettingHistory = async (id: string): Promise<TBillingSettingHistory> => {
+  const result = await BillingSettingHistoryRepository.findById(id);
   if (!result) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Billing Setting history not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting history not found');
   }
   return result;
 };
 
-export const deleteBillingSettingHistory = async (
-  id: string,
-): Promise<void> => {
-  const history = await BillingSettingHistory.findById(id).lean();
-  if (!history) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Billing Setting history not found',
-    );
+export const deleteBillingSettingHistory = async (id: string): Promise<void> => {
+  const histories = await BillingSettingHistoryRepository.findMany({ _id: id });
+  if (!histories.length) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting history not found');
   }
-
-  await BillingSettingHistory.findByIdAndUpdate(id, { is_deleted: true });
+  await BillingSettingHistoryRepository.softDeleteById(id);
 };
 
-export const deleteBillingSettingHistoryPermanent = async (
-  id: string,
-): Promise<void> => {
-  const history = await BillingSettingHistory.findById(id).setOptions({
+export const deleteBillingSettingHistoryPermanent = async (id: string): Promise<void> => {
+  const doc = await BillingSettingHistoryRepository.BillingSettingHistory.findById(id).setOptions({
     bypassDeleted: true,
   });
-  if (!history) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Billing Setting history not found',
-    );
+  if (!doc) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting history not found');
   }
-
-  await BillingSettingHistory.findByIdAndDelete(id);
+  await BillingSettingHistoryRepository.permanentDeleteById(id);
 };
 
 export const deleteBillingSettingHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const histories = await BillingSettingHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = histories.map((h) => h._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await BillingSettingHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await BillingSettingHistory.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await BillingSettingHistoryRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deleteBillingSettingHistoriesPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const histories = await BillingSettingHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = histories.map((h) => h._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await BillingSettingHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await BillingSettingHistory.deleteMany({ _id: { $in: foundIds } }).setOptions(
-    {
-      bypassDeleted: true,
-    },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await BillingSettingHistoryRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-export const restoreBillingSettingHistory = async (
-  id: string,
-): Promise<TBillingSettingHistory> => {
-  const history = await BillingSettingHistory.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+export const restoreBillingSettingHistory = async (id: string): Promise<TBillingSettingHistory> => {
+  const history = await BillingSettingHistoryRepository.findOneAndRestore({
+    _id: id,
+    is_deleted: true,
+  });
   if (!history) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Billing Setting history not found or not deleted',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting history not found or not deleted');
   }
-
   return history;
 };
 
 export const restoreBillingSettingHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await BillingSettingHistory.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restoredHistories = await BillingSettingHistory.find({
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await BillingSettingHistoryRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredHistories.map((h) => h._id.toString());
+    is_deleted: true,
+  });
+  const restored = await BillingSettingHistoryRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restored.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-

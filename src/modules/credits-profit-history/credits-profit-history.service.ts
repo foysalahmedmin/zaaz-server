@@ -1,174 +1,81 @@
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { CreditsProfitHistory } from './credits-profit-history.model';
+import * as CreditsProfitHistoryRepository from './credits-profit-history.repository';
 import { TCreditsProfitHistory } from './credits-profit-history.type';
 
 export const getCreditsProfitHistories = async (
   creditsProfitId: string,
   query: Record<string, unknown> = {},
-): Promise<{
-  data: TCreditsProfitHistory[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const creditsProfitHistoryQuery =
-    new AppAggregationQuery<TCreditsProfitHistory>(CreditsProfitHistory, query);
-  creditsProfitHistoryQuery.pipeline([
-    {
-      $match: { credits_profit: new mongoose.Types.ObjectId(creditsProfitId) },
-    },
-  ]);
-
-  creditsProfitHistoryQuery
-    .populate([{ path: 'credits_profit', justOne: true }])
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await creditsProfitHistoryQuery.execute();
-
-  return result;
+): Promise<{ data: TCreditsProfitHistory[]; meta: { total: number; page: number; limit: number } }> => {
+  return await CreditsProfitHistoryRepository.findPaginated(creditsProfitId, query);
 };
 
-export const getCreditsProfitHistory = async (
-  id: string,
-): Promise<TCreditsProfitHistory> => {
-  const result = await CreditsProfitHistory.findById(id).populate([
-    { path: 'credits_profit' },
-  ]);
+export const getCreditsProfitHistory = async (id: string): Promise<TCreditsProfitHistory> => {
+  const result = await CreditsProfitHistoryRepository.findById(id);
   if (!result) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Credits profit history not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Credits profit history not found');
   }
   return result;
 };
 
 export const deleteCreditsProfitHistory = async (id: string): Promise<void> => {
-  const creditsProfitHistory = await CreditsProfitHistory.findById(id).lean();
-  if (!creditsProfitHistory) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Credits profit history not found',
-    );
+  const histories = await CreditsProfitHistoryRepository.findMany({ _id: id });
+  if (!histories.length) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Credits profit history not found');
   }
-
-  await CreditsProfitHistory.findByIdAndUpdate(id, { is_deleted: true });
+  await CreditsProfitHistoryRepository.softDeleteById(id);
 };
 
-export const deleteCreditsProfitHistoryPermanent = async (
-  id: string,
-): Promise<void> => {
-  const creditsProfitHistory = await CreditsProfitHistory.findById(
-    id,
-  ).setOptions({
+export const deleteCreditsProfitHistoryPermanent = async (id: string): Promise<void> => {
+  const doc = await CreditsProfitHistoryRepository.CreditsProfitHistory.findById(id).setOptions({
     bypassDeleted: true,
   });
-  if (!creditsProfitHistory) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Credits profit history not found',
-    );
+  if (!doc) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Credits profit history not found');
   }
-
-  await CreditsProfitHistory.findByIdAndDelete(id);
+  await CreditsProfitHistoryRepository.permanentDeleteById(id);
 };
 
 export const deleteCreditsProfitHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const creditsProfitHistories = await CreditsProfitHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = creditsProfitHistories.map((creditsProfitHistory) =>
-    creditsProfitHistory._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await CreditsProfitHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await CreditsProfitHistory.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await CreditsProfitHistoryRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deleteCreditsProfitHistoriesPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const creditsProfitHistories = await CreditsProfitHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = creditsProfitHistories.map((creditsProfitHistory) =>
-    creditsProfitHistory._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await CreditsProfitHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await CreditsProfitHistory.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await CreditsProfitHistoryRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-export const restoreCreditsProfitHistory = async (
-  id: string,
-): Promise<TCreditsProfitHistory> => {
-  const creditsProfitHistory = await CreditsProfitHistory.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
-  if (!creditsProfitHistory) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Credits profit history not found or not deleted',
-    );
+export const restoreCreditsProfitHistory = async (id: string): Promise<TCreditsProfitHistory> => {
+  const history = await CreditsProfitHistoryRepository.findOneAndRestore({
+    _id: id,
+    is_deleted: true,
+  });
+  if (!history) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Credits profit history not found or not deleted');
   }
-
-  return creditsProfitHistory;
+  return history;
 };
 
 export const restoreCreditsProfitHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await CreditsProfitHistory.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restoredCreditsProfitHistories = await CreditsProfitHistory.find({
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await CreditsProfitHistoryRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredCreditsProfitHistories.map(
-    (creditsProfitHistory) => creditsProfitHistory._id.toString(),
-  );
+    is_deleted: true,
+  });
+  const restored = await CreditsProfitHistoryRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restored.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-

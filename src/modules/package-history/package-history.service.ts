@@ -1,44 +1,17 @@
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { PackageHistory } from './package-history.model';
+import * as PackageHistoryRepository from './package-history.repository';
 import { TPackageHistory } from './package-history.type';
 
 export const getPackageHistories = async (
   packageId: string,
   query: Record<string, unknown> = {},
-): Promise<{
-  data: TPackageHistory[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const packageHistoryQuery = new AppAggregationQuery<TPackageHistory>(
-    PackageHistory,
-    query,
-  );
-
-  packageHistoryQuery.pipeline([
-    { $match: { package: new mongoose.Types.ObjectId(packageId) } },
-  ]);
-
-  packageHistoryQuery
-    .populate([{ path: 'package', justOne: true }, { path: 'features' }])
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await packageHistoryQuery.execute();
-
-  return result;
+): Promise<{ data: TPackageHistory[]; meta: { total: number; page: number; limit: number } }> => {
+  return await PackageHistoryRepository.findPaginated(packageId, query);
 };
 
-export const getPackageHistory = async (
-  id: string,
-): Promise<TPackageHistory> => {
-  const result = await PackageHistory.findById(id).populate([
-    { path: 'package' },
-    { path: 'features' },
-  ]);
+export const getPackageHistory = async (id: string): Promise<TPackageHistory> => {
+  const result = await PackageHistoryRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package history not found');
   }
@@ -46,120 +19,60 @@ export const getPackageHistory = async (
 };
 
 export const deletePackageHistory = async (id: string): Promise<void> => {
-  const packageHistory = await PackageHistory.findById(id).lean();
-  if (!packageHistory) {
+  const histories = await PackageHistoryRepository.findMany({ _id: id });
+  if (!histories.length) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package history not found');
   }
-
-  await PackageHistory.findByIdAndUpdate(id, { is_deleted: true });
+  await PackageHistoryRepository.softDeleteById(id);
 };
 
-export const deletePackageHistoryPermanent = async (
-  id: string,
-): Promise<void> => {
-  const packageHistory = await PackageHistory.findById(id).setOptions({
+export const deletePackageHistoryPermanent = async (id: string): Promise<void> => {
+  const doc = await PackageHistoryRepository.PackageHistory.findById(id).setOptions({
     bypassDeleted: true,
   });
-  if (!packageHistory) {
+  if (!doc) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package history not found');
   }
-
-  await PackageHistory.findByIdAndDelete(id);
+  await PackageHistoryRepository.permanentDeleteById(id);
 };
 
 export const deletePackageHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const packageHistories = await PackageHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = packageHistories.map((packageHistory) =>
-    packageHistory._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await PackageHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await PackageHistory.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await PackageHistoryRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deletePackageHistoriesPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const packageHistories = await PackageHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = packageHistories.map((packageHistory) =>
-    packageHistory._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await PackageHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await PackageHistory.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await PackageHistoryRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-export const restorePackageHistory = async (
-  id: string,
-): Promise<TPackageHistory> => {
-  const packageHistory = await PackageHistory.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
-  if (!packageHistory) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Package history not found or not deleted',
-    );
+export const restorePackageHistory = async (id: string): Promise<TPackageHistory> => {
+  const history = await PackageHistoryRepository.findOneAndRestore({ _id: id, is_deleted: true });
+  if (!history) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package history not found or not deleted');
   }
-
-  return packageHistory;
+  return history;
 };
 
 export const restorePackageHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await PackageHistory.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restoredPackageHistories = await PackageHistory.find({
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await PackageHistoryRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredPackageHistories.map((packageHistory) =>
-    packageHistory._id.toString(),
-  );
+    is_deleted: true,
+  });
+  const restored = await PackageHistoryRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restored.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-

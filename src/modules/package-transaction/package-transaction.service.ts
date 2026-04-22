@@ -1,18 +1,16 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { clearUserWalletCache } from '../user-wallet/user-wallet.service';
-import { PackageTransaction } from './package-transaction.model';
+import * as PackageTransactionRepository from './package-transaction.repository';
 import { TPackageTransaction } from './package-transaction.type';
 
 export const createPackageTransaction = async (
   data: TPackageTransaction,
   session?: mongoose.ClientSession,
 ): Promise<TPackageTransaction> => {
-  const result = await PackageTransaction.create([data], { session });
-  return result[0].toObject();
+  return await PackageTransactionRepository.create(data, session);
 };
 
 export const getPackageTransactions = async (
@@ -20,66 +18,28 @@ export const getPackageTransactions = async (
 ): Promise<{ data: TPackageTransaction[]; meta: any }> => {
   const { user, package: packageId, plan, ...rest } = query_params;
   const filter: Record<string, unknown> = {};
-
   if (user) filter.user = new mongoose.Types.ObjectId(user as string);
-  if (packageId)
-    filter.package = new mongoose.Types.ObjectId(packageId as string);
+  if (packageId) filter.package = new mongoose.Types.ObjectId(packageId as string);
   if (plan) filter.plan = new mongoose.Types.ObjectId(plan as string);
 
-  const appQuery = new AppAggregationQuery<TPackageTransaction>(
-    PackageTransaction,
-    {
-      ...rest,
-      ...filter,
-    },
-  );
-
-  appQuery
-    .populate([
-      { path: 'package', justOne: true },
-      { path: 'plan', justOne: true },
-      { path: 'user', select: 'name email', justOne: true },
-    ])
-    .search(['email'])
-    .filter()
-    .sort(['created_at', 'updated_at'] as any)
-    .paginate()
-    .fields();
-
-  const result = await appQuery.execute([
-    {
-      key: 'payment',
-      filter: { increase_source: 'payment' },
-    },
-    {
-      key: 'bonus',
-      filter: { increase_source: 'bonus' },
-    },
+  return await PackageTransactionRepository.findPaginated(rest, filter, [
+    { key: 'payment', filter: { increase_source: 'payment' } },
+    { key: 'bonus', filter: { increase_source: 'bonus' } },
   ]);
-
-  return result;
 };
 
 export const getPackageTransactionById = async (
   id: string,
 ): Promise<TPackageTransaction | null> => {
-  return await PackageTransaction.findById(id).populate([
-    'package',
-    'plan',
-    'user',
-    'user_wallet',
-    'payment_transaction',
-  ]);
+  return await PackageTransactionRepository.findByIdPopulated(id);
 };
 
 export const deletePackageTransaction = async (id: string): Promise<void> => {
-  const transaction = await PackageTransaction.findById(id).lean();
+  const transaction = await PackageTransactionRepository.findById(id);
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package transaction not found');
   }
 
-  // Reverse the transaction effect on wallet (subtract credits if it was an increase)
-  // Since PackageTransactions are currently only increases (payment or bonus)
   const wallet = await UserWallet.findById(transaction.user_wallet);
   if (wallet) {
     wallet.credits = Math.max(0, wallet.credits - transaction.credits);
@@ -87,15 +47,11 @@ export const deletePackageTransaction = async (id: string): Promise<void> => {
     await clearUserWalletCache(wallet.user.toString());
   }
 
-  await PackageTransaction.findByIdAndUpdate(id, { is_deleted: true });
+  await PackageTransactionRepository.softDeleteById(id);
 };
 
-export const deletePackageTransactionPermanent = async (
-  id: string,
-): Promise<void> => {
-  const transaction = await PackageTransaction.findById(id).setOptions({
-    bypassDeleted: true,
-  });
+export const deletePackageTransactionPermanent = async (id: string): Promise<void> => {
+  const transaction = await PackageTransactionRepository.findById(id, true);
   if (!transaction) {
     throw new AppError(httpStatus.NOT_FOUND, 'Package transaction not found');
   }
@@ -107,21 +63,14 @@ export const deletePackageTransactionPermanent = async (
     await clearUserWalletCache(wallet.user.toString());
   }
 
-  await PackageTransaction.findByIdAndDelete(id);
+  await PackageTransactionRepository.permanentDeleteById(id);
 };
 
 export const deletePackageTransactions = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const transactions = await PackageTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
-    transaction._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const transactions = await PackageTransactionRepository.findMany({ _id: { $in: ids } });
+  const foundIds = transactions.map((t) => (t as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   for (const transaction of transactions) {
@@ -133,29 +82,15 @@ export const deletePackageTransactions = async (
     }
   }
 
-  await PackageTransaction.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await PackageTransactionRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deletePackageTransactionsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const transactions = await PackageTransaction.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = transactions.map((transaction) =>
-    transaction._id.toString(),
-  );
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const transactions = await PackageTransactionRepository.findMany({ _id: { $in: ids } });
+  const foundIds = transactions.map((t) => (t as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
 
   for (const transaction of transactions) {
@@ -167,30 +102,17 @@ export const deletePackageTransactionsPermanent = async (
     }
   }
 
-  await PackageTransaction.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await PackageTransactionRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-export const restorePackageTransaction = async (
-  id: string,
-): Promise<TPackageTransaction> => {
-  const transaction = await PackageTransaction.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+export const restorePackageTransaction = async (id: string): Promise<TPackageTransaction> => {
+  const transaction = await PackageTransactionRepository.findOneAndRestore({
+    _id: id,
+    is_deleted: true,
+  });
   if (!transaction) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Package transaction not found or not deleted',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Package transaction not found or not deleted');
   }
 
   const wallet = await UserWallet.findById(transaction.user_wallet);
@@ -205,21 +127,14 @@ export const restorePackageTransaction = async (
 
 export const restorePackageTransactions = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await PackageTransaction.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restoredTransactions = await PackageTransaction.find({
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await PackageTransactionRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredTransactions.map((transaction) =>
-    transaction._id.toString(),
-  );
+    is_deleted: true,
+  });
+
+  const restoredTransactions = await PackageTransactionRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restoredTransactions.map((t) => (t as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
 
   for (const transaction of restoredTransactions) {
@@ -231,12 +146,5 @@ export const restorePackageTransactions = async (
     }
   }
 
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-

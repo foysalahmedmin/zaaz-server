@@ -1,43 +1,17 @@
 import httpStatus from 'http-status';
-import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
-import { AiModelHistory } from './ai-model-history.model';
+import * as AiModelHistoryRepository from './ai-model-history.repository';
 import { TAiModelHistory } from './ai-model-history.type';
 
 export const getAiModelHistories = async (
   aiModelId: string,
   query: Record<string, unknown> = {},
-): Promise<{
-  data: TAiModelHistory[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const historyQuery = new AppAggregationQuery<TAiModelHistory>(
-    AiModelHistory,
-    query,
-  );
-
-  historyQuery.pipeline([
-    { $match: { ai_model: new mongoose.Types.ObjectId(aiModelId) } },
-  ]);
-
-  historyQuery
-    .populate([{ path: 'ai_model', justOne: true }])
-    .sort()
-    .paginate()
-    .fields();
-
-  const result = await historyQuery.execute();
-
-  return result;
+): Promise<{ data: TAiModelHistory[]; meta: { total: number; page: number; limit: number } }> => {
+  return await AiModelHistoryRepository.findPaginated(aiModelId, query);
 };
 
-export const getAiModelHistory = async (
-  id: string,
-): Promise<TAiModelHistory> => {
-  const result = await AiModelHistory.findById(id).populate([
-    { path: 'ai_model' },
-  ]);
+export const getAiModelHistory = async (id: string): Promise<TAiModelHistory> => {
+  const result = await AiModelHistoryRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model history not found');
   }
@@ -45,114 +19,58 @@ export const getAiModelHistory = async (
 };
 
 export const deleteAiModelHistory = async (id: string): Promise<void> => {
-  const history = await AiModelHistory.findById(id).lean();
-  if (!history) {
+  const history = await AiModelHistoryRepository.findMany({ _id: id });
+  if (!history.length) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model history not found');
   }
-
-  await AiModelHistory.findByIdAndUpdate(id, { is_deleted: true });
+  await AiModelHistoryRepository.softDeleteById(id);
 };
 
-export const deleteAiModelHistoryPermanent = async (
-  id: string,
-): Promise<void> => {
-  const history = await AiModelHistory.findById(id).setOptions({
-    bypassDeleted: true,
-  });
-  if (!history) {
+export const deleteAiModelHistoryPermanent = async (id: string): Promise<void> => {
+  const history = await AiModelHistoryRepository.findMany({ _id: id }, true);
+  if (!history.length) {
     throw new AppError(httpStatus.NOT_FOUND, 'AI Model history not found');
   }
-
-  await AiModelHistory.findByIdAndDelete(id);
+  await AiModelHistoryRepository.permanentDeleteById(id);
 };
 
 export const deleteAiModelHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const histories = await AiModelHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = histories.map((h) => h._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await AiModelHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await AiModelHistory.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await AiModelHistoryRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deleteAiModelHistoriesPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const histories = await AiModelHistory.find({
-    _id: { $in: ids },
-  }).lean();
-  const foundIds = histories.map((h) => h._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const histories = await AiModelHistoryRepository.findMany({ _id: { $in: ids } });
+  const foundIds = histories.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await AiModelHistory.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await AiModelHistoryRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-export const restoreAiModelHistory = async (
-  id: string,
-): Promise<TAiModelHistory> => {
-  const history = await AiModelHistory.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+export const restoreAiModelHistory = async (id: string): Promise<TAiModelHistory> => {
+  const history = await AiModelHistoryRepository.findOneAndRestore({ _id: id, is_deleted: true });
   if (!history) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'AI Model history not found or not deleted',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'AI Model history not found or not deleted');
   }
-
   return history;
 };
 
 export const restoreAiModelHistories = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const result = await AiModelHistory.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restoredHistories = await AiModelHistory.find({
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const result = await AiModelHistoryRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-  const restoredIds = restoredHistories.map((h) => h._id.toString());
+    is_deleted: true,
+  });
+  const restored = await AiModelHistoryRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restored.map((h) => (h as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
-  return {
-    count: result.modifiedCount,
-    not_found_ids: notFoundIds,
-  };
+  return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-

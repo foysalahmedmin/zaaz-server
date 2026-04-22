@@ -1,9 +1,8 @@
 import httpStatus from 'http-status';
-import AppQueryAggregation from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { FeatureEndpoint } from '../feature-endpoint/feature-endpoint.model';
 import { getPublicFeatureEndpointByIdOrValue } from '../feature-endpoint/feature-endpoint.service';
-import { FeatureUsageLog } from './feature-usage-log.model';
+import * as FeatureUsageLogRepository from './feature-usage-log.repository';
 import {
   TFeatureUsageLog,
   TFeatureUsageLogFromServer,
@@ -13,14 +12,8 @@ import { createFeatureUsageLogValidationSchema } from './feature-usage-log.valid
 export const createFeatureUsageLogFromServer = async (
   payload: TFeatureUsageLogFromServer,
 ): Promise<TFeatureUsageLog> => {
-  const {
-    feature_endpoint_id,
-    feature_endpoint_value,
-    user_id,
-    user_email,
-    status,
-    ...rest
-  } = payload;
+  const { feature_endpoint_id, feature_endpoint_value, user_id, user_email, status, ...rest } =
+    payload;
 
   let featureEndpoint;
   try {
@@ -28,35 +21,28 @@ export const createFeatureUsageLogFromServer = async (
       _id: feature_endpoint_id,
       value: feature_endpoint_value,
     });
-  } catch (error) {
+  } catch {
     // Ignore error if feature endpoint is not found
   }
 
   const data = {
     ...rest,
-    feature_endpoint: featureEndpoint?._id?.toString(),
+    feature_endpoint: featureEndpoint?._id,
     user: user_id,
     email: user_email,
     status,
   };
 
-  const parsedData =
-    createFeatureUsageLogValidationSchema.shape.body.parse(data);
-
-  const result = await FeatureUsageLog.create(parsedData);
-  return result;
+  const parsedData = createFeatureUsageLogValidationSchema.shape.body.parse(data);
+  return await FeatureUsageLogRepository.create(parsedData as unknown as Partial<TFeatureUsageLog>);
 };
 
 export const createFeatureUsageLog = async (
   payload: TFeatureUsageLog,
 ): Promise<TFeatureUsageLog> => {
-  const result = await FeatureUsageLog.create(payload);
-  return result;
+  return await FeatureUsageLogRepository.create(payload);
 };
 
-/**
- * Get all feature usage logs with pagination and filtering
- */
 export const getFeatureUsageLogs = async (
   query_params: Record<string, unknown>,
 ): Promise<{ data: TFeatureUsageLog[]; meta: any }> => {
@@ -64,18 +50,12 @@ export const getFeatureUsageLogs = async (
 
   const filter: Record<string, any> = {};
 
-  // Date range filter
   if (gte || lte) {
     filter.created_at = {};
-    if (gte) {
-      filter.created_at.$gte = new Date(gte as string);
-    }
-    if (lte) {
-      filter.created_at.$lte = new Date(lte as string);
-    }
+    if (gte) filter.created_at.$gte = new Date(gte as string);
+    if (lte) filter.created_at.$lte = new Date(lte as string);
   }
 
-  // Feature filter (if feature_endpoint is not provided)
   if (feature && !feature_endpoint) {
     const endpoints = await FeatureEndpoint.find({ feature }).select('_id');
     filter.feature_endpoint = { $in: endpoints.map((e) => e._id) };
@@ -83,155 +63,56 @@ export const getFeatureUsageLogs = async (
     filter.feature_endpoint = feature_endpoint;
   }
 
-  if (status) {
-    filter.status = status;
-  }
+  if (status) filter.status = status;
 
-  const appQuery = new AppQueryAggregation(FeatureUsageLog, rest);
-
-  if (Object.keys(filter).length > 0) {
-    appQuery.pipeline([{ $match: filter }]);
-  }
-
-  appQuery
-    .populate({
-      path: 'feature_endpoint',
-      select: 'name method endpoint feature',
-      populate: {
-        path: 'feature',
-        select: 'name value',
-      },
-    })
-    .search(['email', 'usage_key', 'status', 'type', 'endpoint'])
-    .filter()
-    .sort(['code', 'status', 'created_at'] as any)
-    .paginate()
-    .fields();
-
-  const [result, aggregateStats] = await Promise.all([
-    appQuery.execute([
-      {
-        key: 'success',
-        filter: { status: 'success' },
-      },
-      {
-        key: 'failed',
-        filter: { status: 'failed' },
-      },
-    ]),
-    FeatureUsageLog.aggregate([
-      { $match: { ...filter, is_deleted: { $ne: true } } },
-      {
-        $group: {
-          _id: null,
-        },
-      },
-    ]),
+  const result = await FeatureUsageLogRepository.findPaginated(rest, filter, [
+    { key: 'success', filter: { status: 'success' } },
+    { key: 'failed', filter: { status: 'failed' } },
   ]);
-
-  if (aggregateStats.length > 0) {
-    result.meta.statistics = {
-      ...result.meta.statistics,
-    };
-  } else {
-    result.meta.statistics = {
-      ...result.meta.statistics,
-    };
-  }
 
   return result;
 };
 
-/**
- * Get single feature usage log by ID
- */
-export const getFeatureUsageLog = async (
-  id: string,
-): Promise<TFeatureUsageLog> => {
-  const result = await FeatureUsageLog.findById(id)
-    .populate('feature_endpoint')
-    .select('+profit_credits +cost_credits +cost_price');
+export const getFeatureUsageLog = async (id: string): Promise<TFeatureUsageLog> => {
+  const result = await FeatureUsageLogRepository.findById(id);
   if (!result) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature usage log not found');
   }
   return result;
 };
 
-/**
- * Soft delete feature usage log
- */
 export const deleteFeatureUsageLog = async (id: string): Promise<void> => {
-  const log = await FeatureUsageLog.findById(id).lean();
+  const logs = await FeatureUsageLogRepository.findMany({ _id: id });
+  if (!logs.length) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Feature usage log not found');
+  }
+  await FeatureUsageLogRepository.softDeleteById(id);
+};
+
+export const deleteFeatureUsageLogPermanent = async (id: string): Promise<void> => {
+  const log = await FeatureUsageLogRepository.findByIdRaw(id, true);
   if (!log) {
     throw new AppError(httpStatus.NOT_FOUND, 'Feature usage log not found');
   }
-
-  await FeatureUsageLog.findByIdAndUpdate(id, { is_deleted: true });
+  await FeatureUsageLogRepository.permanentDeleteById(id);
 };
 
-/**
- * Permanent delete feature usage log
- */
-export const deleteFeatureUsageLogPermanent = async (
-  id: string,
-): Promise<void> => {
-  const log = await FeatureUsageLog.findById(id).setOptions({
-    bypassDeleted: true,
-  });
-  if (!log) {
-    throw new AppError(httpStatus.NOT_FOUND, 'Feature usage log not found');
-  }
-
-  await FeatureUsageLog.findByIdAndDelete(id);
-};
-
-/**
- * Soft delete multiple feature usage logs
- */
 export const deleteFeatureUsageLogs = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const logs = await FeatureUsageLog.find({ _id: { $in: ids } }).lean();
-  const foundIds = logs.map((log) => log._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const logs = await FeatureUsageLogRepository.findMany({ _id: { $in: ids } });
+  const foundIds = logs.map((log) => (log as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await FeatureUsageLog.updateMany(
-    { _id: { $in: foundIds } },
-    { is_deleted: true },
-  );
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await FeatureUsageLogRepository.updateMany({ _id: { $in: foundIds } }, { is_deleted: true });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
-/**
- * Permanent delete multiple feature usage logs
- */
 export const deleteFeatureUsageLogsPermanent = async (
   ids: string[],
-): Promise<{
-  count: number;
-  not_found_ids: string[];
-}> => {
-  const logs = await FeatureUsageLog.find({ _id: { $in: ids } }).lean();
-  const foundIds = logs.map((log) => log._id.toString());
+): Promise<{ count: number; not_found_ids: string[] }> => {
+  const logs = await FeatureUsageLogRepository.findMany({ _id: { $in: ids } });
+  const foundIds = logs.map((log) => (log as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await FeatureUsageLog.deleteMany({ _id: { $in: foundIds } }).setOptions({
-    bypassDeleted: true,
-  });
-
-  return {
-    count: foundIds.length,
-    not_found_ids: notFoundIds,
-  };
+  await FeatureUsageLogRepository.permanentDeleteMany({ _id: { $in: foundIds } });
+  return { count: foundIds.length, not_found_ids: notFoundIds };
 };
-
-
-
-

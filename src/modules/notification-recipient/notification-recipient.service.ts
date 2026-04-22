@@ -1,46 +1,31 @@
 import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import AppAggregationQuery from '../../builder/app-aggregation-query';
 import AppError from '../../builder/app-error';
 import { TJwtPayload } from '../../types/jsonwebtoken.type';
-import { NotificationRecipient } from './notification-recipient.model';
+import * as NotificationRecipientRepository from './notification-recipient.repository';
 import { TNotificationRecipient } from './notification-recipient.type';
 
 export const createNotificationRecipient = async (
   data: TNotificationRecipient,
 ): Promise<TNotificationRecipient> => {
-  const result = await NotificationRecipient.create(data);
-  return result.toObject();
+  return await NotificationRecipientRepository.create(data);
 };
 
 export const getSelfNotificationRecipient = async (
   user: TJwtPayload,
   id: string,
 ): Promise<TNotificationRecipient> => {
-  const result = await NotificationRecipient.findOne({
-    _id: id,
-    author: user._id,
-  }).lean();
-
+  const result = await NotificationRecipientRepository.findOne({ _id: id, author: user._id });
   if (!result) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
   }
   return result;
 };
 
-export const getNotificationRecipient = async (
-  id: string,
-): Promise<TNotificationRecipient> => {
-  const result = await NotificationRecipient.findById(id).lean();
-
+export const getNotificationRecipient = async (id: string): Promise<TNotificationRecipient> => {
+  const result = await NotificationRecipientRepository.findById(id);
   if (!result) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
   }
   return result;
 };
@@ -48,62 +33,19 @@ export const getNotificationRecipient = async (
 export const getSelfNotificationRecipients = async (
   user: TJwtPayload,
   query: Record<string, unknown>,
-): Promise<{
-  data: TNotificationRecipient[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const notificationQuery = new AppAggregationQuery<TNotificationRecipient>(
-    NotificationRecipient,
+): Promise<{ data: TNotificationRecipient[]; meta: { total: number; page: number; limit: number } }> => {
+  return await NotificationRecipientRepository.findPaginated(
     query,
+    { author: new mongoose.Types.ObjectId(user._id) },
+    [{ key: 'unread', filter: { is_read: false } }],
   );
-  notificationQuery.pipeline([
-    { $match: { author: new mongoose.Types.ObjectId(user._id) } },
-  ]);
-
-  notificationQuery
-    .populate([
-      { path: 'recipient', select: '_id name email image', justOne: true },
-      { path: 'notification', select: '_id title type sender', justOne: true },
-    ])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  return await notificationQuery.execute([
-    {
-      key: 'unread',
-      filter: { is_read: false },
-    },
-  ]);
 };
 
 export const getNotificationRecipients = async (
   query: Record<string, unknown>,
-): Promise<{
-  data: TNotificationRecipient[];
-  meta: { total: number; page: number; limit: number };
-}> => {
-  const notificationQuery = new AppAggregationQuery<TNotificationRecipient>(
-    NotificationRecipient,
-    query,
-  );
-
-  notificationQuery
-    .populate([
-      { path: 'recipient', select: '_id name email image', justOne: true },
-      { path: 'notification', select: '_id title type sender', justOne: true },
-    ])
-    .filter()
-    .sort()
-    .paginate()
-    .fields();
-
-  return await notificationQuery.execute([
-    {
-      key: 'unread',
-      filter: { is_read: false },
-    },
+): Promise<{ data: TNotificationRecipient[]; meta: { total: number; page: number; limit: number } }> => {
+  return await NotificationRecipientRepository.findPaginated(query, {}, [
+    { key: 'unread', filter: { is_read: false } },
   ]);
 };
 
@@ -112,55 +54,31 @@ export const updateSelfNotificationRecipient = async (
   id: string,
   payload: Partial<Pick<TNotificationRecipient, 'is_read' | 'read_at'>>,
 ): Promise<TNotificationRecipient> => {
-  const data = await NotificationRecipient.findOne({
-    _id: id,
-    author: user._id,
-  }).lean();
-
+  const data = await NotificationRecipientRepository.findOne({ _id: id, author: user._id });
   if (!data) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
   }
-
-  const result = await NotificationRecipient.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  }).lean();
-
-  return result!;
+  return (await NotificationRecipientRepository.findByIdAndUpdate(id, payload))!;
 };
 
 export const updateNotificationRecipient = async (
   id: string,
   payload: Partial<Pick<TNotificationRecipient, 'is_read' | 'read_at'>>,
 ): Promise<TNotificationRecipient> => {
-  const data = await NotificationRecipient.findById(id).lean();
-
+  const data = await NotificationRecipientRepository.findById(id);
   if (!data) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
   }
-
-  const result = await NotificationRecipient.findByIdAndUpdate(id, payload, {
-    new: true,
-    runValidators: true,
-  }).lean();
-
-  return result!;
+  return (await NotificationRecipientRepository.findByIdAndUpdate(id, payload))!;
 };
 
 export const readAllNotificationRecipients = async (
   user: TJwtPayload,
 ): Promise<{ count: number }> => {
-  const result = await NotificationRecipient.updateMany(
+  const result = await NotificationRecipientRepository.updateMany(
     { author: user._id },
     { is_read: true, read_at: new Date() },
   );
-
   return { count: result.modifiedCount };
 };
 
@@ -169,19 +87,13 @@ export const updateSelfNotificationRecipients = async (
   ids: string[],
   payload: Partial<Pick<TNotificationRecipient, 'is_read' | 'read_at'>>,
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const recipients = await NotificationRecipient.find({
-    _id: { $in: ids },
-    author: user._id,
-  }).lean();
-
-  const foundIds = recipients.map((r) => r._id.toString());
+  const recipients = await NotificationRecipientRepository.findByAuthorAndIds(user._id, ids);
+  const foundIds = recipients.map((r) => (r as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  const result = await NotificationRecipient.updateMany(
+  const result = await NotificationRecipientRepository.updateMany(
     { _id: { $in: foundIds }, author: user._id },
-    { ...payload },
+    payload,
   );
-
   return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
 
@@ -189,18 +101,13 @@ export const updateNotificationRecipients = async (
   ids: string[],
   payload: Partial<Pick<TNotificationRecipient, 'is_read' | 'read_at'>>,
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const recipients = await NotificationRecipient.find({
-    _id: { $in: ids },
-  }).lean();
-
-  const foundIds = recipients.map((r) => r._id.toString());
+  const recipients = await NotificationRecipientRepository.findMany({ _id: { $in: ids } });
+  const foundIds = recipients.map((r) => (r as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  const result = await NotificationRecipient.updateMany(
+  const result = await NotificationRecipientRepository.updateMany(
     { _id: { $in: foundIds } },
-    { ...payload },
+    payload,
   );
-
   return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
 
@@ -208,110 +115,75 @@ export const deleteSelfNotificationRecipient = async (
   user: TJwtPayload,
   id: string,
 ): Promise<void> => {
-  const data = await NotificationRecipient.findOne({
-    _id: id,
-    author: user._id,
-  });
-  if (!data)
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
-
-  await data.softDelete();
+  await NotificationRecipientRepository.softDeleteDoc({ _id: id, author: user._id });
 };
 
-export const deleteNotificationRecipient = async (
-  id: string,
-): Promise<void> => {
-  const data = await NotificationRecipient.findById(id);
-  if (!data)
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
-
-  await data.softDelete();
+export const deleteNotificationRecipient = async (id: string): Promise<void> => {
+  const data = await NotificationRecipientRepository.findById(id);
+  if (!data) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
+  }
+  await NotificationRecipientRepository.softDeleteDoc({ _id: id });
 };
 
-export const deleteNotificationRecipientPermanent = async (
-  id: string,
-): Promise<void> => {
-  const data = await NotificationRecipient.findById(id)
-    .setOptions({ bypassDeleted: true })
-    .lean();
-  if (!data)
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found',
-    );
-
-  await NotificationRecipient.findByIdAndDelete(id);
+export const deleteNotificationRecipientPermanent = async (id: string): Promise<void> => {
+  const data = await NotificationRecipientRepository.findMany({ _id: id }, true);
+  if (!data.length) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found');
+  }
+  await NotificationRecipientRepository.permanentDeleteById(id);
 };
 
 export const deleteSelfNotificationRecipients = async (
   user: TJwtPayload,
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const data = await NotificationRecipient.find({
-    _id: { $in: ids },
-    author: user._id,
-  }).lean();
-
-  const foundIds = data.map((d) => d._id.toString());
+  const data = await NotificationRecipientRepository.findByAuthorAndIds(user._id, ids);
+  const foundIds = data.map((d) => (d as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await NotificationRecipient.updateMany(
+  await NotificationRecipientRepository.updateMany(
     { _id: { $in: foundIds }, author: user._id },
     { is_deleted: true },
   );
-
   return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deleteAllSelfNotificationRecipients = async (
   user: TJwtPayload,
 ): Promise<{ count: number }> => {
-  const result = await NotificationRecipient.updateMany(
+  const result = await NotificationRecipientRepository.updateMany(
     { author: user._id, is_deleted: { $ne: true } },
     { is_deleted: true },
   );
-
   return { count: result.modifiedCount };
 };
 
 export const deleteNotificationRecipients = async (
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const data = await NotificationRecipient.find({ _id: { $in: ids } }).lean();
-  const foundIds = data.map((d) => d._id.toString());
+  const data = await NotificationRecipientRepository.findMany({ _id: { $in: ids } });
+  const foundIds = data.map((d) => (d as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await NotificationRecipient.updateMany(
+  await NotificationRecipientRepository.updateMany(
     { _id: { $in: foundIds } },
     { is_deleted: true },
   );
-
   return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
 export const deleteNotificationRecipientsPermanent = async (
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const data = await NotificationRecipient.find({
-    _id: { $in: ids },
-    is_deleted: true,
-  })
-    .setOptions({ bypassDeleted: true })
-    .lean();
-  const foundIds = data.map((d) => d._id.toString());
+  const data = await NotificationRecipientRepository.findMany(
+    { _id: { $in: ids }, is_deleted: true },
+    true,
+  );
+  const foundIds = data.map((d) => (d as any)._id.toString());
   const notFoundIds = ids.filter((id) => !foundIds.includes(id));
-
-  await NotificationRecipient.deleteMany({
+  await NotificationRecipientRepository.permanentDeleteMany({
     _id: { $in: foundIds },
     is_deleted: true,
-  }).setOptions({ bypassDeleted: true });
-
+  });
   return { count: foundIds.length, not_found_ids: notFoundIds };
 };
 
@@ -319,38 +191,25 @@ export const restoreSelfNotificationRecipient = async (
   user: TJwtPayload,
   id: string,
 ): Promise<TNotificationRecipient> => {
-  const data = await NotificationRecipient.findOneAndUpdate(
-    { _id: id, is_deleted: true, author: user._id },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+  const data = await NotificationRecipientRepository.findOneAndRestore({
+    _id: id,
+    is_deleted: true,
+    author: user._id,
+  });
   if (!data) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found or not deleted',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found or not deleted');
   }
-
   return data;
 };
 
-export const restoreNotificationRecipient = async (
-  id: string,
-): Promise<TNotificationRecipient> => {
-  const data = await NotificationRecipient.findOneAndUpdate(
-    { _id: id, is_deleted: true },
-    { is_deleted: false },
-    { new: true },
-  ).lean();
-
+export const restoreNotificationRecipient = async (id: string): Promise<TNotificationRecipient> => {
+  const data = await NotificationRecipientRepository.findOneAndRestore({
+    _id: id,
+    is_deleted: true,
+  });
   if (!data) {
-    throw new AppError(
-      httpStatus.NOT_FOUND,
-      'Notification recipient not found or not deleted',
-    );
+    throw new AppError(httpStatus.NOT_FOUND, 'Notification recipient not found or not deleted');
   }
-
   return data;
 };
 
@@ -358,40 +217,26 @@ export const restoreSelfNotificationRecipients = async (
   user: TJwtPayload,
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const result = await NotificationRecipient.updateMany(
-    { _id: { $in: ids }, is_deleted: true, author: user._id },
-    { is_deleted: false },
-  );
-
-  const restored = await NotificationRecipient.find({
+  const result = await NotificationRecipientRepository.restoreMany({
     _id: { $in: ids },
+    is_deleted: true,
     author: user._id,
-  }).lean();
-
-  const restoredIds = restored.map((r) => r._id.toString());
+  });
+  const restored = await NotificationRecipientRepository.findByAuthorAndIds(user._id, ids);
+  const restoredIds = restored.map((r) => (r as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
   return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
 
 export const restoreNotificationRecipients = async (
   ids: string[],
 ): Promise<{ count: number; not_found_ids: string[] }> => {
-  const result = await NotificationRecipient.updateMany(
-    { _id: { $in: ids }, is_deleted: true },
-    { is_deleted: false },
-  );
-
-  const restored = await NotificationRecipient.find({
+  const result = await NotificationRecipientRepository.restoreMany({
     _id: { $in: ids },
-  }).lean();
-
-  const restoredIds = restored.map((r) => r._id.toString());
+    is_deleted: true,
+  });
+  const restored = await NotificationRecipientRepository.findMany({ _id: { $in: ids } });
+  const restoredIds = restored.map((r) => (r as any)._id.toString());
   const notFoundIds = ids.filter((id) => !restoredIds.includes(id));
-
   return { count: result.modifiedCount, not_found_ids: notFoundIds };
 };
-
-
-
-
