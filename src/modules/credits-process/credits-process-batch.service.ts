@@ -167,7 +167,7 @@ class CreditsBatchAggregator {
     // Emit a single aggregated update for the user in fallback mode
     if (successCount > 0) {
       try {
-        const { emitToUser } = await import('../../socket');
+        const { emitToUser } = await import('../../config/socket');
         emitToUser(String(userId), 'wallet:credits-updated', {
           credits: lastUpdatedCredits,
           cost_credits: totalCost,

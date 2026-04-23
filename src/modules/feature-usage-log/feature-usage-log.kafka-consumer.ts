@@ -1,4 +1,4 @@
-import { KafkaClient } from '../../config/rabbitmq';
+import { KafkaClient } from '../../config/kafka';
 import * as FeatureUsageLogService from './feature-usage-log.service';
 import { TFeatureUsageLogFromServer } from './feature-usage-log.type';
 import { createFeatureUsageLogFromServerValidationSchema } from './feature-usage-log.validator';
