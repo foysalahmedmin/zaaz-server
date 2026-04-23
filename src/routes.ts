@@ -20,6 +20,7 @@ import PackageHistoryRoutes from './modules/package-history/package-history.rout
 import PackagePriceRoutes from './modules/package-price/package-price.route';
 import PackageRoutes from './modules/package/package.route';
 import PaymentMethodRoutes from './modules/payment-method/payment-method.route';
+import PaymentRoutes from './modules/payment/payment.route';
 import PaymentTransactionRoutes from './modules/payment-transaction/payment-transaction.route';
 import IntervalRoutes from './modules/interval/interval.route';
 import UserWalletRoutes from './modules/user-wallet/user-wallet.route';
@@ -105,6 +106,10 @@ const moduleRoutes = [
   {
     path: '/payment-methods',
     route: PaymentMethodRoutes,
+  },
+  {
+    path: '/payments',
+    route: PaymentRoutes,
   },
   {
     path: '/payment-transactions',

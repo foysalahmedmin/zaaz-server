@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import AppError from '../../builder/app-error';
-import { TPaymentTransactionStatus } from './payment-transaction.type';
+import { TPaymentTransactionStatus } from '../payment-transaction/payment-transaction.type';
 
 export class PaymentStateMachine {
   private static readonly transitions: Record<
@@ -9,19 +9,15 @@ export class PaymentStateMachine {
   > = {
     pending: ['success', 'failed'],
     success: ['refunded'],
-    failed: [], // Terminal state
-    refunded: [], // Terminal state
+    failed: [],
+    refunded: [],
   };
 
-  /**
-   * Validates if a transition is allowed.
-   * Throws error if invalid.
-   */
   static validate(
     currentStatus: TPaymentTransactionStatus,
     targetStatus: TPaymentTransactionStatus,
   ): void {
-    if (currentStatus === targetStatus) return; // Same status is allowed (idempotency)
+    if (currentStatus === targetStatus) return;
 
     const allowed = this.transitions[currentStatus];
     if (!allowed || !allowed.includes(targetStatus)) {
@@ -32,9 +28,6 @@ export class PaymentStateMachine {
     }
   }
 
-  /**
-   * Checks if a transition is allowed without throwing.
-   */
   static canTransition(
     currentStatus: TPaymentTransactionStatus,
     targetStatus: TPaymentTransactionStatus,
@@ -46,6 +39,3 @@ export class PaymentStateMachine {
     );
   }
 }
-
-
-

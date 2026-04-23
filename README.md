@@ -706,7 +706,7 @@ The service layer exposes the following API clusters via the `/api` namespace:
 
 - Identity Management: `/api/auth` (Sign-in, Sign-up, Google SSO, Password Recovery)
 - Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/token-process`, `/api/credits-usages`
-- Financial Operations: `/api/payment-transactions`, `/api/payment-methods`, `/api/package-transactions`
+- Financial Operations: `/api/payments` (initiate, verify, webhook, redirect, reconcile), `/api/payment-transactions` (CRUD), `/api/payment-methods`, `/api/package-transactions`
 - Catalog and Inventory: `/api/packages`, `/api/intervals`, `/api/package-prices`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
 - Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`, `/api/feature-feedbacks`
 - Intelligence Governance: `/api/ai-models`, `/api/ai-model-histories`, `/api/billing-settings`, `/api/billing-setting-histories`, `/api/credits-profits`, `/api/credits-profit-histories`

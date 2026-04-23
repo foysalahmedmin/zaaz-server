@@ -7,15 +7,13 @@ export enum PaymentEvents {
 }
 
 export interface PaymentEventPayload {
-  transactionId: string;
-  userId: string;
+  transaction_id: string;
+  user_id: string;
   amount: number;
   currency: string;
-  paymentMethodId: string;
-  packageId?: string;
-  intervalId?: string;
+  payment_method_id: string;
+  package_id?: string;
+  interval_id?: string;
   metadata?: Record<string, any>;
   timestamp: Date;
 }
-
-
