@@ -147,3 +147,15 @@ export const updatePayment = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+export const refundPayment = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { admin_note } = req.body;
+  const result = await PaymentService.initiateRefund(id, admin_note);
+  responseFormatter(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Payment refunded successfully',
+    data: result,
+  });
+});

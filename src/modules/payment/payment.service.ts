@@ -13,6 +13,7 @@ import { PaymentMethod } from '../payment-method/payment-method.model';
 import * as PaymentTransactionRepository from '../payment-transaction/payment-transaction.repository';
 import { TPaymentTransaction } from '../payment-transaction/payment-transaction.type';
 import { UserWallet } from '../user-wallet/user-wallet.model';
+import { revokePackageCredits } from '../user-wallet/user-wallet.service';
 import { handlePaymentCompleted } from './payment.consumers';
 import { PaymentEventPayload } from './payment.events';
 import { PaymentStateMachine } from './payment-state-machine';
@@ -110,10 +111,23 @@ export const updatePaymentTransactionStatus = async (
       timestamp: new Date(),
     };
 
-    try {
-      await handlePaymentCompleted(event_payload, session);
-    } catch (direct_error) {
-      console.error('[PaymentService] Direct handlePaymentCompleted failed:', direct_error);
+    const max_attempts = 3;
+    let last_error: unknown;
+    for (let attempt = 1; attempt <= max_attempts; attempt++) {
+      try {
+        await handlePaymentCompleted(event_payload, session);
+        last_error = undefined;
+        break;
+      } catch (err) {
+        last_error = err;
+        console.error(`[PaymentService] handlePaymentCompleted attempt ${attempt}/${max_attempts} failed:`, err);
+        if (attempt < max_attempts) {
+          await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 1000));
+        }
+      }
+    }
+    if (last_error) {
+      console.error('[PaymentService] All handlePaymentCompleted attempts failed — will be retried by cron:', last_error);
     }
 
     if (config.rabbitmq_enabled) {
@@ -574,5 +588,76 @@ export const handlePaymentWebhook = async (
       },
       additional_updates,
     );
+  }
+};
+
+export const initiateRefund = async (
+  id: string,
+  admin_note?: string,
+): Promise<TPaymentTransaction> => {
+  const transaction = await PaymentTransactionRepository.PaymentTransaction.findById(id)
+    .populate('payment_method')
+    .lean();
+
+  if (!transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  if (transaction.status !== 'success') {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Cannot refund a transaction with status '${transaction.status}'. Only 'success' transactions can be refunded`,
+    );
+  }
+
+  const payment_method = transaction.payment_method as any;
+  if (!payment_method) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment method not found');
+  }
+
+  const gateway_tx_id = transaction.gateway_transaction_id || transaction.gateway_session_id;
+  if (!gateway_tx_id) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'No gateway transaction ID found — cannot process refund');
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const gateway = PaymentGatewayFactory.create(payment_method);
+    const refund_response = await gateway.refund(
+      gateway_tx_id,
+      transaction.amount,
+      transaction.currency,
+    );
+
+    if (!refund_response.success) {
+      throw new AppError(httpStatus.BAD_GATEWAY, 'Gateway refund failed');
+    }
+
+    await revokePackageCredits(id, session);
+
+    const updated_transaction = await updatePaymentTransactionStatus(
+      id,
+      'refunded',
+      session,
+      {
+        source: 'ADMIN_REFUND',
+        reason: admin_note || 'Admin initiated refund',
+        metadata: { refund_response },
+      },
+      {
+        refund_id: refund_response.refund_id,
+      },
+    );
+
+    await session.commitTransaction();
+    return updated_transaction;
+  } catch (error: any) {
+    await session.abortTransaction();
+    if (error instanceof AppError) throw error;
+    throw new AppError(httpStatus.INTERNAL_SERVER_ERROR, `Refund failed: ${error.message}`);
+  } finally {
+    session.endSession();
   }
 };

@@ -6,6 +6,7 @@ import {
   PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
+  RefundResponse,
   WebhookResponse,
 } from '../index';
 
@@ -152,7 +153,6 @@ export class StripeService implements IPaymentGateway {
     }
   }
   async processRedirect(params: any): Promise<PaymentRedirectResult> {
-    // Check if session_id is available in params
     const sessionId = params.session_id;
     if (sessionId) {
       const verification = await this.verifyPayment(sessionId);
@@ -163,11 +163,37 @@ export class StripeService implements IPaymentGateway {
         };
       }
     }
-    // Default to pending - Stripe relies on webhooks
     return {
       status: 'pending',
       message: 'Processing via webhook',
     };
+  }
+
+  async refund(transactionId: string, amount: number, currency: string): Promise<RefundResponse> {
+    try {
+      const session = await this.stripe.checkout.sessions.retrieve(transactionId);
+      const payment_intent_id = typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+      if (!payment_intent_id) {
+        throw new Error('No payment intent found for this session');
+      }
+
+      const refund = await this.stripe.refunds.create({
+        payment_intent: payment_intent_id,
+        amount: Math.round(amount * 100),
+      });
+
+      return {
+        success: refund.status === 'succeeded',
+        refund_id: refund.id,
+        amount,
+        currency: currency.toUpperCase(),
+      };
+    } catch (error: any) {
+      throw new Error(`Stripe refund failed: ${error.message}`);
+    }
   }
 }
 

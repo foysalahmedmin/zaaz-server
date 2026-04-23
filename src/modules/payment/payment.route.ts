@@ -66,5 +66,13 @@ router.patch(
   PaymentControllers.updatePayment,
 );
 
+// POST - Admin hard refund
+router.post(
+  '/:id/refund',
+  auth('admin'),
+  validation(PaymentValidations.refundPaymentValidationSchema),
+  PaymentControllers.refundPayment,
+);
+
 const PaymentRoutes = router;
 export default PaymentRoutes;

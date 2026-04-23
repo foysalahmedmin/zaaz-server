@@ -140,6 +140,7 @@ const paymentTransactionSchema = new Schema<TPaymentTransactionDocument>(
       type: Boolean,
     },
     is_deleted: { type: Boolean, default: false, select: false },
+    consumer_processed: { type: Boolean, default: false, index: true },
   },
   {
     timestamps: {

@@ -43,11 +43,19 @@ export interface WebhookResponse {
   };
 }
 
+export interface RefundResponse {
+  success: boolean;
+  refund_id: string;
+  amount: number;
+  currency: string;
+}
+
 export interface IPaymentGateway {
   initiatePayment(data: InitiatePaymentData): Promise<PaymentResponse>;
   verifyPayment(transactionId: string): Promise<PaymentVerificationResponse>;
   handleWebhook(payload: any, signature: string): Promise<WebhookResponse>;
   processRedirect(params: any): Promise<PaymentRedirectResult>;
+  refund(transactionId: string, amount: number, currency: string): Promise<RefundResponse>;
 }
 
 export interface PaymentRedirectResult {

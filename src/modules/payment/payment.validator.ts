@@ -67,3 +67,10 @@ export const paymentOperationValidationSchema = z.object({
 export const webhookValidationSchema = z.object({
   params: z.object({ payment_method_id: id_schema }),
 });
+
+export const refundPaymentValidationSchema = z.object({
+  params: z.object({ id: id_schema }),
+  body: z.object({
+    admin_note: z.string().trim().max(500).optional(),
+  }),
+});

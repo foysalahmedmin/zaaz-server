@@ -7,6 +7,7 @@ import {
   PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
+  RefundResponse,
   WebhookResponse,
 } from '../index';
 
@@ -303,6 +304,40 @@ export class SSLCommerzService implements IPaymentGateway {
       gatewayTransactionId: tran_id,
       gatewayResponse: params,
     };
+  }
+
+  async refund(transactionId: string, amount: number, currency: string): Promise<RefundResponse> {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/validator/api/merchantTransIDvalidationAPI.php`,
+        null,
+        {
+          params: {
+            store_id: this.storeId,
+            store_passwd: this.storePassword,
+            format: 'json',
+            v: 1,
+            bank_tran_id: transactionId,
+            refund_amount: amount.toFixed(2),
+            refund_remarks: 'Refund requested by admin',
+          },
+          httpsAgent: this.httpsAgent,
+        },
+      );
+
+      const success =
+        response.data?.status === 'success' ||
+        response.data?.APIConnect === 'DONE';
+
+      return {
+        success,
+        refund_id: response.data?.refund_ref_id || transactionId,
+        amount,
+        currency,
+      };
+    } catch (error: any) {
+      throw new Error(`SSLCommerz refund failed: ${error.message}`);
+    }
   }
 }
 

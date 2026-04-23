@@ -6,6 +6,7 @@ import {
   PaymentRedirectResult,
   PaymentResponse,
   PaymentVerificationResponse,
+  RefundResponse,
   WebhookResponse,
 } from '../index';
 import {
@@ -318,49 +319,60 @@ export class BkashService implements IPaymentGateway {
     }
   }
 
-  /**
-   * Refund Transaction - Refund a completed payment
-   */
-  async refundTransaction(
+  async refund(transactionId: string, amount: number, currency: string): Promise<RefundResponse> {
+    try {
+      const bkash_response = await this.refundTransaction(
+        transactionId,
+        transactionId,
+        amount.toFixed(2),
+        'Refund requested by admin',
+      );
+
+      return {
+        success: true,
+        refund_id: bkash_response.refundTrxID || transactionId,
+        amount,
+        currency,
+      };
+    } catch (error: any) {
+      throw new Error(`bKash refund failed: ${error.message}`);
+    }
+  }
+
+  private async refundTransaction(
     paymentID: string,
     trxID: string,
     amount: string,
     reason: string,
   ): Promise<BkashRefundResponse> {
-    try {
-      const token = await this.grantToken();
+    const token = await this.grantToken();
 
-      const refundRequest: BkashRefundRequest = {
-        paymentID: paymentID,
-        amount: amount,
-        trxID: trxID,
-        sku: 'payment',
-        reason: reason,
-      };
+    const refundRequest: BkashRefundRequest = {
+      paymentID,
+      amount,
+      trxID,
+      sku: 'payment',
+      reason,
+    };
 
-      const response = await this.axiosInstance.post<BkashRefundResponse>(
-        '/tokenized/checkout/payment/refund',
-        refundRequest,
-        {
-          headers: {
-            Authorization: token,
-            'X-APP-Key': this.appKey,
-          },
+    const response = await this.axiosInstance.post<BkashRefundResponse>(
+      '/tokenized/checkout/payment/refund',
+      refundRequest,
+      {
+        headers: {
+          Authorization: token,
+          'X-APP-Key': this.appKey,
         },
-      );
+      },
+    );
 
-      if (response.data && response.data.statusCode === '0000') {
-        return response.data;
-      }
-
-      throw new Error(
-        `bKash refund failed: ${response.data?.statusMessage || 'Unknown error'}`,
-      );
-    } catch (error: any) {
-      throw new Error(
-        `bKash refund failed: ${error.response?.data?.statusMessage || error.message}`,
-      );
+    if (response.data && response.data.statusCode === '0000') {
+      return response.data;
     }
+
+    throw new Error(
+      `bKash refund failed: ${response.data?.statusMessage || 'Unknown error'}`,
+    );
   }
 }
 

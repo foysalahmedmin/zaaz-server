@@ -579,3 +579,40 @@ export const assignPackage = async (
 
   return (updatedWallet as any).toObject();
 };
+
+export const revokePackageCredits = async (
+  payment_transaction_id: string,
+  session?: mongoose.ClientSession,
+): Promise<void> => {
+  const payment_transaction = await mongoose
+    .model('PaymentTransaction')
+    .findById(payment_transaction_id)
+    .session(session || null)
+    .lean() as any;
+
+  if (!payment_transaction) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Payment transaction not found');
+  }
+
+  const package_price = await PackagePrice.findById(payment_transaction.price)
+    .session(session || null)
+    .lean();
+
+  if (!package_price) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Package price not found for this transaction');
+  }
+
+  const credits_to_revoke = package_price.credits || 0;
+
+  await mongoose.model('UserWallet').findOneAndUpdate(
+    { user: payment_transaction.user },
+    { $inc: { credits: -credits_to_revoke } },
+    { session, new: true },
+  );
+
+  await PackageTransaction.findOneAndUpdate(
+    { payment_transaction: payment_transaction_id },
+    { is_active: false },
+    { session },
+  );
+};

@@ -51,6 +51,12 @@ export const handlePaymentCompleted = async (
       );
     }
 
+    await PaymentTransaction.findByIdAndUpdate(
+      transaction_id,
+      { consumer_processed: true },
+      { session },
+    );
+
     if (!external_session) {
       await session.commitTransaction();
     }
@@ -69,6 +75,39 @@ export const handlePaymentCompleted = async (
   } finally {
     if (!external_session) {
       session.endSession();
+    }
+  }
+};
+
+export const retryUnprocessedPaymentConsumers = async (): Promise<void> => {
+  const transactions = await PaymentTransaction.find({
+    status: 'success',
+    consumer_processed: { $ne: true },
+    is_deleted: { $ne: true },
+  })
+    .select('_id user amount currency payment_method package interval')
+    .lean();
+
+  if (transactions.length === 0) return;
+
+  console.log(`[ConsumerRetry] Found ${transactions.length} unprocessed success transaction(s)`);
+
+  for (const tx of transactions) {
+    try {
+      const payload: PaymentEventPayload = {
+        transaction_id: tx._id!.toString(),
+        user_id: tx.user.toString(),
+        amount: tx.amount,
+        currency: tx.currency,
+        payment_method_id: tx.payment_method.toString(),
+        package_id: tx.package?.toString(),
+        interval_id: tx.interval?.toString(),
+        timestamp: new Date(),
+      };
+      await handlePaymentCompleted(payload);
+      console.log(`[ConsumerRetry] Processed transaction ${tx._id}`);
+    } catch (error) {
+      console.error(`[ConsumerRetry] Failed for transaction ${tx._id}:`, error);
     }
   }
 };

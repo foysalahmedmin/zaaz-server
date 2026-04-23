@@ -39,6 +39,7 @@ export type TPaymentTransaction = {
   is_test?: boolean;
   is_active?: boolean;
   is_deleted?: boolean;
+  consumer_processed?: boolean;
 };
 
 export interface TPaymentTransactionDocument
