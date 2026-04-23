@@ -2,7 +2,10 @@ jest.mock('../dashboard.repository', () => ({
   getRevenueByMonth: jest.fn(),
   countUsers: jest.fn(),
   countPaymentTransactions: jest.fn(),
+  countPackageTransactions: jest.fn(),
   getTotalCredits: jest.fn(),
+  getTotalCreditsConsumed: jest.fn(),
+  countActiveSubscriptions: jest.fn(),
   getCreditsIncreaseByMonth: jest.fn(),
   getRevenueByPeriod: jest.fn(),
   getTransactionStatusBreakdown: jest.fn(),
@@ -12,6 +15,8 @@ jest.mock('../dashboard.repository', () => ({
   getUserGrowthByPeriod: jest.fn(),
   getPackagePerformance: jest.fn(),
   getFeaturePerformance: jest.fn(),
+  getAiModelUsage: jest.fn(),
+  getPackageAssignmentsByPeriod: jest.fn(),
 }));
 jest.mock('../../../utils/cache.utils', () => ({
   withCache: jest.fn().mockImplementation((_key: any, _ttl: any, fn: any) => fn()),
@@ -31,17 +36,22 @@ describe('Dashboard Service Unit Tests', () => {
       ]);
       (DashboardRepository.countUsers as jest.Mock).mockResolvedValue(50);
       (DashboardRepository.countPaymentTransactions as jest.Mock).mockResolvedValue(20);
+      (DashboardRepository.countPackageTransactions as jest.Mock).mockResolvedValue(10);
       (DashboardRepository.getTotalCredits as jest.Mock).mockResolvedValue(5000);
-      (DashboardRepository.getCreditsIncreaseByMonth as jest.Mock).mockResolvedValue(500);
+      (DashboardRepository.getTotalCreditsConsumed as jest.Mock).mockResolvedValue(500);
+      (DashboardRepository.countActiveSubscriptions as jest.Mock).mockResolvedValue(8);
 
       const result = await DashboardService.getDashboardStatistics();
 
-      expect(result).toHaveProperty('total_revenue');
+      expect(result).toHaveProperty('monthly_revenue');
       expect(result).toHaveProperty('total_users');
-      expect(result).toHaveProperty('total_transactions');
-      expect(result).toHaveProperty('total_credits');
+      expect(result).toHaveProperty('total_payment_transactions');
+      expect(result).toHaveProperty('total_package_assignments');
+      expect(result).toHaveProperty('total_credits_in_circulation');
+      expect(result).toHaveProperty('monthly_credits_consumed');
+      expect(result).toHaveProperty('active_subscriptions');
       expect(result).toHaveProperty('trends');
-      expect(result.total_revenue.USD).toBe(1000);
+      expect(result.monthly_revenue.USD).toBe(1000);
     });
   });
 

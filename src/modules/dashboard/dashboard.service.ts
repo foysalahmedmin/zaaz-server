@@ -1,8 +1,10 @@
 import { withCache } from '../../utils/cache.utils';
 import * as DashboardRepository from './dashboard.repository';
 import {
+  TDashboardAiModelUsage,
   TDashboardCreditsFlow,
   TDashboardFeaturePerformance,
+  TDashboardPackageAssignments,
   TDashboardPackagePerformance,
   TDashboardPaymentMethod,
   TDashboardRevenueData,
@@ -45,14 +47,44 @@ const getMonthRange = () => {
 };
 
 const CACHE_TTL = 300; // 5 minutes
+const BDT_TO_USD_RATE = 110;
 
 export const getDashboardStatistics = async (): Promise<TDashboardStatistics> => {
   return withCache('dashboard:statistics', CACHE_TTL, async () => {
     const { currentMonthStart, previousMonthStart, previousMonthEnd } = getMonthRange();
 
-    const [currentRevenueResult, previousRevenueResult] = await Promise.all([
+    const [
+      currentRevenueResult,
+      previousRevenueResult,
+      totalUsers,
+      currentMonthUsers,
+      previousMonthUsers,
+      totalPaymentTransactions,
+      currentMonthPaymentTx,
+      previousMonthPaymentTx,
+      totalPackageAssignments,
+      currentMonthPackageAssignments,
+      previousMonthPackageAssignments,
+      totalCreditsInCirculation,
+      currentMonthCreditsConsumed,
+      previousMonthCreditsConsumed,
+      activeSubscriptions,
+    ] = await Promise.all([
       DashboardRepository.getRevenueByMonth({ startDate: currentMonthStart }),
       DashboardRepository.getRevenueByMonth({ startDate: previousMonthStart, endDate: previousMonthEnd }),
+      DashboardRepository.countUsers({}),
+      DashboardRepository.countUsers({ created_at: { $gte: currentMonthStart } }),
+      DashboardRepository.countUsers({ created_at: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      DashboardRepository.countPaymentTransactions({}),
+      DashboardRepository.countPaymentTransactions({ created_at: { $gte: currentMonthStart } }),
+      DashboardRepository.countPaymentTransactions({ created_at: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      DashboardRepository.countPackageTransactions({}),
+      DashboardRepository.countPackageTransactions({ created_at: { $gte: currentMonthStart } }),
+      DashboardRepository.countPackageTransactions({ created_at: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      DashboardRepository.getTotalCredits(),
+      DashboardRepository.getTotalCreditsConsumed(currentMonthStart),
+      DashboardRepository.getTotalCreditsConsumed(previousMonthStart, previousMonthEnd),
+      DashboardRepository.countActiveSubscriptions(),
     ]);
 
     const currentRevenue = {
@@ -64,46 +96,27 @@ export const getDashboardStatistics = async (): Promise<TDashboardStatistics> =>
       BDT: previousRevenueResult.find((r) => r._id === 'BDT')?.total || 0,
     };
 
-    const BDT_TO_USD_RATE = 110;
-    const totalUsdEquivalent = currentRevenue.USD + currentRevenue.BDT / BDT_TO_USD_RATE;
-    const previousTotalUsdEquivalent = previousRevenue.USD + previousRevenue.BDT / BDT_TO_USD_RATE;
-
-    const [
-      totalUsers,
-      currentMonthUsers,
-      previousMonthUsers,
-      totalTransactions,
-      currentMonthTransactions,
-      previousMonthTransactions,
-      totalCredits,
-      currentCreditsIncrease,
-      previousCreditsIncrease,
-    ] = await Promise.all([
-      DashboardRepository.countUsers({}),
-      DashboardRepository.countUsers({ created_at: { $gte: currentMonthStart } }),
-      DashboardRepository.countUsers({ created_at: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
-      DashboardRepository.countPaymentTransactions({}),
-      DashboardRepository.countPaymentTransactions({ created_at: { $gte: currentMonthStart } }),
-      DashboardRepository.countPaymentTransactions({ created_at: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
-      DashboardRepository.getTotalCredits(),
-      DashboardRepository.getCreditsIncreaseByMonth(currentMonthStart),
-      DashboardRepository.getCreditsIncreaseByMonth(previousMonthStart, previousMonthEnd),
-    ]);
+    const currentUsdEquivalent = currentRevenue.USD + currentRevenue.BDT / BDT_TO_USD_RATE;
+    const previousUsdEquivalent = previousRevenue.USD + previousRevenue.BDT / BDT_TO_USD_RATE;
 
     return {
-      total_revenue: {
+      monthly_revenue: {
         USD: currentRevenue.USD,
         BDT: currentRevenue.BDT,
-        total_usd_equivalent: totalUsdEquivalent,
+        total_usd_equivalent: currentUsdEquivalent,
       },
       total_users: totalUsers,
-      total_transactions: totalTransactions,
-      total_credits: totalCredits,
+      total_payment_transactions: totalPaymentTransactions,
+      total_package_assignments: totalPackageAssignments,
+      total_credits_in_circulation: totalCreditsInCirculation,
+      monthly_credits_consumed: currentMonthCreditsConsumed,
+      active_subscriptions: activeSubscriptions,
       trends: {
-        revenue: calculateTrend(totalUsdEquivalent, previousTotalUsdEquivalent),
+        revenue: calculateTrend(currentUsdEquivalent, previousUsdEquivalent),
         users: calculateTrend(currentMonthUsers, previousMonthUsers),
-        transactions: calculateTrend(currentMonthTransactions, previousMonthTransactions),
-        credits: calculateTrend(currentCreditsIncrease, previousCreditsIncrease),
+        payment_transactions: calculateTrend(currentMonthPaymentTx, previousMonthPaymentTx),
+        package_assignments: calculateTrend(currentMonthPackageAssignments, previousMonthPackageAssignments),
+        credits_consumed: calculateTrend(currentMonthCreditsConsumed, previousMonthCreditsConsumed),
       },
     };
   });
@@ -188,7 +201,7 @@ export const getDashboardPackages = async (): Promise<TDashboardPackagePerforman
   });
 };
 
-export const getDashboardFeatures = async (): Promise<TDashboardFeaturePerformance[]> => {
+export const getDashboardFeatures = async (): Promise<TDashboardFeaturePerformance> => {
   return withCache('dashboard:features', CACHE_TTL, async () => {
     const result = await DashboardRepository.getFeaturePerformance();
 
@@ -197,5 +210,27 @@ export const getDashboardFeatures = async (): Promise<TDashboardFeaturePerforman
       usage_count: item.usage_count || 0,
       total_credits_used: item.total_credits_used || 0,
     }));
+  });
+};
+
+export const getDashboardAiModels = async (): Promise<TDashboardAiModelUsage> => {
+  return withCache('dashboard:ai_models', CACHE_TTL, async () => {
+    const result = await DashboardRepository.getAiModelUsage();
+
+    return result.map((item) => ({
+      model_name: item.model_name || 'Unknown',
+      provider: item.provider || 'Unknown',
+      usage_count: item.usage_count || 0,
+      total_tokens_used: item.total_tokens_used || 0,
+      total_credits_charged: item.total_credits_charged || 0,
+    }));
+  });
+};
+
+export const getDashboardPackageAssignments = async (period: string = '30d'): Promise<TDashboardPackageAssignments> => {
+  return withCache(`dashboard:package_assignments:${period}`, CACHE_TTL, async () => {
+    const { startDate, endDate } = getDateRange(period);
+    const result = await DashboardRepository.getPackageAssignmentsByPeriod(startDate, endDate);
+    return result.map((item) => ({ date: item._id, count: item.count }));
   });
 };

@@ -1,6 +1,9 @@
 import { CreditsTransaction } from '../credits-transaction/credits-transaction.model';
 import { Feature } from '../feature/feature.model';
+import { FeatureUsageLog } from '../feature-usage-log/feature-usage-log.model';
+import { PackageTransaction } from '../package-transaction/package-transaction.model';
 import { PaymentTransaction } from '../payment-transaction/payment-transaction.model';
+import { UserSubscription } from '../user-subscription/user-subscription.model';
 import { UserWallet } from '../user-wallet/user-wallet.model';
 import { User } from '../user/user.model';
 
@@ -13,7 +16,9 @@ export const getRevenueByMonth = async (filter: {
       $match: {
         status: 'success',
         is_deleted: { $ne: true },
-        ...(filter.startDate ? { created_at: { $gte: filter.startDate, ...(filter.endDate ? { $lte: filter.endDate } : {}) } } : {}),
+        ...(filter.startDate
+          ? { created_at: { $gte: filter.startDate, ...(filter.endDate ? { $lte: filter.endDate } : {}) } }
+          : {}),
       },
     },
     { $group: { _id: '$currency', total: { $sum: '$amount' } } },
@@ -28,23 +33,19 @@ export const countPaymentTransactions = async (filter: Record<string, unknown>):
   return PaymentTransaction.countDocuments({ is_deleted: { $ne: true }, ...filter });
 };
 
+export const countPackageTransactions = async (filter: Record<string, unknown>): Promise<number> => {
+  return PackageTransaction.countDocuments({ is_deleted: { $ne: true }, ...filter });
+};
+
 export const getTotalCredits = async (): Promise<number> => {
   const result = await UserWallet.aggregate([
-    {
-      $match: {
-        is_deleted: { $ne: true },
-        $or: [{ expires_at: { $exists: false } }, { expires_at: { $gte: new Date() } }],
-      },
-    },
+    { $match: { is_deleted: { $ne: true } } },
     { $group: { _id: null, total: { $sum: '$credits' } } },
   ]);
   return result[0]?.total || 0;
 };
 
-export const getCreditsIncreaseByMonth = async (
-  startDate: Date,
-  endDate?: Date,
-): Promise<number> => {
+export const getCreditsIncreaseByMonth = async (startDate: Date, endDate?: Date): Promise<number> => {
   const result = await CreditsTransaction.aggregate([
     {
       $match: {
@@ -56,6 +57,26 @@ export const getCreditsIncreaseByMonth = async (
     { $group: { _id: null, total: { $sum: '$credits' } } },
   ]);
   return result[0]?.total || 0;
+};
+
+export const getTotalCreditsConsumed = async (startDate?: Date, endDate?: Date): Promise<number> => {
+  const result = await CreditsTransaction.aggregate([
+    {
+      $match: {
+        is_deleted: { $ne: true },
+        type: 'decrease',
+        ...(startDate
+          ? { created_at: { $gte: startDate, ...(endDate ? { $lte: endDate } : {}) } }
+          : {}),
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$credits' } } },
+  ]);
+  return result[0]?.total || 0;
+};
+
+export const countActiveSubscriptions = async (): Promise<number> => {
+  return UserSubscription.countDocuments({ is_deleted: { $ne: true }, status: 'active' });
 };
 
 export const getRevenueByPeriod = async (startDate: Date, endDate: Date): Promise<any[]> => {
@@ -128,7 +149,13 @@ export const getPaymentMethodBreakdown = async (): Promise<any[]> => {
           USD: {
             $sum: {
               $map: {
-                input: { $filter: { input: '$transactions', as: 't', cond: { $and: [{ $eq: ['$$t.currency', 'USD'] }, { $eq: ['$$t.status', 'success'] }] } } },
+                input: {
+                  $filter: {
+                    input: '$transactions',
+                    as: 't',
+                    cond: { $and: [{ $eq: ['$$t.currency', 'USD'] }, { $eq: ['$$t.status', 'success'] }] },
+                  },
+                },
                 as: 't',
                 in: '$$t.amount',
               },
@@ -137,7 +164,13 @@ export const getPaymentMethodBreakdown = async (): Promise<any[]> => {
           BDT: {
             $sum: {
               $map: {
-                input: { $filter: { input: '$transactions', as: 't', cond: { $and: [{ $eq: ['$$t.currency', 'BDT'] }, { $eq: ['$$t.status', 'success'] }] } } },
+                input: {
+                  $filter: {
+                    input: '$transactions',
+                    as: 't',
+                    cond: { $and: [{ $eq: ['$$t.currency', 'BDT'] }, { $eq: ['$$t.status', 'success'] }] },
+                  },
+                },
                 as: 't',
                 in: '$$t.amount',
               },
@@ -308,5 +341,49 @@ export const getFeaturePerformance = async (): Promise<any[]> => {
     },
     { $sort: { usage_count: -1 } },
     { $limit: 10 },
+  ]);
+};
+
+export const getAiModelUsage = async (): Promise<any[]> => {
+  return FeatureUsageLog.aggregate([
+    {
+      $lookup: {
+        from: 'aimodels',
+        localField: 'ai_model',
+        foreignField: '_id',
+        as: 'aiModelData',
+      },
+    },
+    { $unwind: { path: '$aiModelData', preserveNullAndEmptyArrays: true } },
+    {
+      $group: {
+        _id: '$ai_model',
+        model_name: { $first: '$aiModelData.name' },
+        provider: { $first: '$aiModelData.provider' },
+        usage_count: { $sum: 1 },
+        total_tokens_used: { $sum: '$tokens_used' },
+        total_credits_charged: { $sum: '$credits_charged' },
+      },
+    },
+    { $sort: { usage_count: -1 } },
+    { $limit: 10 },
+  ]);
+};
+
+export const getPackageAssignmentsByPeriod = async (startDate: Date, endDate: Date): Promise<any[]> => {
+  return PackageTransaction.aggregate([
+    {
+      $match: {
+        is_deleted: { $ne: true },
+        created_at: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$created_at' } },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
   ]);
 };

@@ -57,6 +57,19 @@ router.get(
   DashboardControllers.getDashboardFeatures,
 );
 
+router.get(
+  '/ai-models',
+  auth('admin', 'super-admin'),
+  DashboardControllers.getDashboardAiModels,
+);
+
+router.get(
+  '/package-assignments',
+  auth('admin', 'super-admin'),
+  validation(DashboardValidations.dashboardPeriodValidationSchema),
+  DashboardControllers.getDashboardPackageAssignments,
+);
+
 const DashboardRoutes = router;
 
 export default DashboardRoutes;

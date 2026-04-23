@@ -1,19 +1,28 @@
 export type TrendType = 'up' | 'down' | 'neutral';
 
+export type TTrend = {
+  type: TrendType;
+  percentage: number;
+};
+
 export type TDashboardStatistics = {
-  total_revenue: {
+  monthly_revenue: {
     USD: number;
     BDT: number;
     total_usd_equivalent: number;
   };
   total_users: number;
-  total_transactions: number;
-  total_credits: number;
+  total_payment_transactions: number;
+  total_package_assignments: number;
+  total_credits_in_circulation: number;
+  monthly_credits_consumed: number;
+  active_subscriptions: number;
   trends: {
-    revenue: { type: TrendType; percentage: number };
-    users: { type: TrendType; percentage: number };
-    transactions: { type: TrendType; percentage: number };
-    credits: { type: TrendType; percentage: number };
+    revenue: TTrend;
+    users: TTrend;
+    payment_transactions: TTrend;
+    package_assignments: TTrend;
+    credits_consumed: TTrend;
   };
 };
 
@@ -56,6 +65,17 @@ export type TDashboardFeaturePerformance = {
   feature_name: string;
   usage_count: number;
   total_credits_used: number;
-};
+}[];
 
+export type TDashboardAiModelUsage = {
+  model_name: string;
+  provider: string;
+  usage_count: number;
+  total_tokens_used: number;
+  total_credits_charged: number;
+}[];
 
+export type TDashboardPackageAssignments = {
+  date: string;
+  count: number;
+}[];

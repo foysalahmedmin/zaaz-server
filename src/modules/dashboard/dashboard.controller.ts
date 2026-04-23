@@ -86,4 +86,24 @@ export const getDashboardFeatures = catchAsync(async (_req, res) => {
   });
 });
 
+export const getDashboardAiModels = catchAsync(async (_req, res) => {
+  const result = await DashboardServices.getDashboardAiModels();
+  responseFormatter(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Dashboard AI model usage data retrieved successfully',
+    data: result,
+  });
+});
+
+export const getDashboardPackageAssignments = catchAsync(async (req, res) => {
+  const period = (req.query.period as string) || '30d';
+  const result = await DashboardServices.getDashboardPackageAssignments(period);
+  responseFormatter(res, {
+    status: httpStatus.OK,
+    success: true,
+    message: 'Dashboard package assignments data retrieved successfully',
+    data: result,
+  });
+});
 
