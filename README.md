@@ -59,7 +59,9 @@ This high-performance, enterprise-grade multi-purpose backend architecture orche
   - SSL Commerz: Leading localized BDT transaction engine.
   - bKash: Seamless mobile financial service integration.
 - **Robust State Management**: Implemented a **Strict State Machine** (`PaymentStateMachine`) to govern transaction lifecycles, preventing invalid transitions (e.g., Failed → Success).
-- **Automated Reconciliation Engine**: A sophisticated background service that automatically identifies "stuck" pending transactions and verifies them against gateway APIs to ensure order fulfillment without manual intervention.
+- **Automated Reconciliation Engine**: A cron job runs every 15 minutes to identify stuck pending transactions and verify them against gateway APIs, ensuring order fulfillment even when webhooks are missed.
+- **Resilient Consumer Pipeline**: Payment success events trigger credit assignment with a 3-attempt exponential backoff retry. A separate cron runs every 30 minutes to recover any transactions where credit assignment failed after all retries (`consumer_processed` flag).
+- **Admin Hard Refund**: Admins can issue full refunds via `POST /api/payments/:id/refund`, which calls the gateway refund API, revokes assigned credits, and updates the transaction to `refunded` — supported across Stripe, SSLCommerz, and bKash.
 - **Event-Driven Side Effects**: Payment completions trigger asynchronous events via **RabbitMQ** for decoupled wallet updates, emails, and downstream service notifications.
 - **Comprehensive Auditing**: Every status change is tracked in `PaymentAuditLog` with detailed metadata (`source`, `reason`, `metadata`), providing full financial traceability.
 - **Atomic Settlement**: Guaranteed single-settlement logic using MongoDB atomic operators across all gateways.
@@ -180,7 +182,7 @@ src/
 ├── internal-credits-process/   # HTTP proxy client for credits-process (partner service integration)
 ├── internal-feature-usage-log/ # HTTP proxy client for feature usage log (partner service integration)
 ├── internal-give-credits/      # Internal service for administrative credit grants
-├── jobs/                       # Background cron jobs (e.g., nightly subscription expiration)
+├── jobs/                       # Background cron jobs (subscription expiration, payment reconciliation, consumer retry)
 ├── middlewares/                 # Auth, RBAC, Rate-Limiting, and Data Sanitization
 ├── modules/                    # Feature-specific Domain Modules (33+ production-grade modules)
 ├── providers/                  # External service provider integrations
@@ -706,7 +708,7 @@ The service layer exposes the following API clusters via the `/api` namespace:
 
 - Identity Management: `/api/auth` (Sign-in, Sign-up, Google SSO, Password Recovery)
 - Value Exchange: `/api/credits-transactions`, `/api/credits-process`, `/api/token-process`, `/api/credits-usages`
-- Financial Operations: `/api/payments` (initiate, verify, webhook, redirect, reconcile), `/api/payment-transactions` (CRUD), `/api/payment-methods`, `/api/package-transactions`
+- Financial Operations: `/api/payments` (initiate, verify, webhook, redirect, reconcile, refund), `/api/payment-transactions` (CRUD), `/api/payment-methods`, `/api/package-transactions`
 - Catalog and Inventory: `/api/packages`, `/api/intervals`, `/api/package-prices`, `/api/package-features`, `/api/package-feature-configs`, `/api/coupons`
 - Service Entitlements: `/api/features`, `/api/feature-endpoints`, `/api/feature-popups`, `/api/feature-feedbacks`
 - Intelligence Governance: `/api/ai-models`, `/api/ai-model-histories`, `/api/billing-settings`, `/api/billing-setting-histories`, `/api/credits-profits`, `/api/credits-profit-histories`
