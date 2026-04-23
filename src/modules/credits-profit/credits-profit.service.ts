@@ -74,6 +74,7 @@ export const updateCreditsProfit = async (
     throw new AppError(httpStatus.NOT_FOUND, 'Credits profit not found');
   }
 
+  const current_version = existing.version || 1;
   await CreditsProfitRepository.createHistory(
     id,
     {
@@ -81,11 +82,12 @@ export const updateCreditsProfit = async (
       percentage: existing.percentage,
       is_active: existing.is_active,
       is_deleted: existing.is_deleted,
+      version: current_version,
     },
     session,
   );
 
-  const result = await CreditsProfitRepository.updateById(id, payload, session);
+  const result = await CreditsProfitRepository.updateById(id, { ...payload, version: current_version + 1 }, session);
   await invalidateCache(TOTAL_PERCENTAGE_KEY);
   return result!;
 };

@@ -173,7 +173,8 @@ export const updateAiModel = async (
     // I will allow this for flexibility unless strict business rule prevents 0 initials.
     // Looking at package implementation: it seems to just unset others if payload is true.
 
-    const result = await AiModelRepository.updateById(id, payload, session);
+    const next_version = (existingAiModel.version || 1) + 1;
+    const result = await AiModelRepository.updateById(id, { ...payload, version: next_version }, session);
 
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'AI Model not found');

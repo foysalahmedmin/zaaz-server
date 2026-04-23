@@ -143,7 +143,7 @@ export const restoreMany = async (
 
 export const createHistory = async (
   creditsProfitId: string,
-  data: Pick<TCreditsProfit, 'name' | 'percentage' | 'is_active' | 'is_deleted'>,
+  data: Pick<TCreditsProfit, 'name' | 'percentage' | 'is_active' | 'is_deleted' | 'version'>,
   session?: mongoose.ClientSession,
 ): Promise<void> => {
   await CreditsProfitHistory.create(
