@@ -47,6 +47,11 @@ const aiModelHistorySchema = new Schema<TAiModelHistoryDocument>(
       type: Boolean,
       default: true,
     },
+    version: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
     is_initial: {
       type: Boolean,
       default: false,

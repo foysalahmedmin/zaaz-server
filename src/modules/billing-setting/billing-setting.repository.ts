@@ -126,10 +126,12 @@ export const createHistory = async (
   existingSetting: TBillingSetting & { _id: any },
   session?: mongoose.ClientSession,
 ): Promise<void> => {
+  const current_version = existingSetting.version || 1;
   await BillingSettingHistory.create(
     [
       {
         billing_setting: existingSetting._id,
+        version: current_version,
         credit_price: existingSetting.credit_price,
         currency: existingSetting.currency,
         status: existingSetting.status,

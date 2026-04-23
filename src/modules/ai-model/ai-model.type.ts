@@ -11,6 +11,7 @@ export type TAiModel = {
   is_active: boolean;
   is_initial: boolean;
   is_deleted: boolean;
+  version?: number;
 };
 
 export interface TAiModelDocument extends TAiModel, Document {

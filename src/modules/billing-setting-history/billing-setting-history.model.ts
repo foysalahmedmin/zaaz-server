@@ -35,6 +35,11 @@ const billingSettingHistorySchema = new Schema<TBillingSettingHistoryDocument>(
       type: Boolean,
       default: true,
     },
+    version: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
     is_initial: {
       type: Boolean,
       default: false,

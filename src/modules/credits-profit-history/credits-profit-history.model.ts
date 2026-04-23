@@ -23,6 +23,11 @@ const creditsProfitHistorySchema = new Schema<TCreditsProfitHistoryDocument>(
       min: [0, 'Percentage must be 0 or greater'],
       max: [100, 'Percentage cannot exceed 100'],
     },
+    version: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
     is_active: {
       type: Boolean,
     },

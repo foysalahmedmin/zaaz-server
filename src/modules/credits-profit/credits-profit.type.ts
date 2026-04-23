@@ -5,6 +5,7 @@ export type TCreditsProfit = {
   percentage: number;
   is_active: boolean;
   is_deleted?: boolean;
+  version?: number;
 };
 
 export interface TCreditsProfitDocument extends TCreditsProfit, Document {
@@ -15,5 +16,3 @@ export interface TCreditsProfitDocument extends TCreditsProfit, Document {
 export type TCreditsProfitModel = Model<TCreditsProfitDocument> & {
   isCreditsProfitExist(_id: string): Promise<TCreditsProfitDocument | null>;
 };
-
-

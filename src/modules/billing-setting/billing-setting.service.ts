@@ -102,7 +102,8 @@ export const updateBillingSetting = async (
       );
     }
 
-    const result = await BillingSettingRepository.updateById(id, payload, session);
+    const next_version = (existing.version || 1) + 1;
+    const result = await BillingSettingRepository.updateById(id, { ...payload, version: next_version }, session);
     if (!result) {
       throw new AppError(httpStatus.NOT_FOUND, 'Billing Setting not found');
     }

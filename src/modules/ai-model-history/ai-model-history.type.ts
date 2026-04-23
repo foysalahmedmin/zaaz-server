@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 
 export type TAiModelHistory = {
   ai_model: mongoose.Types.ObjectId;
+  version: number;
   name: string;
   value: string;
   provider: string;

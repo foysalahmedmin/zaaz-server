@@ -50,6 +50,7 @@ const aiModelSchema = new Schema<TAiModelDocument>(
       default: false,
       select: false,
     },
+    version: { type: Number, default: 1, min: 1 },
   },
   {
     timestamps: {

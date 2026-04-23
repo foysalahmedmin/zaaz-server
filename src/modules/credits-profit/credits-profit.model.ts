@@ -26,6 +26,7 @@ const creditsProfitSchema = new Schema<TCreditsProfitDocument>(
       default: true,
     },
     is_deleted: { type: Boolean, default: false, select: false },
+    version: { type: Number, default: 1, min: 1 },
   },
   {
     timestamps: {

@@ -35,6 +35,7 @@ const billingSettingSchema = new Schema<TBillingSettingDocument>(
       default: false,
     },
     is_deleted: { type: Boolean, default: false, select: false },
+    version: { type: Number, default: 1, min: 1 },
   },
   {
     timestamps: {

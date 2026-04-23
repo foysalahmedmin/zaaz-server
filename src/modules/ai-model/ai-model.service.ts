@@ -134,11 +134,11 @@ export const updateAiModel = async (
   session.startTransaction();
 
   try {
-    // Create history before update
     await AiModelHistory.create(
       [
         {
           ai_model: existingAiModel._id,
+          version: existingAiModel.version || 1,
           name: existingAiModel.name,
           value: existingAiModel.value,
           provider: existingAiModel.provider,

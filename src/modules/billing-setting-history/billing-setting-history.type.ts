@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 
 export type TBillingSettingHistory = {
   billing_setting: mongoose.Types.ObjectId;
+  version: number;
   credit_price: number;
   currency: 'USD';
   status: 'active' | 'inactive';

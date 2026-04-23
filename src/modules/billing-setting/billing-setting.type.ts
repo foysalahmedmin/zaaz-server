@@ -8,6 +8,7 @@ export type TBillingSetting = {
   is_active: boolean;
   is_initial: boolean;
   is_deleted?: boolean;
+  version?: number;
 };
 
 export interface TBillingSettingDocument extends TBillingSetting, Document {

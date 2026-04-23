@@ -2,6 +2,7 @@ import mongoose, { Document, Model, Types } from 'mongoose';
 
 export type TCreditsProfitHistory = {
   credits_profit: mongoose.Types.ObjectId;
+  version: number;
   name: string;
   percentage: number;
   is_active?: boolean;
