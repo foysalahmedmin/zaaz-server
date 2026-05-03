@@ -1,16 +1,20 @@
 import type { Config } from 'jest';
 
 const config: Config = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.spec.ts'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   transform: {
     '^.+\\.tsx?$': [
-      'ts-jest',
+      '@swc/jest',
       {
-        tsconfig: 'tsconfig.json',
+        jsc: {
+          parser: { syntax: 'typescript', decorators: true },
+          target: 'es2020',
+          keepClassNames: true,
+        },
+        module: { type: 'commonjs' },
       },
     ],
   },
